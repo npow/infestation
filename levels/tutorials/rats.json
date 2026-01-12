@@ -1,0 +1,20 @@
+{
+  "name": "Rats",
+  "notes": [
+    {
+      "x": 3,
+      "y": 7,
+      "text": "Aah! It's a rat! Kill it!"
+    },
+    {
+      "x": 1,
+      "y": 5,
+      "text": "I should beware of rats. They have a superpower I don't have."
+    },
+    {
+      "x": 5,
+      "y": 4,
+      "text": "The power to move... DIAGONALLY!"
+    }
+  ]
+}

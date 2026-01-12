@@ -1,0 +1,55 @@
+{
+  "name": "World",
+  "portals": [
+    {
+      "x": 2,
+      "y": 0,
+      "level": "cyborg_rats/cyborg_rats"
+    },
+    {
+      "x": 2,
+      "y": 2,
+      "level": "chase"
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "level": "on_the_clock"
+    },
+    {
+      "x": 2,
+      "y": 6,
+      "level": "lock_in"
+    },
+    {
+      "x": 2,
+      "y": 8,
+      "level": "order_of_operations"
+    },
+    {
+      "x": 2,
+      "y": 10,
+      "level": "release"
+    },
+    {
+      "x": 2,
+      "y": 12,
+      "level": "synchronicity"
+    },
+    {
+      "x": 2,
+      "y": 14,
+      "level": "overstep"
+    },
+    {
+      "x": 2,
+      "y": 16,
+      "level": "guidance"
+    },
+    {
+      "x": 1,
+      "y": 19,
+      "level": "tutorials/tutorials"
+    }
+  ]
+}

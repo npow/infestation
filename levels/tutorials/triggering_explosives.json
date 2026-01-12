@@ -1,0 +1,20 @@
+{
+  "name": "Triggering Explosives",
+  "notes": [
+    {
+      "x": 1,
+      "y": 5,
+      "text": "But remember, stepping on a trigger only makes OTHERS of the same kind activate. So this 2 here is safe to step on."
+    },
+    {
+      "x": 3,
+      "y": 5,
+      "text": "When a trigger activates next to an explosive..."
+    },
+    {
+      "x": 0,
+      "y": 6,
+      "text": "Which isn't to say it's a good idea"
+    }
+  ]
+}

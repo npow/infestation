@@ -1,0 +1,3 @@
+[workspace]
+members = ["game", "quad-gamepad", "quad-touch"]
+resolver = "2"

@@ -1,0 +1,304 @@
+use std::collections::HashSet;
+
+use crate::direction::Dir4;
+use crate::grid::{Cell, Grid};
+use crate::levels::get_level;
+use crate::position::Position;
+
+mod animation;
+mod cyborg_distance;
+mod cyborg_rat;
+mod explosion;
+mod player;
+mod rat;
+mod zap;
+
+const MOVE_SPEED: f32 = 15.0;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum PlayState {
+    Playing,
+    GameOver,
+    Won,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct Moving {
+    pub(crate) cell: Cell,
+    pub(crate) from: Position,
+    pub(crate) progress: f32,
+    pub(crate) to: Position,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct Exploding {
+    pub(crate) pos: Position,
+    pub(crate) progress: f32,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct Zapping {
+    pub(crate) pos: Position,
+    pub(crate) progress: f32,
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum Action {
+    Move(Dir4),
+    Stall,
+}
+
+/// Handles move resolution and animation.
+/// Used for both instant resolution and animated playback.
+#[derive(Clone)]
+pub(crate) struct MoveHandler {
+    /// Grid being modified (also used for rendering during animation).
+    pub(crate) grid: Grid,
+    /// Movement animations in progress.
+    pub(crate) moving: Vec<Moving>,
+    /// Zap animations in progress.
+    pub(crate) zapping: Vec<Zapping>,
+    /// Trigger numbers that have been activated and need processing.
+    pub(crate) triggered_numbers: Vec<u8>,
+    /// Explosion animations in progress.
+    pub(crate) exploding: Vec<Exploding>,
+    /// Explosions queued for the next wave.
+    pub(crate) pending_explosions: Vec<Position>,
+}
+
+impl MoveHandler {
+    pub(crate) fn new(grid: Grid) -> Self {
+        Self {
+            grid,
+            moving: Vec::new(),
+            zapping: Vec::new(),
+            triggered_numbers: Vec::new(),
+            exploding: Vec::new(),
+            pending_explosions: Vec::new(),
+        }
+    }
+
+    /// Check if there's anything to animate.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.moving.is_empty()
+            && self.zapping.is_empty()
+            && self.exploding.is_empty()
+            && self.triggered_numbers.is_empty()
+            && self.pending_explosions.is_empty()
+    }
+
+    fn begin_move(&mut self, moving: Moving) {
+        *self.grid.at_mut(moving.from) = Cell::Empty;
+        self.moving.push(moving);
+        let dest_entity = self.grid.at_mut(moving.to);
+        if !matches!(*dest_entity, Cell::BlackHole) {
+            // The grid changes will get overwritten when we replace the grid with the previous one.
+            // This is just for sequential blocking checks.
+            *dest_entity = moving.cell;
+        }
+    }
+}
+
+/// Core game state without animation.
+#[derive(Clone)]
+pub(crate) struct GameState {
+    pub(crate) grid: Grid,
+    pub(crate) initial_grid: Grid,
+    pub(crate) history: Vec<Grid>,
+    pub(crate) queued_move: Option<Action>,
+    pub(crate) completed_levels: HashSet<String>,
+}
+
+/// Game wrapper combining state and move handling.
+#[derive(Clone)]
+pub(crate) struct Game {
+    pub(crate) state: GameState,
+    /// Animation state. When Some, render from handler.prev_grid.
+    /// state.grid always has the final resolved state.
+    pub(crate) animation: Option<MoveHandler>,
+}
+
+impl GameState {
+    pub(crate) fn new(grid: Grid, completed_levels: HashSet<String>) -> Self {
+        Self {
+            initial_grid: grid.clone(),
+            grid: grid.clone(),
+            history: vec![grid],
+            queued_move: None,
+            completed_levels,
+        }
+    }
+
+    /// Returns the portal destination if the player is currently standing on a portal.
+    pub(crate) fn standing_on_portal(&self) -> Option<&str> {
+        let (player_pos, _) = self.find_player()?;
+        self.grid.get_portal(player_pos)
+    }
+
+    /// Returns the note text if the player is currently standing on a note cell.
+    pub(crate) fn standing_on_note(&self) -> Option<&str> {
+        let (player_pos, _) = self.find_player()?;
+        self.grid.get_note(player_pos)
+    }
+
+    pub(crate) fn current_portal_display_name(&self) -> Option<&'static str> {
+        let level = self.standing_on_portal()?;
+        self.completed_levels
+            .contains(level)
+            .then(|| level_display_name(level))
+    }
+
+    /// Returns the portal destination if the player just stepped onto an unvisited portal (auto-enter).
+    pub(crate) fn portal_destination(&self) -> Option<&str> {
+        // Check for auto-enter: player just stepped onto an unvisited portal
+        let (player_pos, _) = self.find_player()?;
+        let current_portal = self.grid.get_portal(player_pos)?;
+
+        // Don't auto-enter if already completed
+        if self.completed_levels.contains(current_portal) {
+            return None;
+        }
+
+        // Check if player was on a different position before (just moved onto portal)
+        if self.history.len() >= 2 {
+            let prev_grid = &self.history[self.history.len() - 2];
+            let prev_player_pos = prev_grid.entries().find_map(|(pos, cell)| {
+                if matches!(cell, Cell::Player(_)) {
+                    Some(pos)
+                } else {
+                    None
+                }
+            });
+
+            // Only auto-enter if player moved to this position
+            if prev_player_pos != Some(player_pos) {
+                return Some(current_portal);
+            }
+        }
+
+        None
+    }
+
+    pub(crate) fn initial_has_rats(&self) -> bool {
+        self.initial_grid
+            .entries()
+            .any(|(_, cell)| matches!(cell, Cell::Rat(_) | Cell::CyborgRat(_)))
+    }
+
+    /// Compute play state from grid: GameOver if no player, Won if no rats (and started with rats).
+    pub(crate) fn play_state(&self) -> PlayState {
+        let play_state = self.grid.play_state();
+        if play_state == PlayState::GameOver {
+            return PlayState::GameOver;
+        }
+        if self.initial_has_rats() {
+            play_state
+        } else {
+            PlayState::Playing
+        }
+    }
+}
+
+impl Game {
+    pub(crate) fn new(grid: Grid, completed_levels: HashSet<String>) -> Self {
+        Self {
+            state: GameState::new(grid, completed_levels),
+            animation: None,
+        }
+    }
+
+    pub(crate) fn is_level_completed(&self, level: &str) -> bool {
+        self.state.completed_levels.contains(level)
+    }
+
+    pub(crate) fn restart(&mut self) {
+        self.state.grid = self.state.initial_grid.clone();
+        self.state.history = vec![self.state.grid.clone()];
+        self.animation = None;
+        self.state.queued_move = None;
+    }
+
+    pub(crate) fn undo(&mut self) {
+        if self.state.history.len() > 1 {
+            self.state.history.pop();
+            self.state.grid = self.state.history.last().unwrap().clone();
+            self.animation = None;
+            self.state.queued_move = None;
+        }
+    }
+
+    pub(crate) fn is_animating(&self) -> bool {
+        self.animation.is_some()
+    }
+
+    pub(crate) fn begin_action(&mut self, m: Action) {
+        self.make_move_internal(m, true);
+    }
+
+    pub(crate) fn try_begin_action(&mut self, m: Action) {
+        if self.is_animating() {
+            if self.state.queued_move.is_none() {
+                self.state.queued_move = Some(m);
+            }
+        } else {
+            self.make_move_internal(m, true);
+        }
+    }
+
+    /// Apply an input immediately without animation (for editor replay)
+    pub(crate) fn apply_action(&mut self, m: Action) {
+        self.make_move_internal(m, false);
+    }
+
+    fn make_move_internal(&mut self, m: Action, animate: bool) {
+        let play_state = self.state.play_state();
+
+        if play_state != PlayState::Playing {
+            return;
+        }
+
+        if self.state.find_player().is_none() {
+            return;
+        };
+
+        let prev_grid = self.state.grid.clone();
+
+        // Handler #1: resolve instantly
+        let mut resolver = MoveHandler::new(prev_grid.clone());
+        resolver.do_player_move(m);
+        resolver.resolve_all();
+
+        // Copy results back to game state
+        self.state.grid = resolver.grid;
+        self.state.history.push(self.state.grid.clone());
+
+        // Handler #2: for animation (only if animate=true)
+        if animate {
+            let mut animator = MoveHandler::new(prev_grid);
+            animator.do_player_move(m);
+
+            if !animator.is_empty() {
+                self.animation = Some(animator);
+            }
+        }
+    }
+
+    pub(crate) fn initial_has_rats(&self) -> bool {
+        self.state.initial_has_rats()
+    }
+
+    pub(crate) fn grid_width(&self) -> usize {
+        self.state.grid.width()
+    }
+
+    pub(crate) fn grid_height(&self) -> usize {
+        self.state.grid.height()
+    }
+}
+
+fn level_display_name(name: &str) -> &'static str {
+    &get_level(name).unwrap().display_name
+}
+
+#[cfg(test)]
+mod tests;

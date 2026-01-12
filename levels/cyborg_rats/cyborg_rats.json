@@ -1,0 +1,25 @@
+{
+  "name": "Cyborg Rats",
+  "portals": [
+    {
+      "x": 2,
+      "y": 0,
+      "level": "cyborg_rats/ai_takeover"
+    },
+    {
+      "x": 2,
+      "y": 2,
+      "level": "cyborg_rats/fakeout"
+    },
+    {
+      "x": 2,
+      "y": 4,
+      "level": "cyborg_rats/unguided"
+    },
+    {
+      "x": 2,
+      "y": 6,
+      "level": "cyborg_rats/stalemate"
+    }
+  ]
+}

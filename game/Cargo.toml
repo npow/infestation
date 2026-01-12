@@ -1,0 +1,38 @@
+[package]
+name = "infestation"
+version = "0.1.0"
+edition = "2024"
+default-run = "infestation"
+
+[lib]
+name = "infestation"
+path = "src/lib.rs"
+
+[[bin]]
+name = "infestation"
+path = "src/main.rs"
+
+[[bin]]
+name = "editor"
+path = "src/bin/editor.rs"
+
+[dependencies]
+csv = "*"
+log = "*"
+macroquad = "*"
+quad-gamepad = { path = "../quad-gamepad" }
+quad-touch = { path = "../quad-touch" }
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+quad-storage = "*"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+directories = "*"
+keepawake = "*"
+
+[build-dependencies]
+ureq = "*"
+bzip2 = "*"
+tar = "*"

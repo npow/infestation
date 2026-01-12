@@ -1,0 +1,15 @@
+{
+  "name": "Triggers",
+  "notes": [
+    {
+      "x": 1,
+      "y": 7,
+      "text": "A digit is a trigger. Triggers use quantum entanglement to INSTANTLY signal other triggers of the same kind when consumed."
+    },
+    {
+      "x": 7,
+      "y": 1,
+      "text": "If a trigger receives a signal and is not consumed, it turns into a wall along with all adjacent empty spaces."
+    }
+  ]
+}
