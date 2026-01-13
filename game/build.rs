@@ -100,19 +100,19 @@ fn collect_levels(dir: &Path, prefix: &str, levels: &mut Vec<String>) {
             };
             println!("cargo:rerun-if-changed={}", path.display());
             collect_levels(&path, &new_prefix, levels);
-        } else if path.extension().is_some_and(|e| e == "csv") {
-            if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                let level_name = if prefix.is_empty() {
-                    stem.to_string()
-                } else {
-                    format!("{}/{}", prefix, stem)
-                };
-                levels.push(level_name);
-                println!("cargo:rerun-if-changed={}", path.display());
-                let json_path = path.with_extension("json");
-                if json_path.exists() {
-                    println!("cargo:rerun-if-changed={}", json_path.display());
-                }
+        } else if path.extension().is_some_and(|e| e == "csv")
+            && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+        {
+            let level_name = if prefix.is_empty() {
+                stem.to_string()
+            } else {
+                format!("{}/{}", prefix, stem)
+            };
+            levels.push(level_name);
+            println!("cargo:rerun-if-changed={}", path.display());
+            let json_path = path.with_extension("json");
+            if json_path.exists() {
+                println!("cargo:rerun-if-changed={}", json_path.display());
             }
         }
     }

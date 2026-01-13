@@ -245,10 +245,12 @@ impl App {
         let hints = self.input_hints();
         let ui = self.ui_state();
 
-        // Priority: note text > portal name > nothing
+        // Priority: note text > completed portal name > current level name
         let note_text = self.game.state.standing_on_note();
-        let portal_name = self.game.state.current_portal_display_name();
-        let description = note_text.or(portal_name);
+        let portal_name = self.game.state.standing_on_completed_portal();
+        let level_name =
+            levels::get_level(&self.stack.current_level).map(|l| l.display_name.as_str());
+        let description = note_text.or(portal_name).or(level_name);
 
         render(
             &self.game,

@@ -112,6 +112,14 @@ impl Tool {
     }
 }
 
+/// An item being dragged as part of a bulk selection
+struct DraggedItem {
+    delta: PositionDelta,
+    cell: Cell,
+    portal: Option<String>,
+    note: Option<String>,
+}
+
 struct Editor {
     initial_grid: Grid,
     input_history: Vec<Action>,
@@ -127,8 +135,8 @@ struct Editor {
     // Rectangle selection state
     selecting_rect: Option<(Position, Position)>, // (start, current) corners while dragging
     selection: HashSet<Position>,                 // Currently selected cell positions
-    // Multi-item dragging state (anchor_pos, cells with offsets from anchor)
-    dragging_selection: Option<(Position, Vec<(PositionDelta, Cell)>)>,
+    // Multi-item dragging state (anchor_pos, items with offsets from anchor)
+    dragging_selection: Option<(Position, Vec<DraggedItem>)>,
 }
 
 impl Editor {
@@ -250,17 +258,26 @@ impl Editor {
     fn start_drag(&mut self, pos: Position) {
         // If clicking on a selected cell, drag the entire selection
         if self.selection.contains(&pos) {
-            let mut cells = Vec::new();
+            let mut items = Vec::new();
             for &sel_pos in &self.selection {
                 let cell = self.initial_grid.at(sel_pos);
-                if !matches!(cell, Cell::Empty) {
-                    let delta = sel_pos - pos;
-                    cells.push((delta, cell));
+                let portal = self.initial_grid.get_portal(sel_pos).map(String::from);
+                let note = self.initial_grid.get_note(sel_pos).map(String::from);
+                // Include position if it has a non-empty cell, portal, or note
+                if !matches!(cell, Cell::Empty) || portal.is_some() || note.is_some() {
+                    items.push(DraggedItem {
+                        delta: sel_pos - pos,
+                        cell,
+                        portal,
+                        note,
+                    });
                     *self.initial_grid.at_mut(sel_pos) = Cell::Empty;
+                    self.initial_grid.remove_portal(sel_pos);
+                    self.initial_grid.remove_note(sel_pos);
                 }
             }
-            if !cells.is_empty() {
-                self.dragging_selection = Some((pos, cells));
+            if !items.is_empty() {
+                self.dragging_selection = Some((pos, items));
                 self.replay_inputs();
             }
             return;
@@ -278,14 +295,23 @@ impl Editor {
 
     fn end_drag(&mut self, pos: Position) {
         // Handle multi-item drag
-        if let Some((_, cells)) = self.dragging_selection.take() {
+        if let Some((_, items)) = self.dragging_selection.take() {
             let bounds = (self.initial_grid.width(), self.initial_grid.height());
-            for (delta, cell) in cells {
-                let target = pos + delta;
+            for item in items {
+                let target = pos + item.delta;
                 if target.in_bounds(bounds) {
-                    self.place_cell(target, cell);
+                    if !matches!(item.cell, Cell::Empty) {
+                        self.place_cell(target, item.cell);
+                    }
+                    if let Some(level) = item.portal {
+                        self.initial_grid.insert_portal(target, level);
+                    }
+                    if let Some(text) = item.note {
+                        self.initial_grid.insert_note(target, text);
+                    }
                 }
             }
+            self.replay_inputs();
             self.selection.clear();
             return;
         }
@@ -298,10 +324,16 @@ impl Editor {
 
     fn cancel_drag(&mut self) {
         // Handle multi-item drag cancellation
-        if let Some((anchor, cells)) = self.dragging_selection.take() {
-            for (delta, cell) in cells {
-                let target = anchor + delta;
-                *self.initial_grid.at_mut(target) = cell;
+        if let Some((anchor, items)) = self.dragging_selection.take() {
+            for item in items {
+                let target = anchor + item.delta;
+                *self.initial_grid.at_mut(target) = item.cell;
+                if let Some(level) = item.portal {
+                    self.initial_grid.insert_portal(target, level);
+                }
+                if let Some(text) = item.note {
+                    self.initial_grid.insert_note(target, text);
+                }
             }
             self.replay_inputs();
             return;
@@ -337,7 +369,11 @@ impl Editor {
             for y in min_y..=max_y {
                 for x in min_x..=max_x {
                     let pos = Position { x, y };
-                    if !matches!(self.initial_grid.at(pos), Cell::Empty) {
+                    // Select if non-empty cell, or has a portal or note
+                    let has_content = !matches!(self.initial_grid.at(pos), Cell::Empty)
+                        || self.initial_grid.get_portal(pos).is_some()
+                        || self.initial_grid.get_note(pos).is_some();
+                    if has_content {
                         self.selection.insert(pos);
                     }
                 }
@@ -620,20 +656,20 @@ impl Editor {
         };
 
         // Handle multi-item drag preview
-        if let Some((_, ref cells)) = self.dragging_selection {
-            for &(delta, cell) in cells {
-                let target_x = mx + delta.dx as f32 * cell_size;
-                let target_y = my + delta.dy as f32 * cell_size;
+        if let Some((_, ref items)) = self.dragging_selection {
+            for item in items {
+                let target_x = mx + item.delta.dx as f32 * cell_size;
+                let target_y = my + item.delta.dy as f32 * cell_size;
 
-                self.draw_cell_preview(cell, target_x, target_y, cell_size, 180);
+                self.draw_cell_preview(item.cell, target_x, target_y, cell_size, 180);
 
                 // Ghost on opposite pane
                 let other_pane = 1 - current_pane;
-                let target_pos = pos + delta;
+                let target_pos = pos + item.delta;
                 let bounds = (self.initial_grid.width(), self.initial_grid.height());
                 if target_pos.in_bounds(bounds) {
                     let (gx, gy) = self.grid_to_screen(target_pos, other_pane);
-                    self.draw_cell_preview(cell, gx, gy, cell_size, 100);
+                    self.draw_cell_preview(item.cell, gx, gy, cell_size, 100);
                 }
             }
             return;

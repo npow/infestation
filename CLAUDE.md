@@ -75,6 +75,12 @@ A top-down 2D grid-based turn-based puzzle game built with macroquad, targeting 
 - Use enums, newtypes, or Option instead of magic string values
 - `Option<T>` is better than a sentinel value
 
+**Use structs instead of large tuples.**
+
+- Tuples with 3+ elements become hard to read and easy to misuse
+- Named fields are self-documenting; `.2` is not
+- A struct makes destructuring patterns clearer and refactoring safer
+
 **Preserve error information.**
 
 - Don't discard the original error with `.map_err(|_| ...)` or `.ok()`

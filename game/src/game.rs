@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::direction::Dir4;
 use crate::grid::{Cell, Grid};
-use crate::levels::get_level;
+use crate::levels;
 use crate::position::Position;
 
 mod animation;
@@ -141,11 +141,12 @@ impl GameState {
         self.grid.get_note(player_pos)
     }
 
-    pub(crate) fn current_portal_display_name(&self) -> Option<&'static str> {
-        let level = self.standing_on_portal()?;
+    /// Returns the display name of the portal if standing on a completed portal.
+    pub(crate) fn standing_on_completed_portal(&self) -> Option<&str> {
+        let portal = self.standing_on_portal()?;
         self.completed_levels
-            .contains(level)
-            .then(|| level_display_name(level))
+            .contains(portal)
+            .then(|| levels::get_level(portal).map(|l| l.display_name.as_str()))?
     }
 
     /// Returns the portal destination if the player just stepped onto an unvisited portal (auto-enter).
@@ -294,10 +295,6 @@ impl Game {
     pub(crate) fn grid_height(&self) -> usize {
         self.state.grid.height()
     }
-}
-
-fn level_display_name(name: &str) -> &'static str {
-    &get_level(name).unwrap().display_name
 }
 
 #[cfg(test)]

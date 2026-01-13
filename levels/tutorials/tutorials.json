@@ -1,9 +1,9 @@
 {
-  "name": "World",
+  "name": "Tutorials",
   "portals": [
     {
-      "x": 1,
-      "y": 8,
+      "x": 3,
+      "y": 6,
       "level": "tutorials/triggering_explosives"
     },
     {
@@ -17,49 +17,49 @@
       "level": "tutorials/triggers"
     },
     {
-      "x": 3,
+      "x": 5,
       "y": 13,
       "level": "tutorials/explosives"
     },
     {
-      "x": 1,
+      "x": 3,
       "y": 15,
       "level": "tutorials/blackhole"
     },
     {
-      "x": 1,
+      "x": 3,
       "y": 17,
       "level": "tutorials/planks"
     },
     {
-      "x": 1,
+      "x": 3,
       "y": 19,
       "level": "tutorials/webs"
     },
     {
-      "x": 1,
+      "x": 3,
       "y": 21,
       "level": "tutorials/more_rats"
     },
     {
-      "x": 2,
+      "x": 4,
       "y": 21,
       "level": "tutorials/trapped_rat"
     },
     {
-      "x": 3,
+      "x": 5,
       "y": 21,
       "level": "tutorials/trapped_rat2"
     },
     {
-      "x": 1,
+      "x": 3,
       "y": 23,
       "level": "tutorials/rats"
     }
   ],
   "notes": [
     {
-      "x": 4,
+      "x": 6,
       "y": 21,
       "text": "You're a rat-fighting master!"
     }
