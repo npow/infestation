@@ -9,7 +9,7 @@
     {
       "x": 2,
       "y": 2,
-      "level": "chase"
+      "level": "overstep"
     },
     {
       "x": 2,
@@ -19,27 +19,27 @@
     {
       "x": 2,
       "y": 6,
-      "level": "lock_in"
-    },
-    {
-      "x": 2,
-      "y": 8,
       "level": "order_of_operations"
     },
     {
       "x": 2,
+      "y": 8,
+      "level": "chase"
+    },
+    {
+      "x": 2,
       "y": 10,
-      "level": "release"
+      "level": "lock_in"
     },
     {
       "x": 2,
       "y": 12,
-      "level": "synchronicity"
+      "level": "release"
     },
     {
       "x": 2,
       "y": 14,
-      "level": "overstep"
+      "level": "synchronicity"
     },
     {
       "x": 2,
