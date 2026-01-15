@@ -1,0 +1,20 @@
+{
+  "name": "Triggering Explosives",
+  "notes": [
+    {
+      "x": 3,
+      "y": 2,
+      "text": "When a trigger activates next to an explosive, it causes that explosive to detonate."
+    },
+    {
+      "x": 1,
+      "y": 3,
+      "text": "But remember, stepping on a trigger only makes OTHERS of the same kind activate. So stepping on this 2 won't blow you up."
+    },
+    {
+      "x": 1,
+      "y": 5,
+      "text": "Which isn't to say it was a good idea"
+    }
+  ]
+}
