@@ -143,8 +143,9 @@ pub(crate) fn render(
 
     let play_state = game.state.play_state();
 
-    // Button bar at top
-    render_button_bar(ui, play_state == PlayState::Playing, hints, sprites.font());
+    // Button bar at bottom (above dialogue)
+    let bar_y = button_bar_y();
+    render_button_bar(ui, play_state == PlayState::Playing, hints, bar_y, sprites.font());
 
     // Grid lines
     for i in 0..=game.grid_width() {
@@ -447,7 +448,7 @@ fn render_confirm_dialog(dialog: ConfirmDialog, hints: InputHints, font: &Font) 
 }
 
 fn render_dialogue(description: Option<&str>, dialogue_y: f32, font: &Font) {
-    let dialogue_height = screen_height() - dialogue_y;
+    let dialogue_height = screen_height() - dialogue_y - BUTTON_BAR_HEIGHT;
 
     // Background
     draw_rectangle(
@@ -519,16 +520,21 @@ fn grid_offset(game: &Game) -> (f32, f32) {
     let cell = cell_size(game);
     let grid_w = game.grid_width() as f32 * cell;
     let offset_x = (screen_width() - grid_w) / 2.0;
-    let offset_y = BUTTON_BAR_HEIGHT + PADDING; // Grid below button bar
+    let offset_y = PADDING; // Grid at top
     (offset_x, offset_y)
 }
 
 fn dialogue_y(game: &Game) -> f32 {
     let cell = cell_size(game);
     let grid_h = game.grid_height() as f32 * cell;
-    let grid_bottom = BUTTON_BAR_HEIGHT + PADDING + grid_h + PADDING;
-    // Dialogue starts at grid bottom, but no higher than (screen_height - DIALOGUE_HEIGHT)
-    grid_bottom.min(screen_height() - DIALOGUE_HEIGHT)
+    let grid_bottom = PADDING + grid_h + PADDING;
+    // Dialogue starts at grid bottom, but no higher than needed to fit dialogue + button bar
+    grid_bottom.min(screen_height() - DIALOGUE_HEIGHT - BUTTON_BAR_HEIGHT)
+}
+
+pub(crate) fn button_bar_y() -> f32 {
+    // Button bar at the very bottom, below dialogue
+    screen_height() - BUTTON_BAR_HEIGHT
 }
 
 fn button_labels(on_portal: bool, hints: InputHints) -> [(&'static str, ButtonAction); 4] {
@@ -583,13 +589,14 @@ fn button_labels(on_portal: bool, hints: InputHints) -> [(&'static str, ButtonAc
 fn button_rects(
     on_portal: bool,
     hints: InputHints,
+    bar_y: f32,
     font: &Font,
 ) -> [(f32, f32, f32, f32, ButtonAction); 4] {
     let buttons = button_labels(on_portal, hints);
 
     // 2x2 grid: row 0 = buttons 0,1; row 1 = buttons 2,3
     let row_height = BUTTON_HEIGHT + BUTTON_SPACING;
-    let y_start = (BUTTON_BAR_HEIGHT - 2.0 * BUTTON_HEIGHT - BUTTON_SPACING) / 2.0;
+    let y_start = bar_y + (BUTTON_BAR_HEIGHT - 2.0 * BUTTON_HEIGHT - BUTTON_SPACING) / 2.0;
 
     let mut rects = [(0.0, 0.0, 0.0, 0.0, ButtonAction::Reset); 4];
     for row in 0..2 {
@@ -612,22 +619,22 @@ fn button_rects(
     rects
 }
 
-fn render_button_bar(ui: &UiState, is_playing: bool, hints: InputHints, font: &Font) {
+fn render_button_bar(ui: &UiState, is_playing: bool, hints: InputHints, bar_y: f32, font: &Font) {
     // Background
     draw_rectangle(
         0.0,
-        0.0,
+        bar_y,
         screen_width(),
         BUTTON_BAR_HEIGHT,
         Color::from_rgba(20, 20, 30, 255),
     );
 
-    // Bottom border
+    // Top border
     draw_line(
         0.0,
-        BUTTON_BAR_HEIGHT,
+        bar_y,
         screen_width(),
-        BUTTON_BAR_HEIGHT,
+        bar_y,
         2.0,
         Color::from_rgba(60, 60, 80, 255),
     );
@@ -640,7 +647,7 @@ fn render_button_bar(ui: &UiState, is_playing: bool, hints: InputHints, font: &F
         (ButtonAction::Exit, ui.can_exit),
     ];
 
-    for (x, y, w, h, action) in button_rects(ui.on_portal, hints, font) {
+    for (x, y, w, h, action) in button_rects(ui.on_portal, hints, bar_y, font) {
         let (label, _) = labels.iter().find(|&&(_, a)| a == action).unwrap();
         let enabled = enabled_states
             .iter()
@@ -681,9 +688,10 @@ pub(crate) fn button_at_position(
     ui: &UiState,
     is_playing: bool,
     hints: InputHints,
+    bar_y: f32,
     font: &Font,
 ) -> Option<ButtonAction> {
-    for (bx, by, bw, bh, action) in button_rects(ui.on_portal, hints, font) {
+    for (bx, by, bw, bh, action) in button_rects(ui.on_portal, hints, bar_y, font) {
         if pos.x >= bx && pos.x < bx + bw && pos.y >= by && pos.y < by + bh {
             let enabled = match action {
                 ButtonAction::Reset => ui.can_reset,

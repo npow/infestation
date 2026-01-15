@@ -8,7 +8,7 @@ use crate::game::{Action, Game, PlayState};
 use crate::input::{Input, InputState, TouchGesture};
 use crate::level_stack::LevelStack;
 use crate::levels;
-use crate::render::{ButtonAction, ConfirmDialog, InputHints, UiState, button_at_position, render};
+use crate::render::{ButtonAction, ConfirmDialog, InputHints, UiState, button_at_position, button_bar_y, render};
 use crate::screen_wake;
 use crate::sprites::Sprites;
 use crate::storage::{load_completed_levels, save_completed_levels};
@@ -133,7 +133,8 @@ impl App {
 
         let play_state = self.game.state.play_state();
         let is_playing = play_state == PlayState::Playing;
-        if let Some(action) = button_at_position(pos, &ui, is_playing, hints, self.sprites.font()) {
+        let bar_y = button_bar_y();
+        if let Some(action) = button_at_position(pos, &ui, is_playing, hints, bar_y, self.sprites.font()) {
             self.handle_input(button_action_to_input(action));
             return;
         }
