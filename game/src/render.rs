@@ -10,6 +10,7 @@ const DIALOGUE_PADDING: f32 = 12.0;
 const BUTTON_BAR_HEIGHT: f32 = 70.0;
 const BUTTON_HEIGHT: f32 = 28.0;
 const BUTTON_SPACING: f32 = 6.0;
+const BOTTOM_SAFE_AREA: f32 = 40.0;
 
 fn text_params(font: &Font, size: u16, color: Color) -> TextParams<'_> {
     TextParams {
@@ -448,7 +449,7 @@ fn render_confirm_dialog(dialog: ConfirmDialog, hints: InputHints, font: &Font) 
 }
 
 fn render_dialogue(description: Option<&str>, dialogue_y: f32, font: &Font) {
-    let dialogue_height = screen_height() - dialogue_y - BUTTON_BAR_HEIGHT;
+    let dialogue_height = screen_height() - dialogue_y - BUTTON_BAR_HEIGHT - BOTTOM_SAFE_AREA;
 
     // Background
     draw_rectangle(
@@ -510,7 +511,7 @@ fn wrap_text(text: &str, font: &Font, font_size: u16, max_width: f32) -> Vec<Str
 
 fn cell_size(game: &Game) -> f32 {
     let width = screen_width();
-    let height = screen_height() - DIALOGUE_HEIGHT - BUTTON_BAR_HEIGHT;
+    let height = screen_height() - DIALOGUE_HEIGHT - BUTTON_BAR_HEIGHT - BOTTOM_SAFE_AREA;
     let cell_w = (width - PADDING * 2.0) / game.grid_width() as f32;
     let cell_h = (height - PADDING * 2.0) / game.grid_height() as f32;
     cell_w.min(cell_h)
@@ -528,13 +529,13 @@ fn dialogue_y(game: &Game) -> f32 {
     let cell = cell_size(game);
     let grid_h = game.grid_height() as f32 * cell;
     let grid_bottom = PADDING + grid_h + PADDING;
-    // Dialogue starts at grid bottom, but no higher than needed to fit dialogue + button bar
-    grid_bottom.min(screen_height() - DIALOGUE_HEIGHT - BUTTON_BAR_HEIGHT)
+    // Dialogue starts at grid bottom, but no higher than needed to fit dialogue + button bar + safe area
+    grid_bottom.min(screen_height() - DIALOGUE_HEIGHT - BUTTON_BAR_HEIGHT - BOTTOM_SAFE_AREA)
 }
 
 pub(crate) fn button_bar_y() -> f32 {
-    // Button bar at the very bottom
-    screen_height() - BUTTON_BAR_HEIGHT
+    // Button bar above safe area at bottom
+    screen_height() - BUTTON_BAR_HEIGHT - BOTTOM_SAFE_AREA
 }
 
 fn button_labels(on_portal: bool, hints: InputHints) -> [(&'static str, ButtonAction); 4] {
