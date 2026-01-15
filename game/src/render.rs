@@ -533,7 +533,7 @@ fn dialogue_y(game: &Game) -> f32 {
 }
 
 pub(crate) fn button_bar_y() -> f32 {
-    // Button bar at the very bottom, below dialogue
+    // Button bar at the very bottom
     screen_height() - BUTTON_BAR_HEIGHT
 }
 
