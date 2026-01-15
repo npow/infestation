@@ -10,7 +10,7 @@ const DIALOGUE_PADDING: f32 = 12.0;
 const BUTTON_BAR_HEIGHT: f32 = 70.0;
 const BUTTON_HEIGHT: f32 = 28.0;
 const BUTTON_SPACING: f32 = 6.0;
-const BOTTOM_SAFE_AREA: f32 = 40.0;
+const BOTTOM_SAFE_AREA: f32 = 80.0;
 
 fn text_params(font: &Font, size: u16, color: Color) -> TextParams<'_> {
     TextParams {
