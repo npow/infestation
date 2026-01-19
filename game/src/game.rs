@@ -1,3 +1,4 @@
+use std::borrow::BorrowMut;
 use std::collections::HashSet;
 
 use crate::direction::Dir4;
@@ -51,9 +52,9 @@ pub(crate) enum Action {
 /// Handles move resolution and animation.
 /// Used for both instant resolution and animated playback.
 #[derive(Clone)]
-pub(crate) struct MoveHandler {
+pub(crate) struct MoveHandler<G = Grid> {
     /// Grid being modified (also used for rendering during animation).
-    pub(crate) grid: Grid,
+    pub(crate) grid: G,
     /// Movement animations in progress.
     pub(crate) moving: Vec<Moving>,
     /// Zap animations in progress.
@@ -66,8 +67,8 @@ pub(crate) struct MoveHandler {
     pub(crate) pending_explosions: Vec<Position>,
 }
 
-impl MoveHandler {
-    pub(crate) fn new(grid: Grid) -> Self {
+impl<G: BorrowMut<Grid>> MoveHandler<G> {
+    pub(crate) fn new(grid: G) -> Self {
         Self {
             grid,
             moving: Vec::new(),
@@ -88,9 +89,10 @@ impl MoveHandler {
     }
 
     fn begin_move(&mut self, moving: Moving) {
-        *self.grid.at_mut(moving.from) = Cell::Empty;
+        let grid = self.grid.borrow_mut();
+        *grid.at_mut(moving.from) = Cell::Empty;
         self.moving.push(moving);
-        let dest_entity = self.grid.at_mut(moving.to);
+        let dest_entity = grid.at_mut(moving.to);
         if !matches!(*dest_entity, Cell::BlackHole) {
             // The grid changes will get overwritten when we replace the grid with the previous one.
             // This is just for sequential blocking checks.
@@ -233,7 +235,20 @@ impl Game {
     }
 
     pub(crate) fn begin_action(&mut self, m: Action) {
-        self.make_move_internal(m, true);
+        let prev_grid = self.state.grid.clone();
+
+        // Handler #1: resolve instantly
+        if !self.apply_action(m) {
+            return;
+        }
+
+        // Handler #2: for animation
+        let mut animator = MoveHandler::new(prev_grid);
+        animator.do_player_move(m);
+
+        if !animator.is_empty() {
+            self.animation = Some(animator);
+        }
     }
 
     pub(crate) fn try_begin_action(&mut self, m: Action) {
@@ -242,46 +257,25 @@ impl Game {
                 self.state.queued_move = Some(m);
             }
         } else {
-            self.make_move_internal(m, true);
+            self.begin_action(m);
         }
     }
 
     /// Apply an input immediately without animation (for editor replay)
-    pub(crate) fn apply_action(&mut self, m: Action) {
-        self.make_move_internal(m, false);
-    }
-
-    fn make_move_internal(&mut self, m: Action, animate: bool) {
+    pub(crate) fn apply_action(&mut self, m: Action) -> bool {
         let play_state = self.state.play_state();
 
-        if play_state != PlayState::Playing {
-            return;
-        }
-
-        if self.state.find_player().is_none() {
-            return;
+        if play_state != PlayState::Playing || self.state.find_player().is_none() {
+            return false;
         };
 
-        let prev_grid = self.state.grid.clone();
-
-        // Handler #1: resolve instantly
-        let mut resolver = MoveHandler::new(prev_grid.clone());
+        let mut resolver = MoveHandler::new(&mut self.state.grid);
         resolver.do_player_move(m);
         resolver.resolve_all();
 
-        // Copy results back to game state
-        self.state.grid = resolver.grid;
         self.state.history.push(self.state.grid.clone());
 
-        // Handler #2: for animation (only if animate=true)
-        if animate {
-            let mut animator = MoveHandler::new(prev_grid);
-            animator.do_player_move(m);
-
-            if !animator.is_empty() {
-                self.animation = Some(animator);
-            }
-        }
+        true
     }
 
     pub(crate) fn initial_has_rats(&self) -> bool {

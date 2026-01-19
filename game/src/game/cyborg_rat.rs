@@ -1,14 +1,15 @@
+use std::borrow::BorrowMut;
 use std::collections::hash_map::Entry;
 use std::collections::{BinaryHeap, HashMap};
 
 use crate::direction::{Dir4, Dir8};
-use crate::grid::Cell;
+use crate::grid::{Cell, Grid};
 use crate::position::Position;
 
 use super::cyborg_distance::{CyborgDistance, DijkstraEntry};
 use super::{MoveHandler, Moving};
 
-impl MoveHandler {
+impl<G: BorrowMut<Grid>> MoveHandler<G> {
     /// Compute shortest path distances from target using Dijkstra with A + B*sqrt(2) metric
     fn compute_cyborg_distances(&self, target: Position) -> HashMap<Position, CyborgDistance> {
         let mut distances: HashMap<Position, CyborgDistance> = HashMap::new();
@@ -19,7 +20,8 @@ impl MoveHandler {
             pos: target,
         });
 
-        let bounds = self.grid.bounds();
+        let grid = self.grid.borrow();
+        let bounds = grid.bounds();
 
         while let Some(DijkstraEntry { dist, pos }) = heap.pop() {
             match distances.entry(pos) {
@@ -41,7 +43,7 @@ impl MoveHandler {
                 }
 
                 // Check if traversable for cyborg pathfinding
-                let cell = self.grid.at(neighbor);
+                let cell = grid.at(neighbor);
                 let traversable = match cell {
                     Cell::Wall | Cell::BlackHole | Cell::Spiderweb | Cell::Explosive => false,
                     Cell::Empty
@@ -73,6 +75,7 @@ impl MoveHandler {
         // Partition cyborg rats into reachable and unreachable
         let (reachable, unreachable): (Vec<_>, Vec<_>) = self
             .grid
+            .borrow()
             .find_entities(|cell| matches!(cell, Cell::CyborgRat(_)))
             .map(|(pos, _)| pos)
             .partition(|pos| distances.contains_key(pos));
@@ -125,7 +128,7 @@ impl MoveHandler {
                 }
 
                 // Check if cell is available
-                let target_cell = self.grid.at(new_pos);
+                let target_cell = self.grid.borrow().at(new_pos);
 
                 // Can't move into walls, other cyborg rats, spiderwebs, black holes
                 if target_cell.blocks_cyborg_rat() {

@@ -1,14 +1,17 @@
+use std::borrow::BorrowMut;
+
 use crate::direction::{Dir4, Dir8};
-use crate::grid::Cell;
+use crate::grid::{Cell, Grid};
 use crate::position::Position;
 
 use super::{MoveHandler, Moving};
 
-impl MoveHandler {
+impl<G: BorrowMut<Grid>> MoveHandler<G> {
     pub(crate) fn move_rats(&mut self, player: Position, player_facing: Dir4) {
         let blocked_dir = player_facing.opposite();
         let mut rats: Vec<_> = self
             .grid
+            .borrow()
             .find_entities(|cell| matches!(cell, Cell::Rat(_)))
             .map(|(pos, _)| pos)
             .collect();
@@ -50,7 +53,7 @@ impl MoveHandler {
             for dir in moves_to_try {
                 let new_pos = rat_pos + dir.delta();
 
-                let target_cell = self.grid.at(new_pos);
+                let target_cell = self.grid.borrow().at(new_pos);
                 // If rat is moving to player's destination, skip block check
                 // (player is clearing whatever was there, e.g. spiderweb)
                 if target_cell.blocks_rat() {

@@ -1,12 +1,14 @@
-use crate::direction::Dir4;
+use std::borrow::BorrowMut;
+
 use crate::grid::Cell;
 use crate::position::Position;
+use crate::{direction::Dir4, grid::Grid};
 
 use super::{Action, Game, GameState, MoveHandler, Moving};
 
-impl MoveHandler {
+impl<G: BorrowMut<Grid>> MoveHandler<G> {
     pub(crate) fn find_player(&self) -> Option<(Position, Dir4)> {
-        for (pos, cell) in self.grid.entries() {
+        for (pos, cell) in self.grid.borrow().entries() {
             if let Cell::Player(dir) = cell {
                 return Some((pos, dir));
             }
@@ -19,14 +21,15 @@ impl MoveHandler {
             return;
         };
 
-        let prev_grid = self.grid.clone();
+        let grid = self.grid.borrow();
+        let prev_grid = grid.clone();
 
         let new_pos;
         let new_dir;
         match m {
             Action::Move(dir) => {
                 let candidate = player_pos + dir.delta();
-                let target_cell = self.grid.at(candidate);
+                let target_cell = grid.at(candidate);
                 let blocked = target_cell.blocks_player();
                 new_pos = if blocked { player_pos } else { candidate };
                 new_dir = dir;
@@ -50,10 +53,11 @@ impl MoveHandler {
         // The grid is useful for tracking what is blocked so that rat movement is resolved
         // sequentially. But we should wait for animations to complete before placing things at
         // their final positions.
-        self.grid = prev_grid;
+        let curr_grid = self.grid.borrow_mut();
+        *curr_grid = prev_grid;
         // Remove entities from their old positions now that they're tracked as moving entities.
         for m in &self.moving {
-            *self.grid.at_mut(m.from) = Cell::Empty;
+            *curr_grid.at_mut(m.from) = Cell::Empty;
         }
     }
 }

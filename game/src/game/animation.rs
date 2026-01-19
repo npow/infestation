@@ -1,8 +1,10 @@
-use crate::grid::Cell;
+use std::borrow::BorrowMut;
+
+use crate::grid::{Cell, Grid};
 
 use super::{Game, MOVE_SPEED, MoveHandler};
 
-impl MoveHandler {
+impl<G: BorrowMut<Grid>> MoveHandler<G> {
     /// Resolve all pending animations immediately.
     ///
     /// This uses the same `animate()` function as visual playback, but with
@@ -95,9 +97,10 @@ impl MoveHandler {
     }
 
     fn finish_moving(&mut self) {
+        let grid = self.grid.borrow_mut();
         // Update grid: place entities at destination (if they survived)
         for m in self.moving.drain(..) {
-            match self.grid.at(m.to) {
+            match grid.at(m.to) {
                 Cell::BlackHole => {
                     // Black holes swallow entities - don't modify the cell
                     continue;
@@ -117,7 +120,7 @@ impl MoveHandler {
                 _ => {}
             }
             // Place entity (overwrites whatever was there)
-            *self.grid.at_mut(m.to) = m.cell;
+            *grid.at_mut(m.to) = m.cell;
         }
     }
 }
