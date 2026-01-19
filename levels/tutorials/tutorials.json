@@ -22,6 +22,11 @@
       "level": "tutorials/explosives"
     },
     {
+      "x": 6,
+      "y": 13,
+      "level": "tutorials/tinderbox"
+    },
+    {
       "x": 3,
       "y": 15,
       "level": "tutorials/blackhole"
