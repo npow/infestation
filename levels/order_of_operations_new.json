@@ -1,0 +1,10 @@
+{
+  "name": "Order of Operations",
+  "notes": [
+    {
+      "x": 13,
+      "y": 9,
+      "text": "A trigger which is consumed doesn't activate"
+    }
+  ]
+}

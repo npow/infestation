@@ -28,6 +28,11 @@
     },
     {
       "x": 1,
+      "y": 6,
+      "level": "order_of_operations_new"
+    },
+    {
+      "x": 1,
       "y": 7,
       "level": "triggering_explosives_v3"
     },
