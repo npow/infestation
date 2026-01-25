@@ -5,6 +5,7 @@ use crate::direction::Dir4;
 use crate::grid::{Cell, Grid};
 use crate::levels;
 use crate::position::Position;
+use crate::storage::strip_path_prefix;
 
 mod animation;
 mod cyborg_distance;
@@ -143,11 +144,19 @@ impl GameState {
         self.grid.get_note(player_pos)
     }
 
+    fn is_level_completed(&self, level: &str) -> bool {
+        self.completed_levels.contains(strip_path_prefix(level))
+    }
+
+    pub(crate) fn mark_level_completed(&mut self, level: &str) {
+        self.completed_levels
+            .insert(strip_path_prefix(level).to_string());
+    }
+
     /// Returns the display name of the portal if standing on a completed portal.
     pub(crate) fn standing_on_completed_portal(&self) -> Option<&str> {
         let portal = self.standing_on_portal()?;
-        self.completed_levels
-            .contains(portal)
+        self.is_level_completed(portal)
             .then(|| levels::get_level(portal).map(|l| l.display_name.as_str()))?
     }
 
@@ -158,7 +167,7 @@ impl GameState {
         let current_portal = self.grid.get_portal(player_pos)?;
 
         // Don't auto-enter if already completed
-        if self.completed_levels.contains(current_portal) {
+        if self.is_level_completed(current_portal) {
             return None;
         }
 
@@ -211,7 +220,7 @@ impl Game {
     }
 
     pub(crate) fn is_level_completed(&self, level: &str) -> bool {
-        self.state.completed_levels.contains(level)
+        self.state.is_level_completed(level)
     }
 
     pub(crate) fn restart(&mut self) {

@@ -1,0 +1,27 @@
+{
+  "name": "Old Levels",
+  "portals": [
+    {
+      "x": 2,
+      "y": 2,
+      "level": "old_levels/on_the_clock"
+    },
+    {
+      "x": 4,
+      "y": 2,
+      "level": "old_levels/order_of_operations"
+    },
+    {
+      "x": 6,
+      "y": 2,
+      "level": "old_levels/overstep"
+    }
+  ],
+  "notes": [
+    {
+      "x": 4,
+      "y": 5,
+      "text": "These are levels I think are irreparably broken in one way or another. Feel free to play them anyway or not."
+    }
+  ]
+}

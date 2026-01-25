@@ -40,11 +40,8 @@ impl LevelStack {
 
         if current_game.state.play_state() == PlayState::Won {
             // Level completed - mark as visited
-            saved
-                .state
-                .completed_levels
-                .insert(self.current_level.clone());
-        } else if !saved.state.completed_levels.contains(&self.current_level) {
+            saved.state.mark_level_completed(&self.current_level);
+        } else if !saved.is_level_completed(&self.current_level) {
             // Level was unvisited and not completed - undo the portal step
             saved.undo();
         }

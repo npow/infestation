@@ -3,7 +3,15 @@ use std::collections::HashSet;
 pub(crate) use backend::save_completed_levels;
 
 pub(crate) fn load_completed_levels() -> HashSet<String> {
-    backend::try_load_completed_levels().unwrap_or_default()
+    backend::try_load_completed_levels()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|s| strip_path_prefix(&s).to_string())
+        .collect()
+}
+
+pub(crate) fn strip_path_prefix(s: &str) -> &str {
+    s.rsplit('/').next().unwrap_or(s)
 }
 
 macro_rules! warn_err {

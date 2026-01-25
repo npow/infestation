@@ -159,8 +159,7 @@ impl App {
         if !self.game.initial_has_rats() {
             self.game
                 .state
-                .completed_levels
-                .insert(self.stack.current_level.clone());
+                .mark_level_completed(&self.stack.current_level);
             save_completed_levels(&self.game.state.completed_levels);
         }
 

@@ -2,54 +2,106 @@
   "name": "World",
   "portals": [
     {
-      "x": 2,
-      "y": 0,
-      "level": "cyborg_rats/cyborg_rats"
-    },
-    {
-      "x": 2,
+      "x": 1,
       "y": 2,
-      "level": "overstep"
-    },
-    {
-      "x": 2,
-      "y": 4,
-      "level": "on_the_clock"
-    },
-    {
-      "x": 2,
-      "y": 6,
-      "level": "order_of_operations"
-    },
-    {
-      "x": 2,
-      "y": 8,
-      "level": "chase"
-    },
-    {
-      "x": 2,
-      "y": 10,
-      "level": "lock_in"
-    },
-    {
-      "x": 2,
-      "y": 12,
       "level": "release"
     },
     {
-      "x": 2,
-      "y": 14,
-      "level": "synchronicity"
+      "x": 3,
+      "y": 2,
+      "level": "lock_in"
     },
     {
-      "x": 2,
-      "y": 16,
-      "level": "guidance"
+      "x": 5,
+      "y": 2,
+      "level": "chase"
+    },
+    {
+      "x": 7,
+      "y": 2,
+      "level": "cyborg_rats/cyborg_rats"
     },
     {
       "x": 1,
+      "y": 3,
+      "level": "synchronicity"
+    },
+    {
+      "x": 1,
+      "y": 7,
+      "level": "triggering_explosives_v3"
+    },
+    {
+      "x": 7,
+      "y": 7,
+      "level": "old_levels/old_levels"
+    },
+    {
+      "x": 1,
+      "y": 13,
+      "level": "triggers2"
+    },
+    {
+      "x": 2,
+      "y": 13,
+      "level": "triggers"
+    },
+    {
+      "x": 6,
+      "y": 13,
+      "level": "explosives"
+    },
+    {
+      "x": 7,
+      "y": 13,
+      "level": "tinderbox"
+    },
+    {
+      "x": 3,
+      "y": 15,
+      "level": "guidance"
+    },
+    {
+      "x": 4,
+      "y": 15,
+      "level": "blackhole"
+    },
+    {
+      "x": 4,
+      "y": 17,
+      "level": "planks"
+    },
+    {
+      "x": 4,
       "y": 19,
-      "level": "tutorials/tutorials"
+      "level": "webs"
+    },
+    {
+      "x": 4,
+      "y": 21,
+      "level": "more_rats"
+    },
+    {
+      "x": 5,
+      "y": 21,
+      "level": "trapped_rat"
+    },
+    {
+      "x": 6,
+      "y": 21,
+      "level": "trapped_rat2_v2"
+    },
+    {
+      "x": 4,
+      "y": 23,
+      "level": "rats"
+    }
+  ],
+  "notes": [
+    {
+      "x": 7,
+      "y": 21,
+      "text": "You're a rat-fighting master!"
     }
   ]
 }
