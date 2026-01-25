@@ -2,37 +2,6 @@
 
 A top-down 2D grid-based turn-based puzzle game built with macroquad, targeting WASM.
 
-## Architecture Quick Reference
-
-**Project Structure:**
-- `game/src/main.rs` - Entry point and game loop
-- `game/src/game.rs` - Core logic, turn resolution, rat AI
-- `game/src/grid.rs` - Grid and Cell enum (all entity types)
-- `game/src/render.rs` - Rendering and UI
-- `game/src/sprites.rs` - Texture loading
-- `levels/` - CSV level definitions
-
-**Key Types:**
-- `Cell` enum (grid.rs:8) - Empty, Wall, Player(Dir4), Rat(Dir8), Plank, Spiderweb, BlackHole, Explosive, Trigger(u8)
-- `GameState` struct (game.rs) - Core persistent state (grid, history, play_state, completed_levels)
-- `AnimationState` struct (game.rs) - Transient animation state (prev_grid, moving, zapping, exploding)
-- `Game` struct (game.rs) - Wrapper combining `state: GameState` + `animation: Option<AnimationState>`
-- `Grid` struct (grid.rs:31) - 2D cell array with portal map
-
-**Core Methods:**
-- `Game::make_move()` (player.rs) - Entry point, creates AnimationState and delegates to GameState
-- `GameState::do_player_move()` (player.rs) - Player movement and interactions
-- `GameState::move_rats()` (rat.rs) - Rat AI pathfinding
-- `Game::animate()` (animation.rs) - Animation state machine
-
-**Subagents:** See `.claude/agents/` for specialized agents:
-- `entity-dev` - Adding new Cell types (enum variants, CSV parsing, sprites, rendering)
-- `mechanics-dev` - Game logic (turn structure, AI, win/lose conditions, behavior)
-- `level-dev` - Creating and modifying levels
-- `ui-dev` - Rendering, sprites, animations, UI elements
-
-**Agent orchestration:** For gameplay features that need both entity and mechanics work (e.g., "add a goblin enemy"), invoke `entity-dev` first to set up the Cell type and rendering, then invoke `mechanics-dev` to implement the behavior. Pass context from the first agent to the second.
-
 ## Design Principles
 
 **Prefer simple, declarative solutions over complex imperative ones.**
