@@ -27,6 +27,11 @@
       "level": "synchronicity"
     },
     {
+      "x": 5,
+      "y": 5,
+      "level": "ring_around"
+    },
+    {
       "x": 1,
       "y": 6,
       "level": "order_of_operations_new"
