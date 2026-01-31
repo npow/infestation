@@ -67,9 +67,14 @@
       "level": "triggers"
     },
     {
-      "x": 6,
+      "x": 5,
       "y": 13,
       "level": "explosives"
+    },
+    {
+      "x": 6,
+      "y": 13,
+      "level": "explosives2"
     },
     {
       "x": 7,
