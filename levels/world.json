@@ -27,6 +27,11 @@
       "level": "synchronicity"
     },
     {
+      "x": 3,
+      "y": 5,
+      "level": "limited"
+    },
+    {
       "x": 5,
       "y": 5,
       "level": "ring_around"
