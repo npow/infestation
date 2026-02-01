@@ -57,8 +57,11 @@ fn main() {
             panic!("No before file for {}: expected {}_1.csv", base_name, base_name)
         });
 
-        let after_path = after_files.get(base_name).unwrap_or_else(|| {
-            panic!("No after file for {}: expected {}_2.csv", base_name, base_name)
+        // If _2.csv doesn't exist yet, create an empty placeholder so UPDATE_SNAPSHOTS can generate it
+        let after_path = after_files.get(base_name).cloned().unwrap_or_else(|| {
+            let path = scenarios_dir.join(format!("{}_2.csv", base_name));
+            fs::write(&path, "").ok();
+            path.display().to_string()
         });
 
         // Read and parse JSON to get the action
@@ -80,7 +83,7 @@ fn main() {
             base_name.clone(),
             format!(
                 "scenario_test!({}, include_str!(\"{}\"), include_str!(\"{}\"), {}, \"{}\");\n",
-                base_name, before_path, after_path, action_expr, after_path
+                base_name, before_path, &after_path, action_expr, &after_path
             ),
         ));
     }
