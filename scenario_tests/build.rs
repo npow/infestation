@@ -46,7 +46,10 @@ fn main() {
 
     for (base_name, json_path) in &json_files {
         let before_path = before_files.get(base_name).unwrap_or_else(|| {
-            panic!("No before file for {}: expected {}_1.csv", base_name, base_name)
+            panic!(
+                "No before file for {}: expected {}_1.csv",
+                base_name, base_name
+            )
         });
 
         // If _2.csv doesn't exist yet, create an empty placeholder so UPDATE_SNAPSHOTS can generate it
