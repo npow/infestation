@@ -146,7 +146,13 @@ pub(crate) fn render(
 
     // Button bar at bottom (above dialogue)
     let bar_y = button_bar_y();
-    render_button_bar(ui, play_state == PlayState::Playing, hints, bar_y, sprites.font());
+    render_button_bar(
+        ui,
+        play_state == PlayState::Playing,
+        hints,
+        bar_y,
+        sprites.font(),
+    );
 
     // Grid lines
     for i in 0..=game.grid_width() {

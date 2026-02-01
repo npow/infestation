@@ -54,7 +54,10 @@ fn main() {
 
     for (base_name, action, after_path) in &after_files {
         let before_path = before_files.get(base_name).unwrap_or_else(|| {
-            panic!("No before file for {}_{}: expected {}.csv", base_name, action, base_name)
+            panic!(
+                "No before file for {}_{}: expected {}.csv",
+                base_name, action, base_name
+            )
         });
 
         let action_expr = ACTIONS.iter().find(|&&(a, _)| a == action).unwrap().1;

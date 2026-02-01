@@ -82,14 +82,13 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
         // Unreachable cyborg rats just turn to face the player
         for cyborg_pos in unreachable {
-            if let Some(face_dir) = Dir8::from_delta(player - cyborg_pos) {
-                self.begin_move(Moving {
-                    cell: Cell::CyborgRat(face_dir),
-                    from: cyborg_pos,
-                    progress: 1.0,
-                    to: cyborg_pos,
-                });
-            }
+            let face_dir = Dir8::from_delta(player - cyborg_pos).unwrap();
+            self.begin_move(Moving {
+                cell: Cell::CyborgRat(face_dir),
+                from: cyborg_pos,
+                progress: 1.0,
+                to: cyborg_pos,
+            });
         }
 
         // Sort reachable cyborg rats by distance (closest first), tiebreak by position
@@ -148,7 +147,8 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     progress: 0.0,
                     to: cyborg_pos + dir.delta(),
                 });
-            } else if let Some(face_dir) = Dir8::from_delta(player - cyborg_pos) {
+            } else {
+                let face_dir = Dir8::from_delta(player - cyborg_pos).unwrap();
                 // Cyborg rat can't move - turn to face the player
                 self.begin_move(Moving {
                     cell: Cell::CyborgRat(face_dir),
