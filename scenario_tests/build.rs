@@ -59,7 +59,7 @@ fn main() {
         tests.push((
             base_name.clone(),
             format!(
-                "scenario_test!({}, include_str!(\"{}\"), include_str!(\"{}\"), \"{}\", \"{}\");\n",
+                "#[test]\nfn {}() {{\n    run_scenario_test(include_str!(\"{}\"), include_str!(\"{}\"), \"{}\", \"{}\");\n}}\n",
                 base_name, before_path, &after_path, &after_path, json_path
             ),
         ));
