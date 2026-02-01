@@ -79,7 +79,7 @@ impl Grid {
         }
     }
 
-    pub(crate) fn to_csv(&self) -> String {
+    pub fn to_csv(&self) -> String {
         let mut lines = Vec::new();
         for y in 0..self.height {
             let mut row = Vec::new();

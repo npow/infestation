@@ -18,7 +18,7 @@ mod zap;
 const MOVE_SPEED: f32 = 15.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum PlayState {
+pub enum PlayState {
     Playing,
     GameOver,
     Won,
@@ -45,7 +45,7 @@ pub(crate) struct Zapping {
 }
 
 #[derive(Clone, Copy)]
-pub(crate) enum Action {
+pub enum Action {
     Move(Dir4),
     Stall,
 }
@@ -104,7 +104,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
 /// Core game state without animation.
 #[derive(Clone)]
-pub(crate) struct GameState {
+pub struct GameState {
     pub(crate) grid: Grid,
     pub(crate) initial_grid: Grid,
     pub(crate) history: Vec<Grid>,
@@ -114,7 +114,7 @@ pub(crate) struct GameState {
 
 /// Game wrapper combining state and move handling.
 #[derive(Clone)]
-pub(crate) struct Game {
+pub struct Game {
     pub(crate) state: GameState,
     /// Animation state. When Some, render from handler.prev_grid.
     /// state.grid always has the final resolved state.
@@ -271,7 +271,7 @@ impl Game {
     }
 
     /// Apply an input immediately without animation (for editor replay)
-    pub(crate) fn apply_action(&mut self, m: Action) -> bool {
+    pub fn apply_action(&mut self, m: Action) -> bool {
         let play_state = self.state.play_state();
 
         if play_state != PlayState::Playing || self.state.find_player().is_none() {

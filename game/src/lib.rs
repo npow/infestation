@@ -12,3 +12,4 @@ pub(crate) mod storage;
 pub mod editor_app;
 pub mod game_app;
 pub mod sprites;
+pub mod testing;

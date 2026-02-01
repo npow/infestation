@@ -88,8 +88,7 @@ impl LevelMetadata {
 }
 
 impl Grid {
-    #[cfg(test)]
-    pub(crate) fn from_csv(csv_str: &str) -> Self {
+    pub fn from_csv(csv_str: &str) -> Self {
         Self::parse_csv(csv_str, HashMap::new(), HashMap::new())
     }
 

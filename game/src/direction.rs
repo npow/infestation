@@ -1,7 +1,7 @@
 use crate::position::PositionDelta;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum Dir4 {
+pub enum Dir4 {
     North,
     South,
     East,
