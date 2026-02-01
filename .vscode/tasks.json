@@ -40,6 +40,13 @@
       "args": ["check", "--target", "wasm32-unknown-unknown"],
       "group": "build",
       "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "format json",
+      "type": "shell",
+      "command": "prettier --write '**/*.json'",
+      "group": "build",
+      "problemMatcher": []
     }
   ]
 }
