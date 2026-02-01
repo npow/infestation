@@ -1,1 +1,4 @@
-{ "move": "east" }
+{
+  "move": "east",
+  "state": "playing"
+}

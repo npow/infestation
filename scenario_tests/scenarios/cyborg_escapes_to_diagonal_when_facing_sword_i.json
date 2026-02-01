@@ -1,1 +1,4 @@
-{ "move": "stall" }
+{
+  "move": "stall",
+  "state": "playing"
+}

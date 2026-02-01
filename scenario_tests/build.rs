@@ -3,14 +3,6 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
-const ACTIONS: &[(&str, &str)] = &[
-    ("north", "Action::Move(Dir4::North)"),
-    ("south", "Action::Move(Dir4::South)"),
-    ("east", "Action::Move(Dir4::East)"),
-    ("west", "Action::Move(Dir4::West)"),
-    ("stall", "Action::Stall"),
-];
-
 fn main() {
     let out_dir = env::var("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("scenario_tests.rs");
@@ -19,9 +11,9 @@ fn main() {
     println!("cargo:rerun-if-changed={}", scenarios_dir.display());
 
     // Collect scenario triplets: _1.csv, _2.csv, .json
-    let mut before_files: HashMap<String, String> = HashMap::new(); // base_name -> path
-    let mut after_files: HashMap<String, String> = HashMap::new(); // base_name -> path
-    let mut json_files: HashMap<String, String> = HashMap::new(); // base_name -> path
+    let mut before_files: HashMap<String, String> = HashMap::new();
+    let mut after_files: HashMap<String, String> = HashMap::new();
+    let mut json_files: HashMap<String, String> = HashMap::new();
 
     if let Ok(entries) = fs::read_dir(&scenarios_dir) {
         for entry in entries.flatten() {
@@ -64,26 +56,11 @@ fn main() {
             path.display().to_string()
         });
 
-        // Read and parse JSON to get the action
-        let json_content = fs::read_to_string(json_path)
-            .unwrap_or_else(|e| panic!("Failed to read {}: {}", json_path, e));
-        let json: serde_json::Value = serde_json::from_str(&json_content)
-            .unwrap_or_else(|e| panic!("Failed to parse {}: {}", json_path, e));
-        let action = json["move"]
-            .as_str()
-            .unwrap_or_else(|| panic!("Missing 'move' field in {}", json_path));
-
-        let action_expr = ACTIONS
-            .iter()
-            .find(|&&(a, _)| a == action)
-            .unwrap_or_else(|| panic!("Unknown action '{}' in {}", action, json_path))
-            .1;
-
         tests.push((
             base_name.clone(),
             format!(
-                "scenario_test!({}, include_str!(\"{}\"), include_str!(\"{}\"), {}, \"{}\");\n",
-                base_name, before_path, &after_path, action_expr, &after_path
+                "scenario_test!({}, include_str!(\"{}\"), include_str!(\"{}\"), \"{}\", \"{}\");\n",
+                base_name, before_path, &after_path, &after_path, json_path
             ),
         ));
     }

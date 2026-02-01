@@ -1,6 +1,8 @@
 use std::borrow::BorrowMut;
 use std::collections::HashSet;
 
+use serde::{Deserialize, Serialize};
+
 use crate::direction::Dir4;
 use crate::grid::{Cell, Grid};
 use crate::levels;
@@ -17,7 +19,8 @@ mod zap;
 
 const MOVE_SPEED: f32 = 15.0;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum PlayState {
     Playing,
     GameOver,

@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 infestation = { path = "../game" }
+serde_json = "*"
 
 [build-dependencies]
 serde_json = "*"
