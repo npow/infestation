@@ -1231,6 +1231,7 @@ name = "scenario_tests"
 version = "0.1.0"
 dependencies = [
  "infestation",
+ "serde_json",
 ]
 
 [[package]]

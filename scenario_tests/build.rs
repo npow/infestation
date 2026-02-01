@@ -18,33 +18,33 @@ fn main() {
     let scenarios_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("scenarios");
     println!("cargo:rerun-if-changed={}", scenarios_dir.display());
 
-    let mut before_files: HashMap<String, String> = HashMap::new();
-    let mut after_files: Vec<(String, String, String)> = Vec::new();
+    // Collect scenario triplets: _1.csv, _2.csv, .json
+    let mut before_files: HashMap<String, String> = HashMap::new(); // base_name -> path
+    let mut after_files: HashMap<String, String> = HashMap::new(); // base_name -> path
+    let mut json_files: HashMap<String, String> = HashMap::new(); // base_name -> path
 
     if let Ok(entries) = fs::read_dir(&scenarios_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             println!("cargo:rerun-if-changed={}", path.display());
 
-            if path.extension().is_some_and(|e| e == "csv") {
-                let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+            let ext = path.extension().and_then(|e| e.to_str());
 
-                let mut found_action = false;
-                for &(action_suffix, _) in ACTIONS {
-                    if let Some(base) = stem.strip_suffix(&format!("_{}", action_suffix)) {
-                        after_files.push((
-                            base.to_string(),
-                            action_suffix.to_string(),
-                            path.display().to_string(),
-                        ));
-                        found_action = true;
-                        break;
+            match ext {
+                Some("csv") => {
+                    if let Some(base) = stem.strip_suffix("_1") {
+                        before_files.insert(base.to_string(), path.display().to_string());
+                    } else if let Some(base) = stem.strip_suffix("_2") {
+                        after_files.insert(base.to_string(), path.display().to_string());
                     }
                 }
-
-                if !found_action {
-                    before_files.insert(stem.to_string(), path.display().to_string());
+                Some("json") => {
+                    if let Some(base) = stem.strip_suffix("_i") {
+                        json_files.insert(base.to_string(), path.display().to_string());
+                    }
                 }
+                _ => {}
             }
         }
     }
@@ -52,22 +52,35 @@ fn main() {
     let mut code = String::new();
     let mut tests: Vec<(String, String)> = Vec::new();
 
-    for (base_name, action, after_path) in &after_files {
+    for (base_name, json_path) in &json_files {
         let before_path = before_files.get(base_name).unwrap_or_else(|| {
-            panic!(
-                "No before file for {}_{}: expected {}.csv",
-                base_name, action, base_name
-            )
+            panic!("No before file for {}: expected {}_1.csv", base_name, base_name)
         });
 
-        let action_expr = ACTIONS.iter().find(|&&(a, _)| a == action).unwrap().1;
-        let test_name = format!("{}_{}", base_name, action);
+        let after_path = after_files.get(base_name).unwrap_or_else(|| {
+            panic!("No after file for {}: expected {}_2.csv", base_name, base_name)
+        });
+
+        // Read and parse JSON to get the action
+        let json_content = fs::read_to_string(json_path)
+            .unwrap_or_else(|e| panic!("Failed to read {}: {}", json_path, e));
+        let json: serde_json::Value = serde_json::from_str(&json_content)
+            .unwrap_or_else(|e| panic!("Failed to parse {}: {}", json_path, e));
+        let action = json["move"]
+            .as_str()
+            .unwrap_or_else(|| panic!("Missing 'move' field in {}", json_path));
+
+        let action_expr = ACTIONS
+            .iter()
+            .find(|&&(a, _)| a == action)
+            .unwrap_or_else(|| panic!("Unknown action '{}' in {}", action, json_path))
+            .1;
 
         tests.push((
-            test_name.clone(),
+            base_name.clone(),
             format!(
                 "scenario_test!({}, include_str!(\"{}\"), include_str!(\"{}\"), {}, \"{}\");\n",
-                test_name, before_path, after_path, action_expr, after_path
+                base_name, before_path, after_path, action_expr, after_path
             ),
         ));
     }
