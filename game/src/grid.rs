@@ -85,10 +85,10 @@ impl Grid {
             let mut row = Vec::new();
             for x in 0..self.width {
                 let cell_str = match self.cells[y][x] {
-                    Cell::Player(Dir4::North) => "^".to_string(),
-                    Cell::Player(Dir4::South) => "v".to_string(),
-                    Cell::Player(Dir4::East) => ">".to_string(),
-                    Cell::Player(Dir4::West) => "<".to_string(),
+                    Cell::Player(Dir4::North) => "▲".to_string(),
+                    Cell::Player(Dir4::South) => "▼".to_string(),
+                    Cell::Player(Dir4::East) => "►".to_string(),
+                    Cell::Player(Dir4::West) => "◄".to_string(),
                     Cell::Wall => "#".to_string(),
                     Cell::Rat(_) => "R".to_string(),
                     Cell::CyborgRat(_) => "C".to_string(),

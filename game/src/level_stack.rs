@@ -95,7 +95,7 @@ mod tests {
         stack.enter_level(&parent_game, "sublevel".to_string());
 
         // Create sublevel game (not completed - still playing)
-        let sublevel_game = game_from_csv(".,.,.\n.,v,R\n.,.,.");
+        let sublevel_game = game_from_csv(".,.,.\n.,▼,R\n.,.,.");
         assert_eq!(sublevel_game.state.play_state(), PlayState::Playing);
 
         // Exit without completing
@@ -119,7 +119,7 @@ mod tests {
         stack.enter_level(&parent_game, "sublevel".to_string());
 
         // Create sublevel game that's been won
-        let mut sublevel_game = game_from_csv(".,.,.\n.,>,R\n.,.,.");
+        let mut sublevel_game = game_from_csv(".,.,.\n.,►,R\n.,.,.");
         sublevel_game.apply_action(Action::Move(Dir4::East)); // Kill the rat
         assert_eq!(sublevel_game.state.play_state(), PlayState::Won);
 
@@ -152,7 +152,7 @@ mod tests {
 
         // Create sublevel game with inherited completed_levels (simulates how main.rs works)
         let sublevel_game = Game::new(
-            Grid::from_csv(".,.,.\n.,v,R\n.,.,.\n"),
+            Grid::from_csv(".,.,.\n.,▼,R\n.,.,.\n"),
             parent_game.state.completed_levels.clone(),
         );
         assert_eq!(sublevel_game.state.play_state(), PlayState::Playing);

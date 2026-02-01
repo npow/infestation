@@ -12,7 +12,7 @@ fn player_pos(game: &Game) -> Position {
 
 #[test]
 fn undo_restores_state() {
-    let mut game = game_from_csv(".,.,.\n.,v,.\n.,.,.");
+    let mut game = game_from_csv(".,.,.\n.,▼,.\n.,.,.");
     let initial = player_pos(&game);
     game.apply_action(Action::Move(Dir4::East));
     assert_ne!(player_pos(&game), initial);
@@ -22,7 +22,7 @@ fn undo_restores_state() {
 
 #[test]
 fn restart_resets_game() {
-    let mut game = game_from_csv(".,.,.\n.,v,.\n.,.,.");
+    let mut game = game_from_csv(".,.,.\n.,▼,.\n.,.,.");
     let initial = player_pos(&game);
     game.apply_action(Action::Move(Dir4::East));
     game.apply_action(Action::Move(Dir4::South));

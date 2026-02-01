@@ -147,19 +147,19 @@ impl Grid {
             for (x, field) in record.iter().enumerate() {
                 let pos = Position::new(x, y);
                 let cell = match field.trim() {
-                    "^" => {
+                    "▲" => {
                         player_pos = Some(pos);
                         Cell::Player(Dir4::North)
                     }
-                    "v" => {
+                    "▼" => {
                         player_pos = Some(pos);
                         Cell::Player(Dir4::South)
                     }
-                    ">" => {
+                    "►" => {
                         player_pos = Some(pos);
                         Cell::Player(Dir4::East)
                     }
-                    "<" => {
+                    "◄" => {
                         player_pos = Some(pos);
                         Cell::Player(Dir4::West)
                     }
