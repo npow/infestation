@@ -69,6 +69,7 @@ A top-down 2D grid-based turn-based puzzle game built with macroquad, targeting 
 
 **Test behavior, not implementation.**
 
+- Use scenario tests (`scenario_tests` crate) as the primary testing approach
 - Tests should verify observable outcomes (grid state, play state, entity positions)
 - Don't assert on internal variables or intermediate state (e.g., `anim.triggered_numbers`)
 - If the implementation changes but behavior stays the same, tests should still pass
@@ -80,3 +81,14 @@ A top-down 2D grid-based turn-based puzzle game built with macroquad, targeting 
 - Use `pos1 - pos2` to get a `PositionDelta` instead of `PositionDelta::new(pos1.x - pos2.x, ...)`
 - Use `pos.in_bounds(bounds)` instead of manual comparisons with width/height
 - Keep position arithmetic at the type level; only access `.x`/`.y`/`.dx`/`.dy` for final output (e.g., rendering)
+
+## Game Logic Development
+
+**Tests first, then implementation.**
+
+- Before writing ANY game logic change or feature, write comprehensive scenario tests first (in `scenario_tests` crate)
+- Stop and ask for review of the tests before implementing
+- Only proceed with implementation after tests are approved
+- This ensures we agree on expected behavior before code is written
+- Tests should be thorough enough that `cargo llvm-cov` shows 100% coverage of new code
+- After implementing, if coverage of the new code isn't 100%, add more scenario tests until it is
