@@ -88,9 +88,7 @@ fn main() {
         } else {
             manifest_dir.join("scenarios")
         };
-        let file_base = base_name
-            .strip_prefix("two_player_")
-            .unwrap_or(base_name);
+        let file_base = base_name.strip_prefix("two_player_").unwrap_or(base_name);
 
         // If _2.csv doesn't exist yet, create an empty placeholder so UPDATE_SNAPSHOTS can generate it
         let after_path = after_files.get(base_name).cloned().unwrap_or_else(|| {

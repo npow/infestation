@@ -93,7 +93,11 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             players
                 .iter()
                 .enumerate()
-                .filter_map(|(i, p)| player_distances[i].get(&cyborg_pos).map(|&d| (i, d, p.acted)))
+                .filter_map(|(i, p)| {
+                    player_distances[i]
+                        .get(&cyborg_pos)
+                        .map(|&d| (i, d, p.acted))
+                })
                 .min_by_key(|&(idx, dist, acted)| {
                     // Tie-break: prefer acting players, then lower index
                     (dist, !acted, idx)

@@ -127,7 +127,7 @@ struct DraggedItem {
 
 enum EditorMode {
     Level {
-        game: Game,
+        game: Box<Game>,
         input_history: Vec<Action>,
     },
     Scenario {
@@ -162,7 +162,7 @@ impl Editor {
         Self {
             before_grid: grid,
             mode: EditorMode::Level {
-                game,
+                game: Box::new(game),
                 input_history: Vec::new(),
             },
             tool: Tool::Move,
@@ -215,7 +215,7 @@ impl Editor {
             ref input_history,
         } = self.mode
         {
-            *game = Game::new(self.before_grid.clone(), HashSet::new());
+            **game = Game::new(self.before_grid.clone(), HashSet::new());
             for &input in input_history {
                 if game.state.play_state() == PlayState::Playing {
                     game.apply_action(input);
@@ -258,11 +258,10 @@ impl Editor {
             ref mut game,
             ref mut input_history,
         } = self.mode
+            && game.state.play_state() == PlayState::Playing
         {
-            if game.state.play_state() == PlayState::Playing {
-                input_history.push(input);
-                game.apply_action(input);
-            }
+            input_history.push(input);
+            game.apply_action(input);
         }
     }
 
@@ -271,10 +270,9 @@ impl Editor {
             ref mut input_history,
             ..
         } = self.mode
+            && input_history.pop().is_some()
         {
-            if input_history.pop().is_some() {
-                self.replay_inputs();
-            }
+            self.replay_inputs();
         }
     }
 
@@ -968,28 +966,28 @@ impl Editor {
         }
 
         // Show game state on right pane (level mode only - scenario mode shows in toolbar)
-        if pane == 1 {
-            if let EditorMode::Level { ref game, .. } = self.mode {
-                let play_state = game.state.play_state();
-                let state_text = match play_state {
-                    PlayState::Playing => "",
-                    PlayState::GameOver => "GAME OVER",
-                    PlayState::Won => "WON",
-                };
-                if !state_text.is_empty() {
-                    let dims = measure_text(state_text, None, 32, 1.0);
-                    draw_text(
-                        state_text,
-                        pane_x + (pane_width - dims.width) / 2.0,
-                        offset_y + grid_h + 30.0,
-                        32.0,
-                        if play_state == PlayState::Won {
-                            GREEN
-                        } else {
-                            RED
-                        },
-                    );
-                }
+        if pane == 1
+            && let EditorMode::Level { ref game, .. } = self.mode
+        {
+            let play_state = game.state.play_state();
+            let state_text = match play_state {
+                PlayState::Playing => "",
+                PlayState::GameOver => "GAME OVER",
+                PlayState::Won => "WON",
+            };
+            if !state_text.is_empty() {
+                let dims = measure_text(state_text, None, 32, 1.0);
+                draw_text(
+                    state_text,
+                    pane_x + (pane_width - dims.width) / 2.0,
+                    offset_y + grid_h + 30.0,
+                    32.0,
+                    if play_state == PlayState::Won {
+                        GREEN
+                    } else {
+                        RED
+                    },
+                );
             }
         }
     }
@@ -1830,20 +1828,19 @@ impl App {
             ref scenario_names,
             ref mut current_index,
         } = self.mode
+            && (is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl))
         {
-            if is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl) {
-                let mut new_index = None;
-                if is_key_pressed(KeyCode::Left) && *current_index > 0 {
-                    new_index = Some(*current_index - 1);
-                }
-                if is_key_pressed(KeyCode::Right) && *current_index < scenario_names.len() - 1 {
-                    new_index = Some(*current_index + 1);
-                }
-                if let Some(idx) = new_index {
-                    *current_index = idx;
-                    let name = &scenario_names[idx];
-                    self.editor = Self::load_scenario(name, self.editor.sprites.clone());
-                }
+            let mut new_index = None;
+            if is_key_pressed(KeyCode::Left) && *current_index > 0 {
+                new_index = Some(*current_index - 1);
+            }
+            if is_key_pressed(KeyCode::Right) && *current_index < scenario_names.len() - 1 {
+                new_index = Some(*current_index + 1);
+            }
+            if let Some(idx) = new_index {
+                *current_index = idx;
+                let name = &scenario_names[idx];
+                self.editor = Self::load_scenario(name, self.editor.sprites.clone());
             }
         }
 
@@ -1857,7 +1854,13 @@ impl App {
         {
             let name = &scenario_names[current_index];
             let text = format!("{} ({}/{})", name, current_index + 1, scenario_names.len());
-            draw_text(&text, TOOLBAR_WIDTH + PADDING, screen_height() - 10.0, 20.0, WHITE);
+            draw_text(
+                &text,
+                TOOLBAR_WIDTH + PADDING,
+                screen_height() - 10.0,
+                20.0,
+                WHITE,
+            );
         }
 
         true
