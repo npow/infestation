@@ -4,6 +4,7 @@ use macroquad::prelude::*;
 #[derive(Clone)]
 pub struct Sprites {
     player: [Texture2D; 4],
+    player2: [Texture2D; 4],
     rat: [Texture2D; 8],
     cyborg_rat: [Texture2D; 8],
     wall: Texture2D,
@@ -38,6 +39,12 @@ impl Sprites {
                 load_png(include_bytes!("../../assets/player/south.png")),
                 load_png(include_bytes!("../../assets/player/east.png")),
                 load_png(include_bytes!("../../assets/player/west.png")),
+            ],
+            player2: [
+                load_png(include_bytes!("../../assets/player2/north.png")),
+                load_png(include_bytes!("../../assets/player2/south.png")),
+                load_png(include_bytes!("../../assets/player2/east.png")),
+                load_png(include_bytes!("../../assets/player2/west.png")),
             ],
             rat: [
                 load_png(include_bytes!("../../assets/rat/north.png")),
@@ -75,6 +82,10 @@ impl Sprites {
 
     pub(crate) fn player(&self, dir: Dir4) -> &Texture2D {
         &self.player[dir as usize]
+    }
+
+    pub(crate) fn player2(&self, dir: Dir4) -> &Texture2D {
+        &self.player2[dir as usize]
     }
 
     pub(crate) fn rat(&self, dir: Dir8) -> &Texture2D {

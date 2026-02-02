@@ -33,6 +33,7 @@ enum Tool {
     Move,
     Wall,
     Player,
+    Player2,
     Rat,
     CyborgRat,
     Portal,
@@ -45,11 +46,12 @@ enum Tool {
 }
 
 impl Tool {
-    fn all() -> [Tool; 12] {
+    fn all() -> [Tool; 13] {
         [
             Tool::Move,
             Tool::Wall,
             Tool::Player,
+            Tool::Player2,
             Tool::Rat,
             Tool::CyborgRat,
             Tool::Portal,
@@ -66,7 +68,8 @@ impl Tool {
         match self {
             Tool::Move => "Move",
             Tool::Wall => "Wall",
-            Tool::Player => "Player",
+            Tool::Player => "Player1",
+            Tool::Player2 => "Player2",
             Tool::Rat => "Rat",
             Tool::CyborgRat => "Cyborg",
             Tool::Portal => "Portal",
@@ -83,7 +86,8 @@ impl Tool {
         match self {
             Tool::Move => "m",
             Tool::Wall => "#",
-            Tool::Player => "p",
+            Tool::Player => "1",
+            Tool::Player2 => "2",
             Tool::Rat => "r",
             Tool::CyborgRat => "c",
             Tool::Portal => "g",
@@ -101,6 +105,7 @@ impl Tool {
             Tool::Move | Tool::Portal | Tool::Note => None,
             Tool::Wall => Some(Cell::Wall),
             Tool::Player => Some(Cell::Player(player_dir)),
+            Tool::Player2 => Some(Cell::Player2(player_dir)),
             Tool::Rat => Some(Cell::Rat(pos.direction_to(Position::new(0, 0)))),
             Tool::CyborgRat => Some(Cell::CyborgRat(pos.direction_to(Position::new(0, 0)))),
             Tool::Plank => Some(Cell::Plank),
@@ -127,7 +132,8 @@ enum EditorMode {
     },
     Scenario {
         after_grid: Grid,
-        action: Action,
+        p1_action: Option<Action>,
+        p2_action: Option<Action>,
         expected_state: PlayState,
     },
 }
@@ -176,7 +182,8 @@ impl Editor {
     fn new_scenario(
         before_grid: Grid,
         after_grid: Grid,
-        action: Action,
+        p1_action: Option<Action>,
+        p2_action: Option<Action>,
         expected_state: PlayState,
         sprites: Sprites,
     ) -> Self {
@@ -184,7 +191,8 @@ impl Editor {
             before_grid,
             mode: EditorMode::Scenario {
                 after_grid,
-                action,
+                p1_action,
+                p2_action,
                 expected_state,
             },
             tool: Tool::Move,
@@ -291,6 +299,10 @@ impl Editor {
                 self.player_dir = dir;
                 Tool::Player
             }
+            Cell::Player2(dir) => {
+                self.player_dir = dir;
+                Tool::Player2
+            }
             Cell::Rat(_) => Tool::Rat,
             Cell::CyborgRat(_) => Tool::CyborgRat,
             Cell::Plank => Tool::Plank,
@@ -306,11 +318,21 @@ impl Editor {
 
     fn place_cell(&mut self, pos: Position, cell: Cell, pane: usize) {
         let grid = self.grid_for_pane_mut(pane);
-        // If placing player, remove existing player first
+        // If placing player, remove existing player of same type first
         if matches!(cell, Cell::Player(_)) {
             let players: Vec<_> = grid
                 .entries()
                 .filter(|(_, c)| matches!(c, Cell::Player(_)))
+                .map(|(p, _)| p)
+                .collect();
+            for p in players {
+                *grid.at_mut(p) = Cell::Empty;
+            }
+        }
+        if matches!(cell, Cell::Player2(_)) {
+            let players: Vec<_> = grid
+                .entries()
+                .filter(|(_, c)| matches!(c, Cell::Player2(_)))
                 .map(|(p, _)| p)
                 .collect();
             for p in players {
@@ -821,6 +843,7 @@ impl Editor {
             );
         } else if let Some(texture) = match cell {
             Cell::Player(dir) => Some(self.sprites.player(dir)),
+            Cell::Player2(dir) => Some(self.sprites.player2(dir)),
             Cell::Rat(dir) => Some(self.sprites.rat(dir)),
             Cell::CyborgRat(dir) => Some(self.sprites.cyborg_rat(dir)),
             Cell::Wall => Some(self.sprites.wall()),
@@ -921,6 +944,7 @@ impl Editor {
             } else {
                 let texture = match cell {
                     Cell::Player(dir) => self.sprites.player(dir),
+                    Cell::Player2(dir) => self.sprites.player2(dir),
                     Cell::Rat(dir) => self.sprites.rat(dir),
                     Cell::CyborgRat(dir) => self.sprites.cyborg_rat(dir),
                     Cell::Wall => self.sprites.wall(),
@@ -1050,36 +1074,55 @@ impl Editor {
                 draw_text(&moves_text, PADDING, content_y, 26.0, WHITE);
             }
             EditorMode::Scenario {
-                action,
+                p1_action,
+                p2_action,
                 expected_state,
                 ..
             } => {
-                // Action selector
-                draw_text("Action:", PADDING, content_y, 20.0, WHITE);
-                let actions = [
-                    (Action::Move(Dir4::North), "N"),
-                    (Action::Move(Dir4::South), "S"),
-                    (Action::Move(Dir4::East), "E"),
-                    (Action::Move(Dir4::West), "W"),
-                    (Action::Stall, "-"),
+                // Action options: None (no input), or specific action
+                let actions: [(Option<Action>, &str); 6] = [
+                    (None, "·"),
+                    (Some(Action::Move(Dir4::North)), "N"),
+                    (Some(Action::Move(Dir4::South)), "S"),
+                    (Some(Action::Move(Dir4::East)), "E"),
+                    (Some(Action::Move(Dir4::West)), "W"),
+                    (Some(Action::Stall), "-"),
                 ];
-                let btn_w = 20.0;
+                let btn_w = 16.0;
                 let btn_h = 20.0;
-                let action_y = content_y + 5.0;
+
+                // P1 Action selector
+                draw_text("P1:", PADDING, content_y, 16.0, WHITE);
+                let p1_y = content_y + 5.0;
                 for (i, (act, label)) in actions.iter().enumerate() {
-                    let btn_x = PADDING + i as f32 * (btn_w + 2.0);
-                    let selected = action == act;
+                    let btn_x = PADDING + 20.0 + i as f32 * (btn_w + 1.0);
+                    let selected = p1_action == act;
                     let bg = if selected {
                         Color::from_rgba(80, 120, 80, 255)
                     } else {
                         Color::from_rgba(50, 50, 60, 255)
                     };
-                    draw_rectangle(btn_x, action_y, btn_w, btn_h, bg);
-                    draw_text(label, btn_x + 4.0, action_y + 15.0, 16.0, WHITE);
+                    draw_rectangle(btn_x, p1_y, btn_w, btn_h, bg);
+                    draw_text(label, btn_x + 3.0, p1_y + 15.0, 14.0, WHITE);
+                }
+
+                // P2 Action selector
+                let p2_y = p1_y + 25.0;
+                draw_text("P2:", PADDING, p2_y + 15.0, 16.0, WHITE);
+                for (i, (act, label)) in actions.iter().enumerate() {
+                    let btn_x = PADDING + 20.0 + i as f32 * (btn_w + 1.0);
+                    let selected = p2_action == act;
+                    let bg = if selected {
+                        Color::from_rgba(80, 120, 80, 255)
+                    } else {
+                        Color::from_rgba(50, 50, 60, 255)
+                    };
+                    draw_rectangle(btn_x, p2_y, btn_w, btn_h, bg);
+                    draw_text(label, btn_x + 3.0, p2_y + 15.0, 14.0, WHITE);
                 }
 
                 // State selector
-                let state_y = action_y + 35.0;
+                let state_y = p2_y + 35.0;
                 draw_text("State:", PADDING, state_y, 20.0, WHITE);
                 let states = [
                     (PlayState::Playing, "Play"),
@@ -1217,7 +1260,8 @@ impl Editor {
     fn save_scenario(&self, before_path: &str, after_path: &str, json_path: &str) {
         if let EditorMode::Scenario {
             ref after_grid,
-            action,
+            p1_action,
+            p2_action,
             expected_state,
         } = self.mode
         {
@@ -1232,23 +1276,55 @@ impl Editor {
             // Save after grid
             write(after_path, after_grid.to_csv()).expect("Failed to save after CSV");
 
-            // Save JSON with action and state
-            let action_str = match action {
-                Action::Move(Dir4::North) => "north",
-                Action::Move(Dir4::South) => "south",
-                Action::Move(Dir4::East) => "east",
-                Action::Move(Dir4::West) => "west",
-                Action::Stall => "stall",
-            };
+            // Helper to convert action to string
+            fn action_to_str(action: Option<Action>) -> &'static str {
+                match action {
+                    Some(Action::Move(Dir4::North)) => "north",
+                    Some(Action::Move(Dir4::South)) => "south",
+                    Some(Action::Move(Dir4::East)) => "east",
+                    Some(Action::Move(Dir4::West)) => "west",
+                    Some(Action::Stall) => "stall",
+                    None => "null",
+                }
+            }
+
             let state_str = match expected_state {
                 PlayState::Playing => "playing",
                 PlayState::GameOver => "gameover",
                 PlayState::Won => "won",
             };
-            let json = format!(
-                "{{\n  \"move\": \"{}\",\n  \"state\": \"{}\"\n}}\n",
-                action_str, state_str
-            );
+
+            // Use two-player format (p1/p2) for two-player scenarios
+            let is_two_player = p2_action.is_some()
+                || self
+                    .before_grid
+                    .entries()
+                    .any(|(_, c)| matches!(c, Cell::Player2(_)));
+
+            let json = if is_two_player {
+                let p1_str = action_to_str(p1_action);
+                let p2_str = action_to_str(p2_action);
+                let p1_val = if p1_str == "null" {
+                    "null".to_string()
+                } else {
+                    format!("\"{}\"", p1_str)
+                };
+                let p2_val = if p2_str == "null" {
+                    "null".to_string()
+                } else {
+                    format!("\"{}\"", p2_str)
+                };
+                format!(
+                    "{{\n  \"p1\": {},\n  \"p2\": {},\n  \"state\": \"{}\"\n}}\n",
+                    p1_val, p2_val, state_str
+                )
+            } else {
+                let action_str = action_to_str(p1_action);
+                format!(
+                    "{{\n  \"move\": \"{}\",\n  \"state\": \"{}\"\n}}\n",
+                    action_str, state_str
+                )
+            };
             write(json_path, json).expect("Failed to save JSON");
         }
     }
@@ -1314,11 +1390,16 @@ impl App {
     }
 
     pub fn new_scenario(sprites: Sprites, filter: &[&str]) -> Self {
-        let scenarios_dir = "scenario_tests/scenarios";
+        let scenario_dirs = [
+            "scenario_tests/scenarios",
+            "scenario_tests/two_player_scenarios",
+        ];
 
-        // Collect scenario names (base names without suffixes)
-        let mut scenario_names: Vec<String> = std::fs::read_dir(scenarios_dir)
-            .expect("Failed to read scenarios directory")
+        // Collect scenario names from all directories
+        let mut scenario_names: Vec<String> = scenario_dirs
+            .iter()
+            .filter_map(|dir| std::fs::read_dir(dir).ok())
+            .flatten()
             .flatten()
             .filter_map(|entry| {
                 let path = entry.path();
@@ -1332,6 +1413,7 @@ impl App {
             })
             .collect();
         scenario_names.sort();
+        scenario_names.dedup();
 
         // Validate each filter argument exists (fail-fast)
         for &name in filter {
@@ -1350,8 +1432,8 @@ impl App {
 
         assert!(
             !scenario_names.is_empty(),
-            "No scenarios found in {}",
-            scenarios_dir
+            "No scenarios found in {:?}",
+            scenario_dirs
         );
 
         let editor = Self::load_scenario(&scenario_names[0], sprites);
@@ -1366,28 +1448,49 @@ impl App {
     }
 
     fn load_scenario(name: &str, sprites: Sprites) -> Editor {
-        let scenarios_dir = "scenario_tests/scenarios";
+        Self::load_scenario_from_dir(name, "scenario_tests/scenarios", sprites.clone())
+            .or_else(|| {
+                Self::load_scenario_from_dir(name, "scenario_tests/two_player_scenarios", sprites)
+            })
+            .expect("Failed to load scenario")
+    }
+
+    fn load_scenario_from_dir(name: &str, scenarios_dir: &str, sprites: Sprites) -> Option<Editor> {
         let before_path = format!("{}/{}_1.csv", scenarios_dir, name);
         let after_path = format!("{}/{}_2.csv", scenarios_dir, name);
         let json_path = format!("{}/{}_i.json", scenarios_dir, name);
 
-        let before_csv = read_to_string(&before_path).expect("Failed to read before CSV");
-        let after_csv = read_to_string(&after_path).expect("Failed to read after CSV");
-        let json_str = read_to_string(&json_path).expect("Failed to read JSON");
+        let before_csv = read_to_string(&before_path).ok()?;
+        let after_csv = read_to_string(&after_path).ok()?;
+        let json_str = read_to_string(&json_path).ok()?;
 
         let before_grid = Grid::from_csv(&before_csv);
         let after_grid = Grid::from_csv(&after_csv);
 
         let json: serde_json::Value =
             serde_json::from_str(&json_str).expect("Failed to parse JSON");
-        let action = match json["move"].as_str().expect("Missing 'move' field") {
-            "north" => Action::Move(Dir4::North),
-            "south" => Action::Move(Dir4::South),
-            "east" => Action::Move(Dir4::East),
-            "west" => Action::Move(Dir4::West),
-            "stall" => Action::Stall,
-            other => panic!("Unknown action: {}", other),
+
+        // Helper to parse action from JSON value
+        fn parse_action(val: &serde_json::Value) -> Option<Action> {
+            match val.as_str() {
+                Some("north") => Some(Action::Move(Dir4::North)),
+                Some("south") => Some(Action::Move(Dir4::South)),
+                Some("east") => Some(Action::Move(Dir4::East)),
+                Some("west") => Some(Action::Move(Dir4::West)),
+                Some("stall") => Some(Action::Stall),
+                _ => None, // null or missing = no action
+            }
+        }
+
+        // Check if it's two-player format (has p1/p2 fields) or single-player (has move field)
+        let (p1_action, p2_action) = if json.get("p1").is_some() || json.get("p2").is_some() {
+            // Two-player format
+            (parse_action(&json["p1"]), parse_action(&json["p2"]))
+        } else {
+            // Single-player format: "move" field maps to p1_action
+            (parse_action(&json["move"]), None)
         };
+
         let expected_state = match json["state"].as_str().expect("Missing 'state' field") {
             "playing" => PlayState::Playing,
             "gameover" => PlayState::GameOver,
@@ -1395,7 +1498,14 @@ impl App {
             other => panic!("Unknown state: {}", other),
         };
 
-        Editor::new_scenario(before_grid, after_grid, action, expected_state, sprites)
+        Some(Editor::new_scenario(
+            before_grid,
+            after_grid,
+            p1_action,
+            p2_action,
+            expected_state,
+            sprites,
+        ))
     }
 
     /// Run one frame of the editor loop. Returns true to continue.
@@ -1445,7 +1555,8 @@ impl App {
             match c.to_ascii_lowercase() {
                 'm' => self.editor.tool = Tool::Move,
                 '#' => self.editor.tool = Tool::Wall,
-                'p' => self.editor.tool = Tool::Player,
+                '1' => self.editor.tool = Tool::Player,
+                '2' => self.editor.tool = Tool::Player2,
                 'r' => self.editor.tool = Tool::Rat,
                 'c' => self.editor.tool = Tool::CyborgRat,
                 'g' => self.editor.tool = Tool::Portal,
@@ -1519,22 +1630,32 @@ impl App {
                         self.editor.add_input(Action::Stall);
                     }
                 }
-                EditorMode::Scenario { action, .. } => {
-                    // Scenario mode: set the action field
+                EditorMode::Scenario {
+                    p1_action,
+                    p2_action,
+                    ..
+                } => {
+                    // Scenario mode: Ctrl+arrow sets P2 action, arrow sets P1 action
+                    let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
+                    let action_ref = if ctrl { p2_action } else { p1_action };
                     if is_key_pressed(KeyCode::Up) {
-                        *action = Action::Move(Dir4::North);
+                        *action_ref = Some(Action::Move(Dir4::North));
                     }
                     if is_key_pressed(KeyCode::Down) {
-                        *action = Action::Move(Dir4::South);
+                        *action_ref = Some(Action::Move(Dir4::South));
                     }
                     if is_key_pressed(KeyCode::Left) {
-                        *action = Action::Move(Dir4::West);
+                        *action_ref = Some(Action::Move(Dir4::West));
                     }
                     if is_key_pressed(KeyCode::Right) {
-                        *action = Action::Move(Dir4::East);
+                        *action_ref = Some(Action::Move(Dir4::East));
                     }
                     if is_key_pressed(KeyCode::Space) {
-                        *action = Action::Stall;
+                        *action_ref = Some(Action::Stall);
+                    }
+                    // Backspace clears the action (sets to None)
+                    if is_key_pressed(KeyCode::Delete) {
+                        *action_ref = None;
                     }
                 }
             }
@@ -1566,8 +1687,8 @@ impl App {
             self.save();
         }
 
-        // Scroll wheel to rotate player direction (only when Player tool selected)
-        if self.editor.tool == Tool::Player {
+        // Scroll wheel to rotate player direction (when Player or Player2 tool selected)
+        if self.editor.tool == Tool::Player || self.editor.tool == Tool::Player2 {
             let (_, scroll_y) = mouse_wheel();
             if scroll_y < 0.0 {
                 self.editor.player_dir = self.editor.player_dir.rotate_cw();
@@ -1710,7 +1831,17 @@ impl App {
                 current_index,
             } => {
                 let name = &scenario_names[*current_index];
-                let scenarios_dir = "scenario_tests/scenarios";
+                // Determine which directory the scenario belongs to
+                let scenarios_dir = if Path::new(&format!(
+                    "scenario_tests/two_player_scenarios/{}_i.json",
+                    name
+                ))
+                .exists()
+                {
+                    "scenario_tests/two_player_scenarios"
+                } else {
+                    "scenario_tests/scenarios"
+                };
                 let before_path = format!("{}/{}_1.csv", scenarios_dir, name);
                 let after_path = format!("{}/{}_2.csv", scenarios_dir, name);
                 let json_path = format!("{}/{}_i.json", scenarios_dir, name);

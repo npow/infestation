@@ -41,6 +41,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     Cell::Rat(_)
                     | Cell::CyborgRat(_)
                     | Cell::Player(_)
+                    | Cell::Player2(_)
                     | Cell::Spiderweb
                     | Cell::Plank => {
                         // Entity destroyed in explosion

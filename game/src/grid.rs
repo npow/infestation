@@ -12,6 +12,7 @@ pub(crate) enum Cell {
     Empty,
     Wall,
     Player(Dir4),
+    Player2(Dir4),
     Rat(Dir8),
     CyborgRat(Dir8),
     Plank,
@@ -89,6 +90,10 @@ impl Grid {
                     Cell::Player(Dir4::South) => "▼".to_string(),
                     Cell::Player(Dir4::East) => "►".to_string(),
                     Cell::Player(Dir4::West) => "◄".to_string(),
+                    Cell::Player2(Dir4::North) => "△".to_string(),
+                    Cell::Player2(Dir4::South) => "▽".to_string(),
+                    Cell::Player2(Dir4::East) => "▷".to_string(),
+                    Cell::Player2(Dir4::West) => "◁".to_string(),
                     Cell::Wall => "#".to_string(),
                     Cell::Rat(_) => "R".to_string(),
                     Cell::CyborgRat(_) => "C".to_string(),
@@ -213,7 +218,7 @@ impl Grid {
 
     pub(crate) fn play_state(&self) -> PlayState {
         let has_player = self
-            .find_entities(|cell| matches!(cell, Cell::Player(_)))
+            .find_entities(|cell| matches!(cell, Cell::Player(_) | Cell::Player2(_)))
             .next()
             .is_some();
         if !has_player {

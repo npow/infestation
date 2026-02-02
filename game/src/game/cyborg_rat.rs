@@ -51,7 +51,8 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     | Cell::Rat(_)
                     | Cell::CyborgRat(_)
                     | Cell::Trigger(_)
-                    | Cell::Player(_) => true,
+                    | Cell::Player(_)
+                    | Cell::Player2(_) => true,
                 };
 
                 if !traversable {

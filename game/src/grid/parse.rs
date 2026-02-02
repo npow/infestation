@@ -133,6 +133,7 @@ impl Grid {
     ) -> Self {
         let mut cells: Vec<Vec<Cell>> = Vec::new();
         let mut player_pos: Option<Position> = None;
+        let mut player2_pos: Option<Position> = None;
         let mut rat_positions: Vec<Position> = Vec::new();
         let mut cyborg_rat_positions: Vec<Position> = Vec::new();
 
@@ -162,6 +163,22 @@ impl Grid {
                     "◄" => {
                         player_pos = Some(pos);
                         Cell::Player(Dir4::West)
+                    }
+                    "△" => {
+                        player2_pos = Some(pos);
+                        Cell::Player2(Dir4::North)
+                    }
+                    "▽" => {
+                        player2_pos = Some(pos);
+                        Cell::Player2(Dir4::South)
+                    }
+                    "▷" => {
+                        player2_pos = Some(pos);
+                        Cell::Player2(Dir4::East)
+                    }
+                    "◁" => {
+                        player2_pos = Some(pos);
+                        Cell::Player2(Dir4::West)
                     }
                     "#" => Cell::Wall,
                     "=" => Cell::Plank,
@@ -193,13 +210,14 @@ impl Grid {
         }
 
         let mut grid = Grid::new(cells, portals, notes);
-        let player = player_pos.unwrap();
+        // Use player1 position if available, otherwise player2
+        let target = player_pos.or(player2_pos).unwrap();
         for rat in rat_positions {
-            let dir = rat.direction_to(player);
+            let dir = rat.direction_to(target);
             *grid.at_mut(rat) = Cell::Rat(dir);
         }
         for cyborg in cyborg_rat_positions {
-            let dir = cyborg.direction_to(player);
+            let dir = cyborg.direction_to(target);
             *grid.at_mut(cyborg) = Cell::CyborgRat(dir);
         }
         grid
