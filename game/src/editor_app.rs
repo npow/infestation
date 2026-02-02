@@ -12,7 +12,7 @@ use crate::position::{Position, PositionDelta};
 use crate::sprites::Sprites;
 
 const PADDING: f32 = 8.0;
-const TOOLBAR_WIDTH: f32 = 120.0;
+const TOOLBAR_WIDTH: f32 = 150.0;
 
 #[derive(Clone, Copy)]
 struct Rect {
@@ -1008,6 +1008,66 @@ impl Editor {
             }
         }
 
+        // Check scenario-mode buttons (action selectors, state selector)
+        if let EditorMode::Scenario {
+            ref mut p1_action,
+            ref mut p2_action,
+            ref mut expected_state,
+            ..
+        } = self.mode
+        {
+            let content_y = PADDING + Tool::all().len() as f32 * 40.0 + 20.0;
+            let btn_w = 16.0;
+            let btn_h = 20.0;
+            let p1_y = content_y + 5.0;
+            let p2_y = p1_y + 25.0;
+
+            let actions: [Option<Action>; 6] = [
+                None,
+                Some(Action::Move(Dir4::North)),
+                Some(Action::Move(Dir4::South)),
+                Some(Action::Move(Dir4::East)),
+                Some(Action::Move(Dir4::West)),
+                Some(Action::Stall),
+            ];
+
+            // P1 action buttons
+            for (i, act) in actions.iter().enumerate() {
+                let btn_x = PADDING + 20.0 + i as f32 * (btn_w + 1.0);
+                if mx >= btn_x && mx < btn_x + btn_w && my >= p1_y && my < p1_y + btn_h {
+                    *p1_action = *act;
+                    return true;
+                }
+            }
+
+            // P2 action buttons
+            for (i, act) in actions.iter().enumerate() {
+                let btn_x = PADDING + 20.0 + i as f32 * (btn_w + 1.0);
+                if mx >= btn_x && mx < btn_x + btn_w && my >= p2_y && my < p2_y + btn_h {
+                    *p2_action = *act;
+                    return true;
+                }
+            }
+
+            // State buttons
+            let state_y = p2_y + 30.0;
+            let state_btn_y = state_y + 5.0;
+            let state_btn_w = 32.0;
+            let states = [PlayState::Playing, PlayState::GameOver, PlayState::Won];
+
+            for (i, state) in states.iter().enumerate() {
+                let btn_x = PADDING + i as f32 * (state_btn_w + 2.0);
+                if mx >= btn_x
+                    && mx < btn_x + state_btn_w
+                    && my >= state_btn_y
+                    && my < state_btn_y + btn_h
+                {
+                    *expected_state = *state;
+                    return true;
+                }
+            }
+        }
+
         // Check size buttons
         let [w_minus, w_plus, h_minus, h_plus] = self.size_button_rects();
 
@@ -1122,7 +1182,7 @@ impl Editor {
                 }
 
                 // State selector
-                let state_y = p2_y + 35.0;
+                let state_y = p2_y + 30.0;
                 draw_text("State:", PADDING, state_y, 20.0, WHITE);
                 let states = [
                     (PlayState::Playing, "Play"),
@@ -1153,7 +1213,7 @@ impl Editor {
         }
 
         // Size controls
-        let size_y = content_y + 80.0;
+        let size_y = content_y + 110.0;
         draw_text("Size:", PADDING, size_y, 22.0, WHITE);
 
         // Width row
@@ -1212,7 +1272,7 @@ impl Editor {
         let plus_x = TOOLBAR_WIDTH - PADDING - btn_size;
 
         let content_y = PADDING + Tool::all().len() as f32 * 40.0 + 20.0;
-        let size_y = content_y + 80.0;
+        let size_y = content_y + 110.0;
         let width_y = size_y + 25.0;
         let height_y = width_y + 30.0;
 
@@ -1630,33 +1690,8 @@ impl App {
                         self.editor.add_input(Action::Stall);
                     }
                 }
-                EditorMode::Scenario {
-                    p1_action,
-                    p2_action,
-                    ..
-                } => {
-                    // Scenario mode: Ctrl+arrow sets P2 action, arrow sets P1 action
-                    let ctrl = is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl);
-                    let action_ref = if ctrl { p2_action } else { p1_action };
-                    if is_key_pressed(KeyCode::Up) {
-                        *action_ref = Some(Action::Move(Dir4::North));
-                    }
-                    if is_key_pressed(KeyCode::Down) {
-                        *action_ref = Some(Action::Move(Dir4::South));
-                    }
-                    if is_key_pressed(KeyCode::Left) {
-                        *action_ref = Some(Action::Move(Dir4::West));
-                    }
-                    if is_key_pressed(KeyCode::Right) {
-                        *action_ref = Some(Action::Move(Dir4::East));
-                    }
-                    if is_key_pressed(KeyCode::Space) {
-                        *action_ref = Some(Action::Stall);
-                    }
-                    // Backspace clears the action (sets to None)
-                    if is_key_pressed(KeyCode::Delete) {
-                        *action_ref = None;
-                    }
+                EditorMode::Scenario { .. } => {
+                    // Scenario mode: use toolbar buttons for P1/P2 actions
                 }
             }
         }
@@ -1813,6 +1848,17 @@ impl App {
         }
 
         self.editor.render();
+
+        // Draw scenario name at the bottom
+        if let AppMode::Scenario {
+            ref scenario_names,
+            current_index,
+        } = self.mode
+        {
+            let name = &scenario_names[current_index];
+            let text = format!("{} ({}/{})", name, current_index + 1, scenario_names.len());
+            draw_text(&text, TOOLBAR_WIDTH + PADDING, screen_height() - 10.0, 20.0, WHITE);
+        }
 
         true
     }
