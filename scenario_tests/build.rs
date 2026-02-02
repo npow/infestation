@@ -3,19 +3,20 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
-fn main() {
-    let out_dir = env::var("OUT_DIR").unwrap();
-    let dest_path = Path::new(&out_dir).join("scenario_tests.rs");
+struct ScenarioFiles {
+    before_files: HashMap<String, String>,
+    after_files: HashMap<String, String>,
+    json_files: HashMap<String, String>,
+}
 
-    let scenarios_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("scenarios");
-    println!("cargo:rerun-if-changed={}", scenarios_dir.display());
+fn scan_scenarios_dir(dir: &Path, prefix: &str) -> ScenarioFiles {
+    println!("cargo:rerun-if-changed={}", dir.display());
 
-    // Collect scenario triplets: _1.csv, _2.csv, .json
     let mut before_files: HashMap<String, String> = HashMap::new();
     let mut after_files: HashMap<String, String> = HashMap::new();
     let mut json_files: HashMap<String, String> = HashMap::new();
 
-    if let Ok(entries) = fs::read_dir(&scenarios_dir) {
+    if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             println!("cargo:rerun-if-changed={}", path.display());
@@ -26,20 +27,49 @@ fn main() {
             match ext {
                 Some("csv") => {
                     if let Some(base) = stem.strip_suffix("_1") {
-                        before_files.insert(base.to_string(), path.display().to_string());
+                        let key = format!("{}{}", prefix, base);
+                        before_files.insert(key, path.display().to_string());
                     } else if let Some(base) = stem.strip_suffix("_2") {
-                        after_files.insert(base.to_string(), path.display().to_string());
+                        let key = format!("{}{}", prefix, base);
+                        after_files.insert(key, path.display().to_string());
                     }
                 }
                 Some("json") => {
                     if let Some(base) = stem.strip_suffix("_i") {
-                        json_files.insert(base.to_string(), path.display().to_string());
+                        let key = format!("{}{}", prefix, base);
+                        json_files.insert(key, path.display().to_string());
                     }
                 }
                 _ => {}
             }
         }
     }
+
+    ScenarioFiles {
+        before_files,
+        after_files,
+        json_files,
+    }
+}
+
+fn main() {
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let dest_path = Path::new(&out_dir).join("scenario_tests.rs");
+
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    // Scan both scenarios directories
+    let scenarios = scan_scenarios_dir(&manifest_dir.join("scenarios"), "");
+    let two_player = scan_scenarios_dir(&manifest_dir.join("two_player_scenarios"), "two_player_");
+
+    // Merge all files
+    let mut before_files = scenarios.before_files;
+    let mut after_files = scenarios.after_files;
+    let mut json_files = scenarios.json_files;
+
+    before_files.extend(two_player.before_files);
+    after_files.extend(two_player.after_files);
+    json_files.extend(two_player.json_files);
 
     let mut code = String::new();
     let mut tests: Vec<(String, String)> = Vec::new();
@@ -52,9 +82,19 @@ fn main() {
             )
         });
 
+        // Determine which directory to create placeholder in
+        let scenarios_dir = if base_name.starts_with("two_player_") {
+            manifest_dir.join("two_player_scenarios")
+        } else {
+            manifest_dir.join("scenarios")
+        };
+        let file_base = base_name
+            .strip_prefix("two_player_")
+            .unwrap_or(base_name);
+
         // If _2.csv doesn't exist yet, create an empty placeholder so UPDATE_SNAPSHOTS can generate it
         let after_path = after_files.get(base_name).cloned().unwrap_or_else(|| {
-            let path = scenarios_dir.join(format!("{}_2.csv", base_name));
+            let path = scenarios_dir.join(format!("{}_2.csv", file_base));
             fs::write(&path, "").ok();
             path.display().to_string()
         });

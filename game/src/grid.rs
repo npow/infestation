@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::direction::{Dir4, Dir8};
-use crate::game::PlayState;
 use crate::position::Position;
 
 mod parse;
@@ -37,6 +36,24 @@ impl Cell {
     // Not blocked by rats, only other cyborg rats
     pub(crate) fn blocks_cyborg_rat(&self) -> bool {
         matches!(self, Cell::Wall | Cell::CyborgRat(_) | Cell::Spiderweb)
+    }
+
+    /// Returns the player index (0 for Player, 1 for Player2) and direction if this is a player cell.
+    pub(crate) fn as_player(&self) -> Option<(usize, Dir4)> {
+        match self {
+            Cell::Player(dir) => Some((0, *dir)),
+            Cell::Player2(dir) => Some((1, *dir)),
+            _ => None,
+        }
+    }
+
+    /// Creates a player cell for the given index and direction.
+    pub(crate) fn player(index: usize, dir: Dir4) -> Cell {
+        match index {
+            0 => Cell::Player(dir),
+            1 => Cell::Player2(dir),
+            _ => panic!("Invalid player index: {}", index),
+        }
     }
 }
 
@@ -214,25 +231,6 @@ impl Grid {
         mut f: F,
     ) -> impl Iterator<Item = (Position, Cell)> + use<'_, F> {
         self.entries().filter(move |&(_, cell)| f(cell))
-    }
-
-    pub(crate) fn play_state(&self) -> PlayState {
-        let has_player = self
-            .find_entities(|cell| matches!(cell, Cell::Player(_) | Cell::Player2(_)))
-            .next()
-            .is_some();
-        if !has_player {
-            return PlayState::GameOver;
-        }
-        let has_rats = self
-            .find_entities(|cell| matches!(cell, Cell::Rat(_) | Cell::CyborgRat(_)))
-            .next()
-            .is_some();
-        if has_rats {
-            PlayState::Playing
-        } else {
-            PlayState::Won
-        }
     }
 
     pub(crate) fn to_json(&self, level_name: &str) -> String {

@@ -17,6 +17,15 @@ mod player;
 mod rat;
 mod zap;
 
+/// Information about a player for movement resolution.
+#[derive(Clone, Copy)]
+pub struct PlayerInfo {
+    pub pos: Position,
+    pub dir: Dir4,
+    pub acted: bool,
+    pub player_index: usize,
+}
+
 const MOVE_SPEED: f32 = 15.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -200,14 +209,29 @@ impl GameState {
             .any(|(_, cell)| matches!(cell, Cell::Rat(_) | Cell::CyborgRat(_)))
     }
 
-    /// Compute play state from grid: GameOver if no player, Won if no rats (and started with rats).
+    fn count_players(grid: &Grid) -> usize {
+        grid.entries()
+            .filter(|(_, cell)| cell.as_player().is_some())
+            .count()
+    }
+
+    /// Compute play state from grid: GameOver if any player died, Won if no rats (and started with rats).
     pub(crate) fn play_state(&self) -> PlayState {
-        let play_state = self.grid.play_state();
-        if play_state == PlayState::GameOver {
+        // GameOver if any player has died
+        let initial_player_count = Self::count_players(&self.initial_grid);
+        let current_player_count = Self::count_players(&self.grid);
+        if current_player_count < initial_player_count {
             return PlayState::GameOver;
         }
-        if self.initial_has_rats() {
-            play_state
+
+        // Check for win condition (no rats left)
+        let has_rats = self
+            .grid
+            .entries()
+            .any(|(_, cell)| matches!(cell, Cell::Rat(_) | Cell::CyborgRat(_)));
+
+        if !has_rats && self.initial_has_rats() {
+            PlayState::Won
         } else {
             PlayState::Playing
         }
@@ -275,14 +299,25 @@ impl Game {
 
     /// Apply an input immediately without animation (for editor replay)
     pub fn apply_action(&mut self, m: Action) -> bool {
+        self.apply_actions(&[Some(m)])
+    }
+
+    /// Apply multiple player actions immediately without animation.
+    /// Takes one Option<Action> per player in the grid.
+    pub fn apply_actions(&mut self, actions: &[Option<Action>]) -> bool {
         let play_state = self.state.play_state();
 
-        if play_state != PlayState::Playing || self.state.find_player().is_none() {
+        if play_state != PlayState::Playing {
             return false;
-        };
+        }
 
+        // Check that at least one player exists and at least one action is provided
         let mut resolver = MoveHandler::new(&mut self.state.grid);
-        resolver.do_player_move(m);
+        if resolver.find_players().is_empty() {
+            return false;
+        }
+
+        resolver.do_player_moves(actions);
         resolver.resolve_all();
 
         self.state.history.push(self.state.grid.clone());

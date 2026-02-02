@@ -21,3 +21,8 @@ pub fn grid_to_csv(game: &Game) -> String {
 pub fn play_state(game: &Game) -> PlayState {
     game.state.play_state()
 }
+
+/// Apply multiple player actions to a game.
+pub fn apply_actions(game: &mut Game, actions: &[Option<Action>]) -> bool {
+    game.apply_actions(actions)
+}

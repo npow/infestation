@@ -2,12 +2,12 @@ use std::borrow::BorrowMut;
 use std::collections::hash_map::Entry;
 use std::collections::{BinaryHeap, HashMap};
 
-use crate::direction::{Dir4, Dir8};
+use crate::direction::Dir8;
 use crate::grid::{Cell, Grid};
 use crate::position::Position;
 
 use super::cyborg_distance::{CyborgDistance, DijkstraEntry};
-use super::{MoveHandler, Moving};
+use super::{MoveHandler, Moving, PlayerInfo};
 
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
     /// Compute shortest path distances from target using Dijkstra with A + B*sqrt(2) metric
@@ -69,21 +69,50 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         distances
     }
 
-    pub(crate) fn move_cyborg_rats(&mut self, player: Position, player_facing: Dir4) {
-        let distances = self.compute_cyborg_distances(player);
-        let blocked_dir = player_facing.opposite();
+    pub(crate) fn move_cyborg_rats(&mut self, players: &[PlayerInfo]) {
+        if players.is_empty() {
+            return;
+        }
 
-        // Partition cyborg rats into reachable and unreachable
-        let (reachable, unreachable): (Vec<_>, Vec<_>) = self
+        // Compute distances from each player
+        let player_distances: Vec<_> = players
+            .iter()
+            .map(|p| self.compute_cyborg_distances(p.pos))
+            .collect();
+
+        let cyborg_positions: Vec<_> = self
             .grid
             .borrow()
             .find_entities(|cell| matches!(cell, Cell::CyborgRat(_)))
             .map(|(pos, _)| pos)
-            .partition(|pos| distances.contains_key(pos));
+            .collect();
 
-        // Unreachable cyborg rats just turn to face the player
+        // For each cyborg, find nearest player by path distance
+        // Returns (player_index, distance) or None if unreachable from all
+        let nearest_player = |cyborg_pos: Position| -> Option<(usize, CyborgDistance)> {
+            players
+                .iter()
+                .enumerate()
+                .filter_map(|(i, p)| player_distances[i].get(&cyborg_pos).map(|&d| (i, d, p.acted)))
+                .min_by_key(|&(idx, dist, acted)| {
+                    // Tie-break: prefer acting players, then lower index
+                    (dist, !acted, idx)
+                })
+                .map(|(idx, dist, _)| (idx, dist))
+        };
+
+        // Partition into reachable and unreachable
+        let (reachable, unreachable): (Vec<_>, Vec<_>) = cyborg_positions
+            .into_iter()
+            .partition(|&pos| nearest_player(pos).is_some());
+
+        // Unreachable cyborg rats just turn to face the nearest player (by Euclidean)
         for cyborg_pos in unreachable {
-            let face_dir = Dir8::from_delta(player - cyborg_pos).unwrap();
+            let nearest = players
+                .iter()
+                .min_by_key(|p| cyborg_pos.dist_sq(p.pos))
+                .unwrap();
+            let face_dir = Dir8::from_delta(nearest.pos - cyborg_pos).unwrap();
             self.begin_move(Moving {
                 cell: Cell::CyborgRat(face_dir),
                 from: cyborg_pos,
@@ -92,14 +121,27 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             });
         }
 
-        // Sort reachable cyborg rats by distance (closest first), tiebreak by position
+        // Sort reachable cyborg rats by distance to their nearest player
         let mut movable_cyborgs: Vec<_> = reachable
             .into_iter()
-            .map(|pos| (distances[&pos], pos))
+            .map(|pos| {
+                let (player_idx, dist) = nearest_player(pos).unwrap();
+                (dist, pos, player_idx)
+            })
             .collect();
-        movable_cyborgs.sort();
+        movable_cyborgs.sort_by_key(|&(dist, pos, _)| (dist, pos));
 
-        for (current_dist, cyborg_pos) in movable_cyborgs {
+        for (current_dist, cyborg_pos, player_idx) in movable_cyborgs {
+            let player = &players[player_idx];
+            let distances = &player_distances[player_idx];
+
+            // Only move if the assigned player acted
+            if !player.acted {
+                continue;
+            }
+
+            let blocked_dir = player.dir.opposite();
+
             // Find best adjacent cell
             let mut best_move: Option<(Dir8, CyborgDistance)> = None;
 
@@ -123,7 +165,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 }
 
                 // Can't attack from in front of player (sword blocks)
-                if new_pos == player && dir == blocked_dir {
+                if new_pos == player.pos && dir == blocked_dir {
                     continue;
                 }
 
@@ -149,7 +191,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     to: cyborg_pos + dir.delta(),
                 });
             } else {
-                let face_dir = Dir8::from_delta(player - cyborg_pos).unwrap();
+                let face_dir = Dir8::from_delta(player.pos - cyborg_pos).unwrap();
                 // Cyborg rat can't move - turn to face the player
                 self.begin_move(Moving {
                     cell: Cell::CyborgRat(face_dir),

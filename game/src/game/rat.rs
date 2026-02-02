@@ -1,14 +1,35 @@
 use std::borrow::BorrowMut;
 
-use crate::direction::{Dir4, Dir8};
+use crate::direction::Dir8;
 use crate::grid::{Cell, Grid};
 use crate::position::Position;
 
-use super::{MoveHandler, Moving};
+use super::{MoveHandler, Moving, PlayerInfo};
 
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
-    pub(crate) fn move_rats(&mut self, player: Position, player_facing: Dir4) {
-        let blocked_dir = player_facing.opposite();
+    /// Find the nearest player to a position using Euclidean distance.
+    /// Returns the PlayerInfo for the nearest player.
+    /// If tied, prefers acting players. If still tied, prefers lower index.
+    fn nearest_player_euclidean<'a>(
+        &self,
+        pos: Position,
+        players: &'a [PlayerInfo],
+    ) -> &'a PlayerInfo {
+        players
+            .iter()
+            .min_by_key(|p| {
+                let dist = pos.dist_sq(p.pos);
+                // Tie-break: prefer acting players, then lower index
+                (dist, !p.acted, p.player_index)
+            })
+            .unwrap()
+    }
+
+    pub(crate) fn move_rats(&mut self, players: &[PlayerInfo]) {
+        if players.is_empty() {
+            return;
+        }
+
         let mut rats: Vec<_> = self
             .grid
             .borrow()
@@ -16,10 +37,23 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             .map(|(pos, _)| pos)
             .collect();
 
-        rats.sort_by_key(|&pos| (pos.dist_sq(player), pos));
+        // Sort by distance to nearest player
+        rats.sort_by_key(|&pos| {
+            let nearest = self.nearest_player_euclidean(pos, players);
+            (pos.dist_sq(nearest.pos), pos)
+        });
 
         for rat_pos in rats {
-            let face_dir = Dir8::from_delta(player - rat_pos).unwrap();
+            let nearest = self.nearest_player_euclidean(rat_pos, players);
+
+            // Only move if the nearest player acted
+            if !nearest.acted {
+                continue;
+            }
+
+            let target = nearest.pos;
+            let blocked_dir = nearest.dir.opposite();
+            let face_dir = Dir8::from_delta(target - rat_pos).unwrap();
 
             // Build list of moves to try in order
             let moves_to_try: Vec<Dir8> = if face_dir.is_diagonal() {
@@ -30,8 +64,8 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 // Sort orthogonals by distance, tie-break horizontal first
                 let h_pos = rat_pos + h_move.delta();
                 let v_pos = rat_pos + v_move.delta();
-                let h_dist = h_pos.dist_sq(player);
-                let v_dist = v_pos.dist_sq(player);
+                let h_dist = h_pos.dist_sq(target);
+                let v_dist = v_pos.dist_sq(target);
 
                 if h_dist <= v_dist {
                     vec![face_dir, h_move, v_move]
@@ -49,14 +83,12 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 let new_pos = rat_pos + dir.delta();
 
                 let target_cell = self.grid.borrow().at(new_pos);
-                // If rat is moving to player's destination, skip block check
-                // (player is clearing whatever was there, e.g. spiderweb)
                 if target_cell.blocks_rat() {
                     continue;
                 }
 
                 // Can't attack player from in front (sword blocks)
-                if new_pos == player && dir == blocked_dir {
+                if new_pos == target && dir == blocked_dir {
                     continue;
                 }
 
