@@ -120,15 +120,26 @@ struct DraggedItem {
     note: Option<String>,
 }
 
+enum EditorMode {
+    Level {
+        game: Game,
+        input_history: Vec<Action>,
+    },
+    Scenario {
+        after_grid: Grid,
+        action: Action,
+        expected_state: PlayState,
+    },
+}
+
 struct Editor {
-    initial_grid: Grid,
-    input_history: Vec<Action>,
-    game: Game,
+    before_grid: Grid,
+    mode: EditorMode,
     tool: Tool,
-    player_dir: Dir4,                          // Direction for placing new players
-    trigger_digit: u8,                         // Current digit for Trigger tool (1-9)
-    portal_dialog: Option<(Position, String)>, // (position, current text) when entering portal level
-    note_dialog: Option<(Position, String)>,   // (position, current text) when entering note text
+    player_dir: Dir4,  // Direction for placing new players
+    trigger_digit: u8, // Current digit for Trigger tool (1-9)
+    portal_dialog: Option<(Position, usize, String)>, // (position, pane, current text) when entering portal level
+    note_dialog: Option<(Position, usize, String)>, // (position, pane, current text) when entering note text
     sprites: Sprites,
     dragging: Option<(Position, Cell)>, // Source position and cell being dragged
     last_paint_pos: Option<Position>,   // Last position painted/erased (for drag painting)
@@ -140,12 +151,42 @@ struct Editor {
 }
 
 impl Editor {
-    fn new(grid: Grid, sprites: Sprites) -> Self {
+    fn new_level(grid: Grid, sprites: Sprites) -> Self {
         let game = Game::new(grid.clone(), HashSet::new());
         Self {
-            initial_grid: grid,
-            input_history: Vec::new(),
-            game,
+            before_grid: grid,
+            mode: EditorMode::Level {
+                game,
+                input_history: Vec::new(),
+            },
+            tool: Tool::Move,
+            player_dir: Dir4::South,
+            trigger_digit: 1,
+            portal_dialog: None,
+            note_dialog: None,
+            sprites,
+            dragging: None,
+            last_paint_pos: None,
+            selecting_rect: None,
+            selection: HashSet::new(),
+            dragging_selection: None,
+        }
+    }
+
+    fn new_scenario(
+        before_grid: Grid,
+        after_grid: Grid,
+        action: Action,
+        expected_state: PlayState,
+        sprites: Sprites,
+    ) -> Self {
+        Self {
+            before_grid,
+            mode: EditorMode::Scenario {
+                after_grid,
+                action,
+                expected_state,
+            },
             tool: Tool::Move,
             player_dir: Dir4::South,
             trigger_digit: 1,
@@ -161,34 +202,77 @@ impl Editor {
     }
 
     fn replay_inputs(&mut self) {
-        self.game = Game::new(self.initial_grid.clone(), HashSet::new());
-        for &input in &self.input_history {
-            if self.game.state.play_state() == PlayState::Playing {
-                self.game.apply_action(input);
+        if let EditorMode::Level {
+            ref mut game,
+            ref input_history,
+        } = self.mode
+        {
+            *game = Game::new(self.before_grid.clone(), HashSet::new());
+            for &input in input_history {
+                if game.state.play_state() == PlayState::Playing {
+                    game.apply_action(input);
+                }
             }
         }
     }
 
+    /// Get the grid displayed in the right pane
+    fn after_grid(&self) -> &Grid {
+        match &self.mode {
+            EditorMode::Level { game, .. } => &game.state.grid,
+            EditorMode::Scenario { after_grid, .. } => after_grid,
+        }
+    }
+
+    /// Get mutable reference to the grid for a given pane
+    fn grid_for_pane_mut(&mut self, pane: usize) -> &mut Grid {
+        if pane == 0 {
+            &mut self.before_grid
+        } else {
+            match &mut self.mode {
+                EditorMode::Level { .. } => &mut self.before_grid, // Level mode: edits go to before_grid
+                EditorMode::Scenario { after_grid, .. } => after_grid,
+            }
+        }
+    }
+
+    /// Get reference to the grid for a given pane
+    fn grid_for_pane(&self, pane: usize) -> &Grid {
+        if pane == 0 {
+            &self.before_grid
+        } else {
+            self.after_grid()
+        }
+    }
+
     fn add_input(&mut self, input: Action) {
-        if self.game.state.play_state() == PlayState::Playing {
-            self.input_history.push(input);
-            self.game.apply_action(input);
+        if let EditorMode::Level {
+            ref mut game,
+            ref mut input_history,
+        } = self.mode
+        {
+            if game.state.play_state() == PlayState::Playing {
+                input_history.push(input);
+                game.apply_action(input);
+            }
         }
     }
 
     fn remove_last_input(&mut self) {
-        if self.input_history.pop().is_some() {
-            self.replay_inputs();
+        if let EditorMode::Level {
+            ref mut input_history,
+            ..
+        } = self.mode
+        {
+            if input_history.pop().is_some() {
+                self.replay_inputs();
+            }
         }
     }
 
     /// Q-pick: sample the cell under the cursor and set the tool accordingly
     fn q_pick(&mut self, pos: Position, pane: usize) {
-        let grid = if pane == 0 {
-            &self.initial_grid
-        } else {
-            &self.game.state.grid
-        };
+        let grid = self.grid_for_pane(pane);
 
         // Check for portal/note first (they overlay cells)
         if grid.get_portal(pos).is_some() {
@@ -220,49 +304,53 @@ impl Editor {
         };
     }
 
-    fn place_cell(&mut self, pos: Position, cell: Cell) {
+    fn place_cell(&mut self, pos: Position, cell: Cell, pane: usize) {
+        let grid = self.grid_for_pane_mut(pane);
         // If placing player, remove existing player first
         if matches!(cell, Cell::Player(_)) {
-            let players: Vec<_> = self
-                .initial_grid
+            let players: Vec<_> = grid
                 .entries()
                 .filter(|(_, c)| matches!(c, Cell::Player(_)))
                 .map(|(p, _)| p)
                 .collect();
             for p in players {
-                *self.initial_grid.at_mut(p) = Cell::Empty;
+                *grid.at_mut(p) = Cell::Empty;
             }
         }
 
-        *self.initial_grid.at_mut(pos) = cell;
+        *grid.at_mut(pos) = cell;
         self.replay_inputs();
     }
 
-    fn erase_cell(&mut self, pos: Position) {
-        *self.initial_grid.at_mut(pos) = Cell::Empty;
-        self.initial_grid.remove_portal(pos);
-        self.initial_grid.remove_note(pos);
+    fn erase_cell(&mut self, pos: Position, pane: usize) {
+        let grid = self.grid_for_pane_mut(pane);
+        *grid.at_mut(pos) = Cell::Empty;
+        grid.remove_portal(pos);
+        grid.remove_note(pos);
         self.replay_inputs();
     }
 
-    fn place_portal(&mut self, pos: Position, level: String) {
-        self.initial_grid.insert_portal(pos, level);
+    fn place_portal(&mut self, pos: Position, level: String, pane: usize) {
+        self.grid_for_pane_mut(pane).insert_portal(pos, level);
         self.replay_inputs();
     }
 
-    fn place_note(&mut self, pos: Position, text: String) {
-        self.initial_grid.insert_note(pos, text);
+    fn place_note(&mut self, pos: Position, text: String, pane: usize) {
+        self.grid_for_pane_mut(pane).insert_note(pos, text);
         self.replay_inputs();
     }
 
-    fn start_drag(&mut self, pos: Position) {
+    fn start_drag(&mut self, pos: Position, pane: usize) {
         // If clicking on a selected cell, drag the entire selection
         if self.selection.contains(&pos) {
+            // First pass: collect items (immutable borrow)
+            let grid = self.grid_for_pane(pane);
             let mut items = Vec::new();
+            let mut positions_to_clear = Vec::new();
             for &sel_pos in &self.selection {
-                let cell = self.initial_grid.at(sel_pos);
-                let portal = self.initial_grid.get_portal(sel_pos).map(String::from);
-                let note = self.initial_grid.get_note(sel_pos).map(String::from);
+                let cell = grid.at(sel_pos);
+                let portal = grid.get_portal(sel_pos).map(String::from);
+                let note = grid.get_note(sel_pos).map(String::from);
                 // Include position if it has a non-empty cell, portal, or note
                 if !matches!(cell, Cell::Empty) || portal.is_some() || note.is_some() {
                     items.push(DraggedItem {
@@ -271,11 +359,18 @@ impl Editor {
                         portal,
                         note,
                     });
-                    *self.initial_grid.at_mut(sel_pos) = Cell::Empty;
-                    self.initial_grid.remove_portal(sel_pos);
-                    self.initial_grid.remove_note(sel_pos);
+                    positions_to_clear.push(sel_pos);
                 }
             }
+
+            // Second pass: clear cells (mutable borrow)
+            let grid = self.grid_for_pane_mut(pane);
+            for sel_pos in positions_to_clear {
+                *grid.at_mut(sel_pos) = Cell::Empty;
+                grid.remove_portal(sel_pos);
+                grid.remove_note(sel_pos);
+            }
+
             if !items.is_empty() {
                 self.dragging_selection = Some((pos, items));
                 self.replay_inputs();
@@ -284,30 +379,31 @@ impl Editor {
         }
 
         // Otherwise, single-cell drag as before
-        let cell = self.initial_grid.at(pos);
+        let cell = self.grid_for_pane(pane).at(pos);
         if !matches!(cell, Cell::Empty) {
             self.selection.clear();
             self.dragging = Some((pos, cell));
-            *self.initial_grid.at_mut(pos) = Cell::Empty;
+            *self.grid_for_pane_mut(pane).at_mut(pos) = Cell::Empty;
             self.replay_inputs();
         }
     }
 
-    fn end_drag(&mut self, pos: Position) {
+    fn end_drag(&mut self, pos: Position, pane: usize) {
         // Handle multi-item drag
         if let Some((_, items)) = self.dragging_selection.take() {
-            let bounds = (self.initial_grid.width(), self.initial_grid.height());
+            let grid = self.grid_for_pane_mut(pane);
+            let bounds = (grid.width(), grid.height());
             for item in items {
                 let target = pos + item.delta;
                 if target.in_bounds(bounds) {
                     if !matches!(item.cell, Cell::Empty) {
-                        self.place_cell(target, item.cell);
+                        *grid.at_mut(target) = item.cell;
                     }
                     if let Some(level) = item.portal {
-                        self.initial_grid.insert_portal(target, level);
+                        grid.insert_portal(target, level);
                     }
                     if let Some(text) = item.note {
-                        self.initial_grid.insert_note(target, text);
+                        grid.insert_note(target, text);
                     }
                 }
             }
@@ -318,21 +414,22 @@ impl Editor {
 
         // Single-item drag
         if let Some((_, cell)) = self.dragging.take() {
-            self.place_cell(pos, cell);
+            self.place_cell(pos, cell, pane);
         }
     }
 
-    fn cancel_drag(&mut self) {
+    fn cancel_drag(&mut self, pane: usize) {
         // Handle multi-item drag cancellation
         if let Some((anchor, items)) = self.dragging_selection.take() {
+            let grid = self.grid_for_pane_mut(pane);
             for item in items {
                 let target = anchor + item.delta;
-                *self.initial_grid.at_mut(target) = item.cell;
+                *grid.at_mut(target) = item.cell;
                 if let Some(level) = item.portal {
-                    self.initial_grid.insert_portal(target, level);
+                    grid.insert_portal(target, level);
                 }
                 if let Some(text) = item.note {
-                    self.initial_grid.insert_note(target, text);
+                    grid.insert_note(target, text);
                 }
             }
             self.replay_inputs();
@@ -342,7 +439,7 @@ impl Editor {
         // Single-item drag cancellation
         if let Some((src_pos, cell)) = self.dragging.take() {
             // Put it back
-            *self.initial_grid.at_mut(src_pos) = cell;
+            *self.grid_for_pane_mut(pane).at_mut(src_pos) = cell;
             self.replay_inputs();
         }
     }
@@ -358,25 +455,33 @@ impl Editor {
         }
     }
 
-    fn end_selection(&mut self) {
+    fn end_selection(&mut self, pane: usize) {
         if let Some((start, end)) = self.selecting_rect.take() {
             let min_x = start.x.min(end.x);
             let max_x = start.x.max(end.x);
             let min_y = start.y.min(end.y);
             let max_y = start.y.max(end.y);
 
-            self.selection.clear();
+            // First pass: collect positions with content (immutable borrow)
+            let grid = self.grid_for_pane(pane);
+            let mut selected_positions = Vec::new();
             for y in min_y..=max_y {
                 for x in min_x..=max_x {
                     let pos = Position { x, y };
                     // Select if non-empty cell, or has a portal or note
-                    let has_content = !matches!(self.initial_grid.at(pos), Cell::Empty)
-                        || self.initial_grid.get_portal(pos).is_some()
-                        || self.initial_grid.get_note(pos).is_some();
+                    let has_content = !matches!(grid.at(pos), Cell::Empty)
+                        || grid.get_portal(pos).is_some()
+                        || grid.get_note(pos).is_some();
                     if has_content {
-                        self.selection.insert(pos);
+                        selected_positions.push(pos);
                     }
                 }
+            }
+
+            // Second pass: update selection (mutable borrow)
+            self.selection.clear();
+            for pos in selected_positions {
+                self.selection.insert(pos);
             }
         }
     }
@@ -391,8 +496,8 @@ impl Editor {
         let pane_width = available_width / 2.0;
         let available_height = screen_height() - PADDING * 2.0;
 
-        let cell_w = pane_width / self.initial_grid.width() as f32;
-        let cell_h = available_height / self.initial_grid.height() as f32;
+        let cell_w = pane_width / self.before_grid.width() as f32;
+        let cell_h = available_height / self.before_grid.height() as f32;
         let cell_size = cell_w.min(cell_h);
 
         (pane_width, available_height, cell_size)
@@ -401,8 +506,8 @@ impl Editor {
     fn grid_offset(&self, pane: usize) -> (f32, f32) {
         let (pane_width, _, cell_size) = self.pane_layout();
         let pane_x = TOOLBAR_WIDTH + PADDING + pane as f32 * (pane_width + PADDING);
-        let grid_w = self.initial_grid.width() as f32 * cell_size;
-        let grid_h = self.initial_grid.height() as f32 * cell_size;
+        let grid_w = self.before_grid.width() as f32 * cell_size;
+        let grid_h = self.before_grid.height() as f32 * cell_size;
         let offset_x = pane_x + (pane_width - grid_w) / 2.0;
         let offset_y = PADDING + (screen_height() - PADDING * 2.0 - grid_h) / 2.0;
         (offset_x, offset_y)
@@ -428,8 +533,8 @@ impl Editor {
 
             if gx >= 0
                 && gy >= 0
-                && (gx as usize) < self.initial_grid.width()
-                && (gy as usize) < self.initial_grid.height()
+                && (gx as usize) < self.before_grid.width()
+                && (gy as usize) < self.before_grid.height()
             {
                 return Some((Position::new(gx as usize, gy as usize), pane));
             }
@@ -442,17 +547,16 @@ impl Editor {
 
         let (pane_width, _, cell_size) = self.pane_layout();
 
-        // Draw left pane (initial grid)
-        self.render_grid(&self.initial_grid, 0, pane_width, cell_size, "Initial");
+        let (left_label, right_label) = match &self.mode {
+            EditorMode::Level { .. } => ("Initial", "After Moves"),
+            EditorMode::Scenario { .. } => ("Before", "After"),
+        };
 
-        // Draw right pane (game state after replaying)
-        self.render_grid(
-            &self.game.state.grid,
-            1,
-            pane_width,
-            cell_size,
-            "After Moves",
-        );
+        // Draw left pane (before grid)
+        self.render_grid(&self.before_grid, 0, pane_width, cell_size, left_label);
+
+        // Draw right pane
+        self.render_grid(self.after_grid(), 1, pane_width, cell_size, right_label);
 
         // Draw selection highlights and rectangle
         self.render_selection(cell_size);
@@ -471,7 +575,7 @@ impl Editor {
     }
 
     fn render_portal_dialog(&self) {
-        let Some((_, ref text)) = self.portal_dialog else {
+        let Some((_, _, ref text)) = self.portal_dialog else {
             return;
         };
 
@@ -534,7 +638,7 @@ impl Editor {
     }
 
     fn render_note_dialog(&self) {
-        let Some((_, ref text)) = self.note_dialog else {
+        let Some((_, _, ref text)) = self.note_dialog else {
             return;
         };
 
@@ -666,7 +770,7 @@ impl Editor {
                 // Ghost on opposite pane
                 let other_pane = 1 - current_pane;
                 let target_pos = pos + item.delta;
-                let bounds = (self.initial_grid.width(), self.initial_grid.height());
+                let bounds = (self.before_grid.width(), self.before_grid.height());
                 if target_pos.in_bounds(bounds) {
                     let (gx, gy) = self.grid_to_screen(target_pos, other_pane);
                     self.draw_cell_preview(item.cell, gx, gy, cell_size, 100);
@@ -771,7 +875,10 @@ impl Editor {
 
         // Draw portals
         for (pos, level) in grid.portals() {
-            let completed = self.game.is_level_completed(level);
+            let completed = match &self.mode {
+                EditorMode::Level { game, .. } => game.is_level_completed(level),
+                EditorMode::Scenario { .. } => false,
+            };
             let texture = self.sprites.portal(completed);
             draw_texture_ex(
                 texture,
@@ -836,27 +943,29 @@ impl Editor {
             }
         }
 
-        // Show game state on right pane
+        // Show game state on right pane (level mode only - scenario mode shows in toolbar)
         if pane == 1 {
-            let play_state = self.game.state.play_state();
-            let state_text = match play_state {
-                PlayState::Playing => "",
-                PlayState::GameOver => "GAME OVER",
-                PlayState::Won => "WON",
-            };
-            if !state_text.is_empty() {
-                let dims = measure_text(state_text, None, 32, 1.0);
-                draw_text(
-                    state_text,
-                    pane_x + (pane_width - dims.width) / 2.0,
-                    offset_y + grid_h + 30.0,
-                    32.0,
-                    if play_state == PlayState::Won {
-                        GREEN
-                    } else {
-                        RED
-                    },
-                );
+            if let EditorMode::Level { ref game, .. } = self.mode {
+                let play_state = game.state.play_state();
+                let state_text = match play_state {
+                    PlayState::Playing => "",
+                    PlayState::GameOver => "GAME OVER",
+                    PlayState::Won => "WON",
+                };
+                if !state_text.is_empty() {
+                    let dims = measure_text(state_text, None, 32, 1.0);
+                    draw_text(
+                        state_text,
+                        pane_x + (pane_width - dims.width) / 2.0,
+                        offset_y + grid_h + 30.0,
+                        32.0,
+                        if play_state == PlayState::Won {
+                            GREEN
+                        } else {
+                            RED
+                        },
+                    );
+                }
             }
         }
     }
@@ -931,23 +1040,87 @@ impl Editor {
             );
         }
 
-        // Move count below tools
-        let moves_y = PADDING + Tool::all().len() as f32 * 40.0 + 20.0;
-        let moves_text = format!("Moves: {}", self.input_history.len());
-        draw_text(&moves_text, PADDING, moves_y, 26.0, WHITE);
+        // Mode-specific content below tools
+        let content_y = PADDING + Tool::all().len() as f32 * 40.0 + 20.0;
+
+        match &self.mode {
+            EditorMode::Level { input_history, .. } => {
+                // Move count
+                let moves_text = format!("Moves: {}", input_history.len());
+                draw_text(&moves_text, PADDING, content_y, 26.0, WHITE);
+            }
+            EditorMode::Scenario {
+                action,
+                expected_state,
+                ..
+            } => {
+                // Action selector
+                draw_text("Action:", PADDING, content_y, 20.0, WHITE);
+                let actions = [
+                    (Action::Move(Dir4::North), "N"),
+                    (Action::Move(Dir4::South), "S"),
+                    (Action::Move(Dir4::East), "E"),
+                    (Action::Move(Dir4::West), "W"),
+                    (Action::Stall, "-"),
+                ];
+                let btn_w = 20.0;
+                let btn_h = 20.0;
+                let action_y = content_y + 5.0;
+                for (i, (act, label)) in actions.iter().enumerate() {
+                    let btn_x = PADDING + i as f32 * (btn_w + 2.0);
+                    let selected = action == act;
+                    let bg = if selected {
+                        Color::from_rgba(80, 120, 80, 255)
+                    } else {
+                        Color::from_rgba(50, 50, 60, 255)
+                    };
+                    draw_rectangle(btn_x, action_y, btn_w, btn_h, bg);
+                    draw_text(label, btn_x + 4.0, action_y + 15.0, 16.0, WHITE);
+                }
+
+                // State selector
+                let state_y = action_y + 35.0;
+                draw_text("State:", PADDING, state_y, 20.0, WHITE);
+                let states = [
+                    (PlayState::Playing, "Play"),
+                    (PlayState::GameOver, "Over"),
+                    (PlayState::Won, "Won"),
+                ];
+                let state_btn_y = state_y + 5.0;
+                let state_btn_w = 32.0;
+                for (i, (state, label)) in states.iter().enumerate() {
+                    let btn_x = PADDING + i as f32 * (state_btn_w + 2.0);
+                    let selected = expected_state == state;
+                    let bg = if selected {
+                        Color::from_rgba(80, 120, 80, 255)
+                    } else {
+                        Color::from_rgba(50, 50, 60, 255)
+                    };
+                    draw_rectangle(btn_x, state_btn_y, state_btn_w, btn_h, bg);
+                    let dims = measure_text(label, None, 14, 1.0);
+                    draw_text(
+                        label,
+                        btn_x + (state_btn_w - dims.width) / 2.0,
+                        state_btn_y + 15.0,
+                        14.0,
+                        WHITE,
+                    );
+                }
+            }
+        }
 
         // Size controls
-        let size_y = moves_y + 40.0;
+        let size_y = content_y + 80.0;
         draw_text("Size:", PADDING, size_y, 22.0, WHITE);
 
         // Width row
         let width_y = size_y + 25.0;
-        let (w_minus, w_plus) = self.render_size_row("W", self.initial_grid.width(), width_y);
+        let (w_minus, w_plus) = self.render_size_row("W", self.before_grid.width(), width_y);
         let _ = (w_minus, w_plus); // Positions used in click handler
 
         // Height row
         let height_y = width_y + 30.0;
-        let (h_minus, h_plus) = self.render_size_row("H", self.initial_grid.height(), height_y);
+        let (h_minus, h_plus) = self.render_size_row("H", self.before_grid.height(), height_y);
         let _ = (h_minus, h_plus); // Positions used in click handler
     }
 
@@ -995,8 +1168,8 @@ impl Editor {
         let minus_x = PADDING;
         let plus_x = TOOLBAR_WIDTH - PADDING - btn_size;
 
-        let moves_y = PADDING + Tool::all().len() as f32 * 40.0 + 20.0;
-        let size_y = moves_y + 40.0;
+        let content_y = PADDING + Tool::all().len() as f32 * 40.0 + 20.0;
+        let size_y = content_y + 80.0;
         let width_y = size_y + 25.0;
         let height_y = width_y + 30.0;
 
@@ -1028,36 +1201,91 @@ impl Editor {
         ]
     }
 
-    fn save(&self, csv_path: &str, json_path: &str, level_name: &str) {
+    fn save_level(&self, csv_path: &str, json_path: &str, level_name: &str) {
         // Create parent directories if they don't exist
         if let Some(parent) = Path::new(csv_path).parent() {
             let _ = create_dir_all(parent);
         }
 
-        let csv = self.initial_grid.to_csv();
+        let csv = self.before_grid.to_csv();
         write(csv_path, csv).expect("Failed to save CSV");
 
-        let json = self.initial_grid.to_json(level_name);
+        let json = self.before_grid.to_json(level_name);
         write(json_path, json).expect("Failed to save JSON");
     }
 
+    fn save_scenario(&self, before_path: &str, after_path: &str, json_path: &str) {
+        if let EditorMode::Scenario {
+            ref after_grid,
+            action,
+            expected_state,
+        } = self.mode
+        {
+            // Create parent directories if they don't exist
+            if let Some(parent) = Path::new(before_path).parent() {
+                let _ = create_dir_all(parent);
+            }
+
+            // Save before grid
+            write(before_path, self.before_grid.to_csv()).expect("Failed to save before CSV");
+
+            // Save after grid
+            write(after_path, after_grid.to_csv()).expect("Failed to save after CSV");
+
+            // Save JSON with action and state
+            let action_str = match action {
+                Action::Move(Dir4::North) => "north",
+                Action::Move(Dir4::South) => "south",
+                Action::Move(Dir4::East) => "east",
+                Action::Move(Dir4::West) => "west",
+                Action::Stall => "stall",
+            };
+            let state_str = match expected_state {
+                PlayState::Playing => "playing",
+                PlayState::GameOver => "gameover",
+                PlayState::Won => "won",
+            };
+            let json = format!(
+                "{{\n  \"move\": \"{}\",\n  \"state\": \"{}\"\n}}\n",
+                action_str, state_str
+            );
+            write(json_path, json).expect("Failed to save JSON");
+        }
+    }
+
     fn resize(&mut self, delta_w: i32, delta_h: i32) {
-        let new_w = (self.initial_grid.width() as i32 + delta_w).max(1) as usize;
-        let new_h = (self.initial_grid.height() as i32 + delta_h).max(1) as usize;
-        self.initial_grid.resize(new_w, new_h);
+        let new_w = (self.before_grid.width() as i32 + delta_w).max(1) as usize;
+        let new_h = (self.before_grid.height() as i32 + delta_h).max(1) as usize;
+        self.before_grid.resize(new_w, new_h);
+        if let EditorMode::Scenario {
+            ref mut after_grid, ..
+        } = self.mode
+        {
+            after_grid.resize(new_w, new_h);
+        }
         self.replay_inputs();
     }
 }
 
+enum AppMode {
+    Level {
+        csv_path: String,
+        json_path: String,
+        level_name: String,
+    },
+    Scenario {
+        scenario_names: Vec<String>,
+        current_index: usize,
+    },
+}
+
 pub struct App {
     editor: Editor,
-    csv_path: String,
-    json_path: String,
-    level_name: String,
+    mode: AppMode,
 }
 
 impl App {
-    pub fn new(sprites: Sprites, level_name: &str) -> Self {
+    pub fn new_level(sprites: Sprites, level_name: &str) -> Self {
         let csv_path = format!("levels/{}.csv", level_name);
         let json_path = format!("levels/{}.json", level_name);
 
@@ -1073,26 +1301,113 @@ impl App {
             (grid, level_name.to_string())
         };
 
-        let editor = Editor::new(grid, sprites);
+        let editor = Editor::new_level(grid, sprites);
 
         Self {
             editor,
-            csv_path,
-            json_path,
-            level_name: display_name,
+            mode: AppMode::Level {
+                csv_path,
+                json_path,
+                level_name: display_name,
+            },
         }
+    }
+
+    pub fn new_scenario(sprites: Sprites, filter: &[&str]) -> Self {
+        let scenarios_dir = "scenario_tests/scenarios";
+
+        // Collect scenario names (base names without suffixes)
+        let mut scenario_names: Vec<String> = std::fs::read_dir(scenarios_dir)
+            .expect("Failed to read scenarios directory")
+            .flatten()
+            .filter_map(|entry| {
+                let path = entry.path();
+                let stem = path.file_stem()?.to_str()?;
+                // Look for _i.json files to identify scenarios
+                if path.extension()?.to_str()? == "json" && stem.ends_with("_i") {
+                    Some(stem.strip_suffix("_i")?.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        scenario_names.sort();
+
+        // Validate each filter argument exists (fail-fast)
+        for &name in filter {
+            assert!(
+                scenario_names.iter().any(|s| s == name),
+                "Scenario '{}' not found. Available: {:?}",
+                name,
+                scenario_names
+            );
+        }
+
+        // Filter to specified scenarios if any provided
+        if !filter.is_empty() {
+            scenario_names.retain(|name| filter.contains(&name.as_str()));
+        }
+
+        assert!(
+            !scenario_names.is_empty(),
+            "No scenarios found in {}",
+            scenarios_dir
+        );
+
+        let editor = Self::load_scenario(&scenario_names[0], sprites);
+
+        Self {
+            editor,
+            mode: AppMode::Scenario {
+                scenario_names,
+                current_index: 0,
+            },
+        }
+    }
+
+    fn load_scenario(name: &str, sprites: Sprites) -> Editor {
+        let scenarios_dir = "scenario_tests/scenarios";
+        let before_path = format!("{}/{}_1.csv", scenarios_dir, name);
+        let after_path = format!("{}/{}_2.csv", scenarios_dir, name);
+        let json_path = format!("{}/{}_i.json", scenarios_dir, name);
+
+        let before_csv = read_to_string(&before_path).expect("Failed to read before CSV");
+        let after_csv = read_to_string(&after_path).expect("Failed to read after CSV");
+        let json_str = read_to_string(&json_path).expect("Failed to read JSON");
+
+        let before_grid = Grid::from_csv(&before_csv);
+        let after_grid = Grid::from_csv(&after_csv);
+
+        let json: serde_json::Value =
+            serde_json::from_str(&json_str).expect("Failed to parse JSON");
+        let action = match json["move"].as_str().expect("Missing 'move' field") {
+            "north" => Action::Move(Dir4::North),
+            "south" => Action::Move(Dir4::South),
+            "east" => Action::Move(Dir4::East),
+            "west" => Action::Move(Dir4::West),
+            "stall" => Action::Stall,
+            other => panic!("Unknown action: {}", other),
+        };
+        let expected_state = match json["state"].as_str().expect("Missing 'state' field") {
+            "playing" => PlayState::Playing,
+            "gameover" => PlayState::GameOver,
+            "won" => PlayState::Won,
+            other => panic!("Unknown state: {}", other),
+        };
+
+        Editor::new_scenario(before_grid, after_grid, action, expected_state, sprites)
     }
 
     /// Run one frame of the editor loop. Returns true to continue.
     pub fn tick(&mut self) -> bool {
         // Handle portal dialog input first (blocks other input)
-        if let Some((pos, ref mut text)) = self.editor.portal_dialog {
+        if let Some((pos, pane, ref mut text)) = self.editor.portal_dialog {
             if is_key_pressed(KeyCode::Escape) {
                 self.editor.portal_dialog = None;
             } else if is_key_pressed(KeyCode::Enter) && !text.is_empty() {
                 let level = text.clone();
                 self.editor.portal_dialog = None;
-                self.editor.place_portal(pos, level);
+                self.editor.place_portal(pos, level, pane);
             } else if is_key_pressed(KeyCode::Backspace) && !text.is_empty() {
                 text.pop();
             } else if let Some(c) = get_char_pressed()
@@ -1106,13 +1421,13 @@ impl App {
         }
 
         // Handle note dialog input (blocks other input)
-        if let Some((pos, ref mut text)) = self.editor.note_dialog {
+        if let Some((pos, pane, ref mut text)) = self.editor.note_dialog {
             if is_key_pressed(KeyCode::Escape) {
                 self.editor.note_dialog = None;
             } else if is_key_pressed(KeyCode::Enter) && !text.is_empty() {
                 let note_text = text.clone();
                 self.editor.note_dialog = None;
-                self.editor.place_note(pos, note_text);
+                self.editor.place_note(pos, note_text, pane);
             } else if is_key_pressed(KeyCode::Backspace) && !text.is_empty() {
                 text.pop();
             } else if let Some(c) = get_char_pressed()
@@ -1184,45 +1499,71 @@ impl App {
                 self.editor.resize(1, 0);
             }
         } else {
-            // Movement input (add to history)
-            if is_key_pressed(KeyCode::Up) {
-                self.editor.add_input(Action::Move(Dir4::North));
-            }
-            if is_key_pressed(KeyCode::Down) {
-                self.editor.add_input(Action::Move(Dir4::South));
-            }
-            if is_key_pressed(KeyCode::Left) {
-                self.editor.add_input(Action::Move(Dir4::West));
-            }
-            if is_key_pressed(KeyCode::Right) {
-                self.editor.add_input(Action::Move(Dir4::East));
-            }
-            if is_key_pressed(KeyCode::Space) {
-                self.editor.add_input(Action::Stall);
+            // Movement input - behavior depends on mode
+            match &mut self.editor.mode {
+                EditorMode::Level { .. } => {
+                    // Level mode: add to history and replay
+                    if is_key_pressed(KeyCode::Up) {
+                        self.editor.add_input(Action::Move(Dir4::North));
+                    }
+                    if is_key_pressed(KeyCode::Down) {
+                        self.editor.add_input(Action::Move(Dir4::South));
+                    }
+                    if is_key_pressed(KeyCode::Left) {
+                        self.editor.add_input(Action::Move(Dir4::West));
+                    }
+                    if is_key_pressed(KeyCode::Right) {
+                        self.editor.add_input(Action::Move(Dir4::East));
+                    }
+                    if is_key_pressed(KeyCode::Space) {
+                        self.editor.add_input(Action::Stall);
+                    }
+                }
+                EditorMode::Scenario { action, .. } => {
+                    // Scenario mode: set the action field
+                    if is_key_pressed(KeyCode::Up) {
+                        *action = Action::Move(Dir4::North);
+                    }
+                    if is_key_pressed(KeyCode::Down) {
+                        *action = Action::Move(Dir4::South);
+                    }
+                    if is_key_pressed(KeyCode::Left) {
+                        *action = Action::Move(Dir4::West);
+                    }
+                    if is_key_pressed(KeyCode::Right) {
+                        *action = Action::Move(Dir4::East);
+                    }
+                    if is_key_pressed(KeyCode::Space) {
+                        *action = Action::Stall;
+                    }
+                }
             }
         }
 
-        // Undo last move (u or backspace)
+        // Undo last move (u or backspace) - level mode only
         if is_key_pressed(KeyCode::U) || is_key_pressed(KeyCode::Backspace) {
             self.editor.remove_last_input();
         }
 
-        // Escape: cancel drag/selection, or clear moves
+        // Escape: cancel drag/selection, or clear moves (level mode)
         if is_key_pressed(KeyCode::Escape) {
             if self.editor.dragging.is_some() || self.editor.dragging_selection.is_some() {
-                self.editor.cancel_drag();
+                self.editor.cancel_drag(0);
             } else if !self.editor.selection.is_empty() || self.editor.selecting_rect.is_some() {
                 self.editor.clear_selection();
-            } else {
-                self.editor.input_history.clear();
+            } else if let EditorMode::Level {
+                ref mut input_history,
+                ..
+            } = self.editor.mode
+            {
+                input_history.clear();
                 self.editor.replay_inputs();
             }
         }
 
         // Save
         if is_key_down(KeyCode::LeftControl) && is_key_pressed(KeyCode::S) {
-            self.editor
-                .save(&self.csv_path, &self.json_path, &self.level_name);
+            self.save();
         }
 
         // Scroll wheel to rotate player direction (only when Player tool selected)
@@ -1241,10 +1582,10 @@ impl App {
         // Right-click-and-drag to erase (also clears selection)
         if is_mouse_button_down(MouseButton::Right) {
             self.editor.clear_selection();
-            if let Some((pos, _)) = self.editor.screen_to_grid(mx, my)
+            if let Some((pos, pane)) = self.editor.screen_to_grid(mx, my)
                 && self.editor.last_paint_pos != Some(pos)
             {
-                self.editor.erase_cell(pos);
+                self.editor.erase_cell(pos, pane);
                 self.editor.last_paint_pos = Some(pos);
             }
         } else if is_mouse_button_down(MouseButton::Left) {
@@ -1253,33 +1594,33 @@ impl App {
                 // Check toolbar first on initial press
                 if self.editor.click_toolbar(mx, my) {
                     // Toolbar clicked, don't do grid actions
-                } else if let Some((pos, _)) = self.editor.screen_to_grid(mx, my) {
+                } else if let Some((pos, pane)) = self.editor.screen_to_grid(mx, my) {
                     match self.editor.tool {
                         Tool::Move => {
-                            let cell = self.editor.initial_grid.at(pos);
+                            let cell = self.editor.grid_for_pane(pane).at(pos);
                             if matches!(cell, Cell::Empty) && !self.editor.selection.contains(&pos)
                             {
                                 // Click on empty cell: start rectangle selection
                                 self.editor.start_selection(pos);
                             } else {
                                 // Click on a cell (or selected cell): start dragging
-                                self.editor.start_drag(pos);
+                                self.editor.start_drag(pos, pane);
                             }
                         }
                         Tool::Portal => {
                             // Open portal dialog
-                            self.editor.portal_dialog = Some((pos, String::new()));
+                            self.editor.portal_dialog = Some((pos, pane, String::new()));
                         }
                         Tool::Note => {
                             // Open note dialog
-                            self.editor.note_dialog = Some((pos, String::new()));
+                            self.editor.note_dialog = Some((pos, pane, String::new()));
                         }
                         tool => {
                             // Place cell and start tracking drag-painting
                             if let Some(cell) =
                                 tool.to_cell(pos, self.editor.player_dir, self.editor.trigger_digit)
                             {
-                                self.editor.place_cell(pos, cell);
+                                self.editor.place_cell(pos, cell, pane);
                                 self.editor.last_paint_pos = Some(pos);
                             }
                         }
@@ -1296,7 +1637,7 @@ impl App {
                     }
                 } else if !matches!(self.editor.tool, Tool::Move | Tool::Portal | Tool::Note)
                     && self.editor.dragging.is_none()
-                    && let Some((pos, _)) = self.editor.screen_to_grid(mx, my)
+                    && let Some((pos, pane)) = self.editor.screen_to_grid(mx, my)
                     && self.editor.last_paint_pos != Some(pos)
                     && let Some(cell) = self.editor.tool.to_cell(
                         pos,
@@ -1305,27 +1646,77 @@ impl App {
                     )
                 {
                     // Continue drag-painting for non-Move/Portal tools
-                    self.editor.place_cell(pos, cell);
+                    self.editor.place_cell(pos, cell, pane);
                     self.editor.last_paint_pos = Some(pos);
                 }
             }
         } else {
             // No mouse button down - reset paint tracking and handle drag/selection release
             if self.editor.selecting_rect.is_some() {
-                self.editor.end_selection();
+                if let Some((_, pane)) = self.editor.screen_to_grid(mx, my) {
+                    self.editor.end_selection(pane);
+                } else {
+                    self.editor.end_selection(0); // Default to pane 0 if outside grid
+                }
             }
             if self.editor.dragging.is_some() || self.editor.dragging_selection.is_some() {
-                if let Some((pos, _)) = self.editor.screen_to_grid(mx, my) {
-                    self.editor.end_drag(pos);
+                if let Some((pos, pane)) = self.editor.screen_to_grid(mx, my) {
+                    self.editor.end_drag(pos, pane);
                 } else {
-                    self.editor.cancel_drag();
+                    self.editor.cancel_drag(0); // Default to pane 0 if outside grid
                 }
             }
             self.editor.last_paint_pos = None;
         }
 
+        // Scenario navigation (Ctrl+Left/Right)
+        if let AppMode::Scenario {
+            ref scenario_names,
+            ref mut current_index,
+        } = self.mode
+        {
+            if is_key_down(KeyCode::LeftControl) || is_key_down(KeyCode::RightControl) {
+                let mut new_index = None;
+                if is_key_pressed(KeyCode::Left) && *current_index > 0 {
+                    new_index = Some(*current_index - 1);
+                }
+                if is_key_pressed(KeyCode::Right) && *current_index < scenario_names.len() - 1 {
+                    new_index = Some(*current_index + 1);
+                }
+                if let Some(idx) = new_index {
+                    *current_index = idx;
+                    let name = &scenario_names[idx];
+                    self.editor = Self::load_scenario(name, self.editor.sprites.clone());
+                }
+            }
+        }
+
         self.editor.render();
 
         true
+    }
+
+    fn save(&self) {
+        match &self.mode {
+            AppMode::Level {
+                csv_path,
+                json_path,
+                level_name,
+            } => {
+                self.editor.save_level(csv_path, json_path, level_name);
+            }
+            AppMode::Scenario {
+                scenario_names,
+                current_index,
+            } => {
+                let name = &scenario_names[*current_index];
+                let scenarios_dir = "scenario_tests/scenarios";
+                let before_path = format!("{}/{}_1.csv", scenarios_dir, name);
+                let after_path = format!("{}/{}_2.csv", scenarios_dir, name);
+                let json_path = format!("{}/{}_i.json", scenarios_dir, name);
+                self.editor
+                    .save_scenario(&before_path, &after_path, &json_path);
+            }
+        }
     }
 }

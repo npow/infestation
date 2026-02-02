@@ -5,13 +5,12 @@ use macroquad::prelude::next_frame;
 use infestation::editor_app::App;
 use infestation::sprites::Sprites;
 
-#[macroquad::main("Level Editor")]
+#[macroquad::main("Scenario Editor")]
 async fn main() {
     let args: Vec<String> = env::args().collect();
-    assert_eq!(args.len(), 2, "Usage: editor <level_name>");
-    let level_name = args.get(1).unwrap();
+    let scenario_filter: Vec<&str> = args.iter().skip(1).map(String::as_str).collect();
 
-    let mut app = App::new_level(Sprites::load().await, level_name);
+    let mut app = App::new_scenario(Sprites::load().await, &scenario_filter);
     while app.tick() {
         next_frame().await;
     }

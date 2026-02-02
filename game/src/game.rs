@@ -47,7 +47,7 @@ pub(crate) struct Zapping {
     pub(crate) progress: f32,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Action {
     Move(Dir4),
     Stall,

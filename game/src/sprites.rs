@@ -1,6 +1,7 @@
 use crate::direction::{Dir4, Dir8};
 use macroquad::prelude::*;
 
+#[derive(Clone)]
 pub struct Sprites {
     player: [Texture2D; 4],
     rat: [Texture2D; 8],

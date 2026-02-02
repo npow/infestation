@@ -50,6 +50,14 @@ A top-down 2D grid-based turn-based puzzle game built with macroquad, targeting 
 - Named fields are self-documenting; `.2` is not
 - A struct makes destructuring patterns clearer and refactoring safer
 
+**Fail fast. No fallbacks.**
+
+- If something is wrong, panic or return an error immediately
+- Never silently fall back to a default or alternative behavior
+- `.unwrap_or_default()` hides bugs; `.unwrap()` or `.expect()` surfaces them
+- If a file should exist, panic if it doesn't—don't create an empty one
+- "Graceful degradation" in development means bugs ship to production
+
 **Preserve error information.**
 
 - Don't discard the original error with `.map_err(|_| ...)` or `.ok()`
