@@ -39,12 +39,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(sprites: Sprites) -> Self {
+    pub fn new(sprites: Sprites, level_name: Option<&str>) -> Self {
         screen_wake::request();
 
+        let level_name = level_name.unwrap_or("world");
         let mut completed = load_completed_levels();
-        let game = load_level("world", &mut completed);
-        let stack = LevelStack::new("world".to_string());
+        let game = load_level(level_name, &mut completed);
+        let stack = LevelStack::new(level_name.to_string());
         Self {
             game,
             stack,
