@@ -6,16 +6,25 @@ use crate::{direction::Dir4, grid::Grid};
 
 use super::{Action, Game, GameState, MoveHandler, Moving, PlayerInfo};
 
+pub(crate) struct FoundPlayer {
+    pub(crate) pos: Position,
+    pub(crate) dir: Dir4,
+    pub(crate) player_index: usize,
+}
+
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
     /// Find all players in the grid, sorted by player index.
-    pub(crate) fn find_players(&self) -> Vec<(Position, Dir4, usize)> {
+    pub(crate) fn find_players(&self) -> Vec<FoundPlayer> {
         let mut players: Vec<_> = self
             .grid
             .borrow()
             .entries()
-            .filter_map(|(pos, cell)| cell.as_player().map(|(idx, dir)| (pos, dir, idx)))
+            .filter_map(|(pos, cell)| {
+                cell.as_player()
+                    .map(|(player_index, dir)| FoundPlayer { pos, dir, player_index })
+            })
             .collect();
-        players.sort_by_key(|&(_, _, idx)| idx);
+        players.sort_by_key(|p| p.player_index);
         players
     }
 
@@ -35,7 +44,8 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         let mut move_dirs: Vec<Option<Dir4>> = Vec::new();
         let mut facing_dirs: Vec<Dir4> = Vec::new();
 
-        for (i, &(player_pos, current_dir, _)) in players.iter().enumerate() {
+        for (i, player) in players.iter().enumerate() {
+            let (player_pos, current_dir) = (player.pos, player.dir);
             let action = actions.get(i).copied().flatten();
             match action {
                 Some(Action::Move(dir)) => {
@@ -60,20 +70,20 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
         // Phase 2: Resolve player-player conflicts
         if players.len() == 2 {
-            let moving = [dests[0] != players[0].0, dests[1] != players[1].0];
+            let moving = [dests[0] != players[0].pos, dests[1] != players[1].pos];
 
             if moving[0] && moving[1] && dests[0] == dests[1] {
                 // Both target same cell → both blocked
-                dests[0] = players[0].0;
-                dests[1] = players[1].0;
+                dests[0] = players[0].pos;
+                dests[1] = players[1].pos;
             } else {
                 // Check each direction: player i moving into player j's position
                 for (i, j) in [(0usize, 1usize), (1, 0)] {
-                    if moving[i] && dests[i] == players[j].0 && dests[j] == players[j].0 {
+                    if moving[i] && dests[i] == players[j].pos && dests[j] == players[j].pos {
                         // Player i moves into player j's cell while j stays
                         if facing_dirs[j].is_opposite(move_dirs[i].unwrap()) {
                             // j faces i → i blocked
-                            dests[i] = players[i].0;
+                            dests[i] = players[i].pos;
                         }
                         // else: i kills j (handled naturally by overwrite in finish_moving)
                     }
@@ -83,7 +93,8 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
         // Phase 3: Create Moving entities and build PlayerInfos
         let mut player_infos: Vec<PlayerInfo> = Vec::new();
-        for (i, &(player_pos, _, player_index)) in players.iter().enumerate() {
+        for (i, player) in players.iter().enumerate() {
+            let (player_pos, player_index) = (player.pos, player.player_index);
             let action = actions.get(i).copied().flatten();
             let dest = dests[i];
             let blocked = dest == player_pos;
