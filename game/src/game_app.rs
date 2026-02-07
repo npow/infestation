@@ -15,6 +15,9 @@ use crate::screen_wake;
 use crate::sprites::Sprites;
 use crate::storage::{load_completed_levels, save_completed_levels};
 
+/// Grace period for the second player to input before a solo action fires.
+const SYNC_GRACE_PERIOD: f32 = 0.064;
+
 fn load_level(name: &str, completed_levels: &mut HashSet<String>) -> Game {
     let level = levels::get_level(name).unwrap_or_else(|| panic!("Level not found: {}", name));
     Game::new(level.grid.clone(), mem::take(completed_levels))
@@ -35,6 +38,8 @@ pub struct App {
     confirm_dialog: ConfirmDialog,
     /// Per-player buffered actions (sync or immediate).
     pending: [Option<PendingAction>; 2],
+    /// Time elapsed since the first pending action was set, for the 2P grace period.
+    pending_timer: f32,
 }
 
 impl App {
@@ -53,6 +58,7 @@ impl App {
             sprites,
             confirm_dialog: ConfirmDialog::None,
             pending: [None; 2],
+            pending_timer: 0.0,
         }
     }
 
@@ -167,6 +173,18 @@ impl App {
         }
     }
 
+    /// Advance the grace period timer whenever any pending action exists.
+    /// Called every frame regardless of animation state.
+    fn advance_pending_timer(&mut self, dt: f32) {
+        let player_count = self.game.state.player_count();
+        let any_pending = self.pending[..player_count].iter().any(|p| p.is_some());
+        if any_pending {
+            self.pending_timer += dt;
+        } else {
+            self.pending_timer = 0.0;
+        }
+    }
+
     /// Try to execute pending actions if the trigger condition is met.
     fn try_execute_pending(&mut self) {
         if self.game.is_animating() {
@@ -178,18 +196,32 @@ impl App {
             return;
         }
 
-        let has_non_synced = self.pending[..player_count]
-            .iter()
-            .any(|p| p.is_some_and(|pa| !pa.synced));
+        let any_pending = self.pending[..player_count].iter().any(|p| p.is_some());
+        let all_pending = self.pending[..player_count].iter().all(|p| p.is_some());
+
+        if !any_pending {
+            return;
+        }
+
         let all_synced = self.pending[..player_count]
             .iter()
             .all(|p| p.is_some_and(|pa| pa.synced));
 
-        if !has_non_synced && !all_synced {
+        // In 2-player, if not all players have acted yet, wait for grace period
+        // (unless explicitly synced — those wait indefinitely)
+        if player_count > 1 && !all_pending && !all_synced {
+            if self.pending_timer < SYNC_GRACE_PERIOD {
+                return;
+            }
+        }
+
+        // All synced: wait indefinitely for all players
+        if all_synced && !all_pending {
             return;
         }
 
-        // Build actions and consume all pending
+        // Fire
+        self.pending_timer = 0.0;
         let actions: Vec<Option<Action>> = (0..player_count)
             .map(|i| self.pending[i].take().map(|pa| pa.action))
             .collect();
@@ -317,6 +349,7 @@ impl App {
             self.try_execute_pending();
         }
 
+        self.advance_pending_timer(dt);
         self.game.animate(dt);
         self.handle_portal_transition();
         self.try_execute_pending();
