@@ -4,8 +4,7 @@ use quad_gamepad::{GamepadAxis, GamepadButton, GamepadContext};
 use crate::direction::Dir4;
 use crate::game::Action;
 
-const REPEAT_DELAY: f32 = 0.5;
-const REPEAT_RATE: f32 = 0.05;
+const REPEAT_DELAY: f32 = 0.2;
 const STICK_THRESHOLD: f32 = 0.5;
 const SWIPE_THRESHOLD: f32 = 30.0;
 
@@ -268,14 +267,14 @@ fn poll_keys_action(
     for (i, &key) in keys.iter().enumerate() {
         let down = is_key_down(key);
         let pressed = is_key_pressed(key);
-        if input_repeat(down, pressed, &mut held_move[i], dt) {
+        if input_held(down, pressed, &mut held_move[i], dt) {
             return Some(Action::Move(DIRS[i]));
         }
     }
 
     let stall_down = is_key_down(stall_key);
     let stall_pressed = is_key_pressed(stall_key);
-    if input_repeat(stall_down, stall_pressed, held_stall, dt) {
+    if input_held(stall_down, stall_pressed, held_stall, dt) {
         return Some(Action::Stall);
     }
 
@@ -295,7 +294,7 @@ fn poll_gamepad_action(
     for i in 0..4 {
         let down = gp_btn_down(gp, index, DPAD_BUTTONS[i]);
         let pressed = gp_btn_pressed(gp, index, DPAD_BUTTONS[i]);
-        if input_repeat(down, pressed, &mut held_move[i], dt) {
+        if input_held(down, pressed, &mut held_move[i], dt) {
             return Some(Action::Move(DIRS[i]));
         }
     }
@@ -339,7 +338,7 @@ fn poll_gamepad_action(
         gp_btn_down(gp, index, GamepadButton::South) || gp_btn_down(gp, index, GamepadButton::East);
     let stall_pressed = gp_btn_pressed(gp, index, GamepadButton::South)
         || gp_btn_pressed(gp, index, GamepadButton::East);
-    if input_repeat(stall_down, stall_pressed, held_stall, dt) {
+    if input_held(stall_down, stall_pressed, held_stall, dt) {
         return Some(Action::Stall);
     }
 
@@ -391,10 +390,22 @@ fn any_gp_pressed_multi(gp: &GamepadContext, btns: &[GamepadButton]) -> bool {
 
 // --- Utilities ---
 
+const UNDO_REPEAT_RATE: f32 = 0.05;
+
+fn input_held(down: bool, pressed: bool, held: &mut f32, dt: f32) -> bool {
+    if down {
+        *held += dt;
+        pressed || *held > REPEAT_DELAY
+    } else {
+        *held = 0.0;
+        false
+    }
+}
+
 fn input_repeat(down: bool, pressed: bool, held: &mut f32, dt: f32) -> bool {
     if down {
         *held += dt;
-        pressed || (*held > REPEAT_DELAY && *held % REPEAT_RATE < dt)
+        pressed || (*held > REPEAT_DELAY && *held % UNDO_REPEAT_RATE < dt)
     } else {
         *held = 0.0;
         false
