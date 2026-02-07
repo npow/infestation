@@ -3,12 +3,17 @@
   "notes": [
     {
       "x": 3,
-      "y": 1,
-      "text": "Rats can't catch me from behind if I keep moving. And they can't attack me head-on if I keep them at swordpoint..."
+      "y": 0,
+      "text": "But it seems like I need to watch my flank... And of course ALL of the diagonals"
     },
     {
       "x": 3,
       "y": 2,
+      "text": "Rats can't catch me from behind if I keep moving. And they can't attack me head-on if I keep them at swordpoint..."
+    },
+    {
+      "x": 3,
+      "y": 4,
       "text": "That's a LOT more rats!"
     }
   ]
