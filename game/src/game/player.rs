@@ -125,7 +125,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 }
 
 impl Game {
-    pub(crate) fn enter_portal(&self) -> Option<&str> {
-        self.state.standing_on_portal()
+    pub(crate) fn enter_portal(&self, player_index: usize) -> Option<&str> {
+        self.state.player_standing_on_portal(player_index)
     }
 }

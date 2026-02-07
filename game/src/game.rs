@@ -152,15 +152,24 @@ impl GameState {
         }
     }
 
+    /// Returns the portal destination for a specific player.
+    pub(crate) fn player_standing_on_portal(&self, player_index: usize) -> Option<&str> {
+        let cell_matcher: fn(&Cell) -> bool = if player_index == 0 {
+            |c| matches!(c, Cell::Player(_))
+        } else {
+            |c| matches!(c, Cell::Player2(_))
+        };
+        self.grid
+            .entries()
+            .find(|(_, cell)| cell_matcher(&cell))
+            .and_then(|(pos, _)| self.grid.get_portal(pos))
+    }
+
     /// Returns the portal destination if any player is currently standing on a portal.
     /// If both players are on portals, prefers P1.
     pub(crate) fn standing_on_portal(&self) -> Option<&str> {
-        self.grid
-            .entries()
-            .filter_map(|(pos, cell)| cell.as_player().map(|(idx, _)| (idx, pos)))
-            .filter_map(|(idx, pos)| self.grid.get_portal(pos).map(|p| (idx, p)))
-            .min_by_key(|(idx, _)| *idx)
-            .map(|(_, portal)| portal)
+        self.player_standing_on_portal(0)
+            .or_else(|| self.player_standing_on_portal(1))
     }
 
     /// Returns the note text if a player is currently standing on a note cell.

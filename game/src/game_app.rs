@@ -109,7 +109,7 @@ impl App {
                     ConfirmDialog::QuitGame
                 };
             }
-            MetaInput::Confirm => {
+            MetaInput::Confirm(player) => {
                 let play_state = self.game.state.play_state();
                 if !self.game.is_animating()
                     && play_state == PlayState::Won
@@ -117,7 +117,7 @@ impl App {
                 {
                     self.exit_level();
                 } else if play_state == PlayState::Playing
-                    && let Some(level) = self.game.enter_portal().map(str::to_string)
+                    && let Some(level) = self.game.enter_portal(player).map(str::to_string)
                 {
                     self.do_portal_transition(&level);
                 }
@@ -239,7 +239,7 @@ impl App {
             let mut should_confirm = false;
             for action in self.input.poll_meta_inputs(&self.gamepad, dt) {
                 match action {
-                    MetaInput::Confirm => should_confirm = true,
+                    MetaInput::Confirm(_) => should_confirm = true,
                     MetaInput::Undo | MetaInput::Exit => {
                         self.confirm_dialog = ConfirmDialog::None;
                     }

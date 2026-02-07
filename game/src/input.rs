@@ -33,7 +33,8 @@ pub(crate) enum MetaInput {
     Undo,
     Restart,
     Exit,
-    Confirm,
+    /// Confirm action from a specific player (0=P1, 1=P2).
+    Confirm(usize),
 }
 
 /// A touch gesture result.
@@ -51,7 +52,7 @@ pub(crate) struct InputState {
     held_stall: [f32; NUM_SOURCES],
     /// Meta action held timers.
     held_undo: f32,
-    held_confirm: f32,
+    held_confirm: [f32; 2],
     /// Per-gamepad analog stick edge detection.
     stick_active: [[bool; 4]; 2],
     touch_start: Option<(u64, Vec2)>,
@@ -64,7 +65,7 @@ impl InputState {
             held_move: [[0.0; 4]; NUM_SOURCES],
             held_stall: [0.0; NUM_SOURCES],
             held_undo: 0.0,
-            held_confirm: 0.0,
+            held_confirm: [0.0; 2],
             stick_active: [[false; 4]; 2],
             touch_start: None,
             touch_handled_this_frame: false,
@@ -75,7 +76,7 @@ impl InputState {
         self.held_move = [[0.0; 4]; NUM_SOURCES];
         self.held_stall = [0.0; NUM_SOURCES];
         self.held_undo = 0.0;
-        self.held_confirm = 0.0;
+        self.held_confirm = [0.0; 2];
         self.stick_active = [[false; 4]; 2];
     }
 
@@ -102,13 +103,27 @@ impl InputState {
             inputs.push(MetaInput::Undo);
         }
 
-        // Confirm with repeat (Space / A / B on any gamepad)
-        let confirm_down = is_key_down(KeyCode::Space)
-            || any_gp_down_multi(gamepad, &[GamepadButton::South, GamepadButton::East]);
-        let confirm_pressed = is_key_pressed(KeyCode::Space)
-            || any_gp_pressed_multi(gamepad, &[GamepadButton::South, GamepadButton::East]);
-        if input_repeat(confirm_down, confirm_pressed, &mut self.held_confirm, dt) {
-            inputs.push(MetaInput::Confirm);
+        // Per-player confirm with repeat: Space/gp0 → P1, Tab/gp1 → P2
+        let controller_connected = gamepad.gamepad(0).is_some_and(|g| g.is_connected());
+        let arrow_player = if controller_connected { 1 } else { 0 };
+        let confirm_sources: [(bool, bool, usize); 4] = [
+            (is_key_down(KeyCode::Space), is_key_pressed(KeyCode::Space), arrow_player),
+            (is_key_down(KeyCode::Tab), is_key_pressed(KeyCode::Tab), 1),
+            (
+                gp_btn_down_multi(gamepad, 0, &[GamepadButton::South, GamepadButton::East]),
+                gp_btn_pressed_multi(gamepad, 0, &[GamepadButton::South, GamepadButton::East]),
+                0,
+            ),
+            (
+                gp_btn_down_multi(gamepad, 1, &[GamepadButton::South, GamepadButton::East]),
+                gp_btn_pressed_multi(gamepad, 1, &[GamepadButton::South, GamepadButton::East]),
+                1,
+            ),
+        ];
+        for (down, pressed, player) in confirm_sources {
+            if input_repeat(down, pressed, &mut self.held_confirm[player], dt) {
+                inputs.push(MetaInput::Confirm(player));
+            }
         }
 
         // Exit (Escape / Start on any gamepad)
@@ -350,6 +365,14 @@ fn any_gp_down(gp: &GamepadContext, btn: GamepadButton) -> bool {
 /// Check if a button was pressed on any gamepad (0 or 1).
 fn any_gp_pressed(gp: &GamepadContext, btn: GamepadButton) -> bool {
     (0..2).any(|i| gp_btn_pressed(gp, i, btn))
+}
+
+fn gp_btn_down_multi(gp: &GamepadContext, index: usize, btns: &[GamepadButton]) -> bool {
+    btns.iter().any(|&btn| gp_btn_down(gp, index, btn))
+}
+
+fn gp_btn_pressed_multi(gp: &GamepadContext, index: usize, btns: &[GamepadButton]) -> bool {
+    btns.iter().any(|&btn| gp_btn_pressed(gp, index, btn))
 }
 
 /// Check if any of multiple buttons are down on any gamepad.
