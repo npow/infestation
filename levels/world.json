@@ -77,6 +77,11 @@
       "level": "tinderbox"
     },
     {
+      "x": 8,
+      "y": 13,
+      "level": "tinderrectangle"
+    },
+    {
       "x": 3,
       "y": 15,
       "level": "guidance"
