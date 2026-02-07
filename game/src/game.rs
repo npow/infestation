@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
 
 use crate::direction::Dir4;
-use crate::grid::{Cell, Grid};
+use crate::grid::{Cell, Grid, NoteText};
 use crate::levels;
 use crate::position::Position;
 use crate::storage::strip_path_prefix;
@@ -142,7 +142,7 @@ impl GameState {
     }
 
     /// Returns the note text if the player is currently standing on a note cell.
-    pub(crate) fn standing_on_note(&self) -> Option<&str> {
+    pub(crate) fn standing_on_note(&self) -> Option<&NoteText> {
         let (player_pos, _) = self.find_player()?;
         self.grid.get_note(player_pos)
     }

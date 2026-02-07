@@ -7,7 +7,7 @@ use macroquad::prelude::*;
 
 use crate::direction::Dir4;
 use crate::game::{Action, Game, PlayState};
-use crate::grid::{Cell, Grid, LevelMetadata};
+use crate::grid::{Cell, Grid, LevelMetadata, NoteText};
 use crate::position::{Position, PositionDelta};
 use crate::sprites::Sprites;
 
@@ -117,7 +117,7 @@ struct DraggedItem {
     delta: PositionDelta,
     cell: Cell,
     portal: Option<String>,
-    note: Option<String>,
+    note: Option<NoteText>,
 }
 
 enum EditorMode {
@@ -336,7 +336,7 @@ impl Editor {
     }
 
     fn place_note(&mut self, pos: Position, text: String, pane: usize) {
-        self.grid_for_pane_mut(pane).insert_note(pos, text);
+        self.grid_for_pane_mut(pane).insert_note(pos, NoteText::Simple(text));
         self.replay_inputs();
     }
 
@@ -350,7 +350,7 @@ impl Editor {
             for &sel_pos in &self.selection {
                 let cell = grid.at(sel_pos);
                 let portal = grid.get_portal(sel_pos).map(String::from);
-                let note = grid.get_note(sel_pos).map(String::from);
+                let note = grid.get_note(sel_pos).cloned();
                 // Include position if it has a non-empty cell, portal, or note
                 if !matches!(cell, Cell::Empty) || portal.is_some() || note.is_some() {
                     items.push(DraggedItem {

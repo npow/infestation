@@ -5,7 +5,7 @@ use crate::game::PlayState;
 use crate::position::Position;
 
 mod parse;
-pub(crate) use parse::LevelMetadata;
+pub(crate) use parse::{LevelMetadata, NoteText};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Cell {
@@ -45,14 +45,14 @@ pub(crate) struct Grid {
     width: usize,
     height: usize,
     portals: HashMap<Position, String>,
-    notes: HashMap<Position, String>,
+    notes: HashMap<Position, NoteText>,
 }
 
 impl Grid {
     pub(crate) fn new(
         cells: Vec<Vec<Cell>>,
         portals: HashMap<Position, String>,
-        notes: HashMap<Position, String>,
+        notes: HashMap<Position, NoteText>,
     ) -> Self {
         let height = cells.len();
         let width = cells.first().map(|r| r.len()).unwrap();
@@ -188,15 +188,15 @@ impl Grid {
         self.portals.remove(&pos);
     }
 
-    pub(crate) fn get_note(&self, pos: Position) -> Option<&str> {
-        self.notes.get(&pos).map(String::as_str)
+    pub(crate) fn get_note(&self, pos: Position) -> Option<&NoteText> {
+        self.notes.get(&pos)
     }
 
-    pub(crate) fn notes(&self) -> impl Iterator<Item = (Position, &str)> {
-        self.notes.iter().map(|(&pos, text)| (pos, text.as_str()))
+    pub(crate) fn notes(&self) -> impl Iterator<Item = (Position, &NoteText)> {
+        self.notes.iter().map(|(&pos, text)| (pos, text))
     }
 
-    pub(crate) fn insert_note(&mut self, pos: Position, text: String) {
+    pub(crate) fn insert_note(&mut self, pos: Position, text: NoteText) {
         self.notes.insert(pos, text);
     }
 

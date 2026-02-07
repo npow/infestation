@@ -6,7 +6,37 @@ use serde::{Deserialize, Serialize};
 use crate::direction::Dir4;
 use crate::position::Position;
 
+use crate::render::InputHints;
+
 use super::{Cell, Grid};
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub(crate) enum NoteText {
+    Simple(String),
+    ByPlatform {
+        controller: String,
+        keyboard: String,
+        mobile: String,
+    },
+}
+
+impl NoteText {
+    pub(crate) fn resolve(&self, hints: InputHints) -> &str {
+        match self {
+            NoteText::Simple(s) => s,
+            NoteText::ByPlatform {
+                controller,
+                keyboard,
+                mobile,
+            } => match hints {
+                InputHints::Controller(_) => controller,
+                InputHints::Touch => mobile,
+                InputHints::Keyboard => keyboard,
+            },
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Default)]
 pub(crate) struct LevelMetadata {
@@ -28,7 +58,7 @@ struct Portal {
 struct Note {
     x: i32,
     y: i32,
-    text: String,
+    text: NoteText,
 }
 
 impl LevelMetadata {
@@ -39,7 +69,7 @@ impl LevelMetadata {
     pub(crate) fn from_grid(
         name: &str,
         portals: &HashMap<Position, String>,
-        notes: &HashMap<Position, String>,
+        notes: &HashMap<Position, NoteText>,
     ) -> Self {
         let mut portals: Vec<_> = portals
             .iter()
@@ -79,7 +109,7 @@ impl LevelMetadata {
             .collect()
     }
 
-    pub(crate) fn notes(&self) -> HashMap<Position, String> {
+    pub(crate) fn notes(&self) -> HashMap<Position, NoteText> {
         self.notes
             .iter()
             .map(|n| (Position::new(n.x as usize, n.y as usize), n.text.clone()))
@@ -99,7 +129,7 @@ impl Grid {
     fn parse_csv(
         csv_str: &str,
         portals: HashMap<Position, String>,
-        notes: HashMap<Position, String>,
+        notes: HashMap<Position, NoteText>,
     ) -> Self {
         let mut cells: Vec<Vec<Cell>> = Vec::new();
         let mut player_pos: Option<Position> = None;

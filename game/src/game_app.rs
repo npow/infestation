@@ -251,7 +251,7 @@ impl App {
         let ui = self.ui_state();
 
         // Priority: note text > completed portal name > current level name
-        let note_text = self.game.state.standing_on_note();
+        let note_text = self.game.state.standing_on_note().map(|t| t.resolve(hints));
         let portal_name = self.game.state.standing_on_completed_portal();
         let level_name =
             levels::get_level(&self.stack.current_level).map(|l| l.display_name.as_str());

@@ -132,6 +132,15 @@
       "x": 7,
       "y": 21,
       "text": "I'm a rat-fighting master!"
+    },
+    {
+      "x": 4,
+      "y": 24,
+      "text": {
+        "controller": "Use the D-pad or left joystick to move",
+        "keyboard": "Use the arrow keys to move",
+        "mobile": "Swipe up, down, left, or right to move"
+      }
     }
   ]
 }
