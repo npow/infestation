@@ -30,34 +30,78 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         let grid = self.grid.borrow();
         let prev_grid = grid.clone();
 
-        // Process each player's action and build PlayerInfo vec
-        let mut player_infos: Vec<PlayerInfo> = Vec::new();
-        for (i, &(player_pos, current_dir, player_index)) in players.iter().enumerate() {
-            let action = actions.get(i).copied().flatten();
+        // Phase 1: Determine each player's intended destination (wall/plank blocks only)
+        let mut dests: Vec<Position> = Vec::new();
+        let mut move_dirs: Vec<Option<Dir4>> = Vec::new();
+        let mut facing_dirs: Vec<Dir4> = Vec::new();
 
-            let (new_pos, new_dir, acted) = match action {
+        for (i, &(player_pos, current_dir, _)) in players.iter().enumerate() {
+            let action = actions.get(i).copied().flatten();
+            match action {
                 Some(Action::Move(dir)) => {
                     let candidate = player_pos + dir.delta();
-                    let target_cell = self.grid.borrow().at(candidate);
-                    let blocked = target_cell.blocks_player();
-                    let new_pos = if blocked { player_pos } else { candidate };
-
-                    self.begin_move(Moving {
-                        cell: Cell::player(player_index, dir),
-                        from: player_pos,
-                        progress: if blocked { 1.0 } else { 0.0 },
-                        to: new_pos,
-                    });
-                    (new_pos, dir, true)
+                    let wall_blocked = self.grid.borrow().at(candidate).blocks_player();
+                    dests.push(if wall_blocked { player_pos } else { candidate });
+                    move_dirs.push(Some(dir));
+                    facing_dirs.push(dir);
                 }
-                Some(Action::Stall) => (player_pos, current_dir, true),
-                None => (player_pos, current_dir, false),
-            };
+                Some(Action::Stall) => {
+                    dests.push(player_pos);
+                    move_dirs.push(None);
+                    facing_dirs.push(current_dir);
+                }
+                None => {
+                    dests.push(player_pos);
+                    move_dirs.push(None);
+                    facing_dirs.push(current_dir);
+                }
+            }
+        }
+
+        // Phase 2: Resolve player-player conflicts
+        if players.len() == 2 {
+            let moving = [dests[0] != players[0].0, dests[1] != players[1].0];
+
+            if moving[0] && moving[1] && dests[0] == dests[1] {
+                // Both target same cell → both blocked
+                dests[0] = players[0].0;
+                dests[1] = players[1].0;
+            } else {
+                // Check each direction: player i moving into player j's position
+                for (i, j) in [(0usize, 1usize), (1, 0)] {
+                    if moving[i] && dests[i] == players[j].0 && dests[j] == players[j].0 {
+                        // Player i moves into player j's cell while j stays
+                        if facing_dirs[j].is_opposite(move_dirs[i].unwrap()) {
+                            // j faces i → i blocked
+                            dests[i] = players[i].0;
+                        }
+                        // else: i kills j (handled naturally by overwrite in finish_moving)
+                    }
+                }
+            }
+        }
+
+        // Phase 3: Create Moving entities and build PlayerInfos
+        let mut player_infos: Vec<PlayerInfo> = Vec::new();
+        for (i, &(player_pos, _, player_index)) in players.iter().enumerate() {
+            let action = actions.get(i).copied().flatten();
+            let dest = dests[i];
+            let blocked = dest == player_pos;
+
+            if move_dirs[i].is_some() {
+                let dir = facing_dirs[i];
+                self.begin_move(Moving {
+                    cell: Cell::player(player_index, dir),
+                    from: player_pos,
+                    progress: if blocked { 1.0 } else { 0.0 },
+                    to: dest,
+                });
+            }
 
             player_infos.push(PlayerInfo {
-                pos: new_pos,
-                dir: new_dir,
-                acted,
+                pos: dest,
+                dir: facing_dirs[i],
+                acted: action.is_some(),
                 player_index,
             });
         }

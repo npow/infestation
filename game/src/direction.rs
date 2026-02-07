@@ -27,6 +27,16 @@ impl Dir4 {
         }
     }
 
+    pub(crate) fn is_opposite(self, other: Dir4) -> bool {
+        matches!(
+            (self, other),
+            (Dir4::North, Dir4::South)
+                | (Dir4::South, Dir4::North)
+                | (Dir4::East, Dir4::West)
+                | (Dir4::West, Dir4::East)
+        )
+    }
+
     pub(crate) fn rotate_cw(self) -> Dir4 {
         match self {
             Dir4::North => Dir4::East,
