@@ -88,12 +88,12 @@ impl Tool {
             Tool::Wall => "#",
             Tool::Player => "1",
             Tool::Player2 => "2",
-            Tool::Rat => "r",
+            Tool::Rat => "",
             Tool::CyborgRat => "c",
             Tool::Portal => "g",
             Tool::Note => "n",
             Tool::Plank => "=",
-            Tool::Spiderweb => "w",
+            Tool::Spiderweb => "",
             Tool::BlackHole => "o",
             Tool::Explosive => "x",
             Tool::Trigger => "t",
@@ -125,10 +125,16 @@ struct DraggedItem {
     note: Option<NoteText>,
 }
 
+#[derive(Clone, Copy)]
+struct PendingAction {
+    action: Action,
+    synced: bool,
+}
+
 enum EditorMode {
     Level {
         game: Box<Game>,
-        input_history: Vec<Action>,
+        input_history: Vec<Vec<Option<Action>>>,
     },
     Scenario {
         after_grid: Grid,
@@ -154,6 +160,8 @@ struct Editor {
     selection: HashSet<Position>,                 // Currently selected cell positions
     // Multi-item dragging state (anchor_pos, items with offsets from anchor)
     dragging_selection: Option<(Position, Vec<DraggedItem>)>,
+    // Two-player sync buffering
+    pending: [Option<PendingAction>; 2],
 }
 
 impl Editor {
@@ -176,6 +184,7 @@ impl Editor {
             selecting_rect: None,
             selection: HashSet::new(),
             dragging_selection: None,
+            pending: [None; 2],
         }
     }
 
@@ -206,6 +215,7 @@ impl Editor {
             selecting_rect: None,
             selection: HashSet::new(),
             dragging_selection: None,
+            pending: [None; 2],
         }
     }
 
@@ -216,9 +226,9 @@ impl Editor {
         } = self.mode
         {
             **game = Game::new(self.before_grid.clone(), HashSet::new());
-            for &input in input_history {
+            for actions in input_history {
                 if game.state.play_state() == PlayState::Playing {
-                    game.apply_action(input);
+                    game.apply_actions(actions);
                 }
             }
         }
@@ -253,16 +263,48 @@ impl Editor {
         }
     }
 
-    fn add_input(&mut self, input: Action) {
+    fn add_actions(&mut self, actions: Vec<Option<Action>>) {
         if let EditorMode::Level {
             ref mut game,
             ref mut input_history,
         } = self.mode
             && game.state.play_state() == PlayState::Playing
         {
-            input_history.push(input);
-            game.apply_action(input);
+            game.apply_actions(&actions);
+            input_history.push(actions);
         }
+    }
+
+    fn register_action(&mut self, player: usize, action: Action, synced: bool) {
+        self.pending[player] = Some(PendingAction { action, synced });
+        self.try_execute_pending();
+    }
+
+    fn try_execute_pending(&mut self) {
+        let player_count = self
+            .before_grid
+            .entries()
+            .filter(|(_, cell)| cell.as_player().is_some())
+            .count();
+        if player_count == 0 {
+            return;
+        }
+
+        let has_non_synced = self.pending[..player_count]
+            .iter()
+            .any(|p| p.is_some_and(|pa| !pa.synced));
+        let all_synced = self.pending[..player_count]
+            .iter()
+            .all(|p| p.is_some_and(|pa| pa.synced));
+
+        if !has_non_synced && !all_synced {
+            return;
+        }
+
+        let actions: Vec<Option<Action>> = (0..player_count)
+            .map(|i| self.pending[i].take().map(|pa| pa.action))
+            .collect();
+        self.add_actions(actions);
     }
 
     fn remove_last_input(&mut self) {
@@ -356,7 +398,8 @@ impl Editor {
     }
 
     fn place_note(&mut self, pos: Position, text: String, pane: usize) {
-        self.grid_for_pane_mut(pane).insert_note(pos, NoteText::Simple(text));
+        self.grid_for_pane_mut(pane)
+            .insert_note(pos, NoteText::Simple(text));
         self.replay_inputs();
     }
 
@@ -1615,12 +1658,10 @@ impl App {
                 '#' => self.editor.tool = Tool::Wall,
                 '1' => self.editor.tool = Tool::Player,
                 '2' => self.editor.tool = Tool::Player2,
-                'r' => self.editor.tool = Tool::Rat,
                 'c' => self.editor.tool = Tool::CyborgRat,
                 'g' => self.editor.tool = Tool::Portal,
                 'n' => self.editor.tool = Tool::Note,
                 '=' => self.editor.tool = Tool::Plank,
-                'w' => self.editor.tool = Tool::Spiderweb,
                 'o' => self.editor.tool = Tool::BlackHole,
                 'x' => self.editor.tool = Tool::Explosive,
                 't' => self.editor.tool = Tool::Trigger,
@@ -1667,25 +1708,53 @@ impl App {
             if is_key_pressed(KeyCode::Right) {
                 self.editor.resize(1, 0);
             }
-        } else {
-            // Movement input - behavior depends on mode
+        } else if !is_key_down(KeyCode::LeftControl) && !is_key_down(KeyCode::RightControl) {
+            // Movement input - behavior depends on mode (skip when Ctrl held)
             match &mut self.editor.mode {
                 EditorMode::Level { .. } => {
-                    // Level mode: add to history and replay
+                    let synced_p1 = is_key_down(KeyCode::RightAlt);
+                    let synced_p2 = is_key_down(KeyCode::LeftAlt);
+
+                    // P1: arrow keys + space
                     if is_key_pressed(KeyCode::Up) {
-                        self.editor.add_input(Action::Move(Dir4::North));
+                        self.editor
+                            .register_action(0, Action::Move(Dir4::North), synced_p1);
                     }
                     if is_key_pressed(KeyCode::Down) {
-                        self.editor.add_input(Action::Move(Dir4::South));
+                        self.editor
+                            .register_action(0, Action::Move(Dir4::South), synced_p1);
                     }
                     if is_key_pressed(KeyCode::Left) {
-                        self.editor.add_input(Action::Move(Dir4::West));
+                        self.editor
+                            .register_action(0, Action::Move(Dir4::West), synced_p1);
                     }
                     if is_key_pressed(KeyCode::Right) {
-                        self.editor.add_input(Action::Move(Dir4::East));
+                        self.editor
+                            .register_action(0, Action::Move(Dir4::East), synced_p1);
                     }
                     if is_key_pressed(KeyCode::Space) {
-                        self.editor.add_input(Action::Stall);
+                        self.editor.register_action(0, Action::Stall, synced_p1);
+                    }
+
+                    // P2: WASD + tab
+                    if is_key_pressed(KeyCode::W) {
+                        self.editor
+                            .register_action(1, Action::Move(Dir4::North), synced_p2);
+                    }
+                    if is_key_pressed(KeyCode::S) {
+                        self.editor
+                            .register_action(1, Action::Move(Dir4::South), synced_p2);
+                    }
+                    if is_key_pressed(KeyCode::A) {
+                        self.editor
+                            .register_action(1, Action::Move(Dir4::West), synced_p2);
+                    }
+                    if is_key_pressed(KeyCode::D) {
+                        self.editor
+                            .register_action(1, Action::Move(Dir4::East), synced_p2);
+                    }
+                    if is_key_pressed(KeyCode::Tab) {
+                        self.editor.register_action(1, Action::Stall, synced_p2);
                     }
                 }
                 EditorMode::Scenario { .. } => {
@@ -1696,23 +1765,29 @@ impl App {
 
         // Undo last move (u or backspace) - level mode only
         if is_key_pressed(KeyCode::U) || is_key_pressed(KeyCode::Backspace) {
+            self.editor.pending = [None; 2];
             self.editor.remove_last_input();
         }
 
-        // Escape: cancel drag/selection, or clear moves (level mode)
+        // Escape: cancel drag/selection
         if is_key_pressed(KeyCode::Escape) {
             if self.editor.dragging.is_some() || self.editor.dragging_selection.is_some() {
                 self.editor.cancel_drag(0);
             } else if !self.editor.selection.is_empty() || self.editor.selecting_rect.is_some() {
                 self.editor.clear_selection();
-            } else if let EditorMode::Level {
+            }
+        }
+
+        // R: restart (clear moves) in level mode
+        if is_key_pressed(KeyCode::R)
+            && let EditorMode::Level {
                 ref mut input_history,
                 ..
             } = self.editor.mode
-            {
-                input_history.clear();
-                self.editor.replay_inputs();
-            }
+        {
+            input_history.clear();
+            self.editor.pending = [None; 2];
+            self.editor.replay_inputs();
         }
 
         // Save

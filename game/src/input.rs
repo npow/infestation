@@ -80,11 +80,7 @@ impl InputState {
     }
 
     /// Poll meta actions (undo, restart, exit, confirm) from keyboard + any gamepad.
-    pub(crate) fn poll_meta_inputs(
-        &mut self,
-        gamepad: &GamepadContext,
-        dt: f32,
-    ) -> Vec<MetaInput> {
+    pub(crate) fn poll_meta_inputs(&mut self, gamepad: &GamepadContext, dt: f32) -> Vec<MetaInput> {
         let mut inputs = Vec::new();
 
         // Restart (R / LB / LT on any gamepad)
@@ -320,8 +316,8 @@ fn poll_gamepad_action(
     }
 
     // Stall (South/East buttons)
-    let stall_down = gp_btn_down(gp, index, GamepadButton::South)
-        || gp_btn_down(gp, index, GamepadButton::East);
+    let stall_down =
+        gp_btn_down(gp, index, GamepadButton::South) || gp_btn_down(gp, index, GamepadButton::East);
     let stall_pressed = gp_btn_pressed(gp, index, GamepadButton::South)
         || gp_btn_pressed(gp, index, GamepadButton::East);
     if input_repeat(stall_down, stall_pressed, held_stall, dt) {
