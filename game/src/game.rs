@@ -161,7 +161,7 @@ impl GameState {
         };
         self.grid
             .entries()
-            .find(|(_, cell)| cell_matcher(&cell))
+            .find(|(_, cell)| cell_matcher(cell))
             .and_then(|(pos, _)| self.grid.get_portal(pos))
     }
 

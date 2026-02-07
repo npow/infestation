@@ -107,7 +107,11 @@ impl InputState {
         let controller_connected = gamepad.gamepad(0).is_some_and(|g| g.is_connected());
         let arrow_player = if controller_connected { 1 } else { 0 };
         let confirm_sources: [(bool, bool, usize); 4] = [
-            (is_key_down(KeyCode::Space), is_key_pressed(KeyCode::Space), arrow_player),
+            (
+                is_key_down(KeyCode::Space),
+                is_key_pressed(KeyCode::Space),
+                arrow_player,
+            ),
             (is_key_down(KeyCode::Tab), is_key_pressed(KeyCode::Tab), 1),
             (
                 gp_btn_down_multi(gamepad, 0, &[GamepadButton::South, GamepadButton::East]),
