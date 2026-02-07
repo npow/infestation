@@ -27,115 +27,120 @@
       "level": "synchronicity"
     },
     {
+      "x": 8,
+      "y": 8,
+      "level": "cooperation"
+    },
+    {
       "x": 3,
-      "y": 5,
+      "y": 12,
       "level": "limited2"
     },
     {
       "x": 5,
-      "y": 5,
+      "y": 12,
       "level": "reload"
     },
     {
       "x": 1,
-      "y": 6,
+      "y": 13,
       "level": "order_of_operations_new_v2"
     },
     {
       "x": 1,
-      "y": 7,
+      "y": 14,
       "level": "triggering_explosives_v3"
     },
     {
       "x": 7,
-      "y": 7,
+      "y": 14,
       "level": "old_levels/old_levels"
     },
     {
       "x": 1,
-      "y": 13,
+      "y": 20,
       "level": "triggers2"
     },
     {
       "x": 2,
-      "y": 13,
+      "y": 20,
       "level": "triggers"
     },
     {
       "x": 5,
-      "y": 13,
+      "y": 20,
       "level": "explosives"
     },
     {
       "x": 6,
-      "y": 13,
+      "y": 20,
       "level": "explosives2"
     },
     {
       "x": 7,
-      "y": 13,
+      "y": 20,
       "level": "tinderbox"
     },
     {
       "x": 8,
-      "y": 13,
+      "y": 20,
       "level": "tinderrectangle"
     },
     {
       "x": 6,
-      "y": 14,
+      "y": 21,
       "level": "no_retreat"
     },
     {
       "x": 3,
-      "y": 15,
+      "y": 22,
       "level": "guidance"
     },
     {
       "x": 4,
-      "y": 15,
+      "y": 22,
       "level": "blackhole_v2"
     },
     {
       "x": 4,
-      "y": 17,
+      "y": 24,
       "level": "planks"
     },
     {
       "x": 4,
-      "y": 19,
+      "y": 26,
       "level": "webs"
     },
     {
       "x": 4,
-      "y": 21,
+      "y": 28,
       "level": "more_rats"
     },
     {
       "x": 5,
-      "y": 21,
+      "y": 28,
       "level": "trapped_rat"
     },
     {
       "x": 6,
-      "y": 21,
+      "y": 28,
       "level": "trapped_rat2_v2"
     },
     {
       "x": 4,
-      "y": 23,
+      "y": 30,
       "level": "rats"
     }
   ],
   "notes": [
     {
       "x": 7,
-      "y": 21,
+      "y": 28,
       "text": "I'm a rat-fighting master!"
     },
     {
       "x": 4,
-      "y": 24,
+      "y": 31,
       "text": {
         "controller": "Use the D-pad or left joystick to move",
         "keyboard": "Use the arrow keys to move",
