@@ -19,10 +19,16 @@ pub(crate) enum NoteText {
         keyboard: String,
         mobile: String,
     },
+    TwoPlayer {
+        keyboard_only: String,
+        one_controller: String,
+        two_controllers: String,
+        mobile: String,
+    },
 }
 
 impl NoteText {
-    pub(crate) fn resolve(&self, hints: InputHints) -> &str {
+    pub(crate) fn resolve(&self, hints: InputHints, gamepad_count: usize) -> &str {
         match self {
             NoteText::Simple(s) => s,
             NoteText::ByPlatform {
@@ -34,6 +40,22 @@ impl NoteText {
                 InputHints::Touch => mobile,
                 InputHints::Keyboard => keyboard,
             },
+            NoteText::TwoPlayer {
+                keyboard_only,
+                one_controller,
+                two_controllers,
+                mobile,
+            } => {
+                if matches!(hints, InputHints::Touch) {
+                    mobile
+                } else if gamepad_count >= 2 {
+                    two_controllers
+                } else if gamepad_count == 1 {
+                    one_controller
+                } else {
+                    keyboard_only
+                }
+            }
         }
     }
 }

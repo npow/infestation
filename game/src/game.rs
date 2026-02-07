@@ -122,6 +122,9 @@ pub struct GameState {
     pub(crate) history: Vec<Grid>,
     pub(crate) queued_actions: Option<Vec<Option<Action>>>,
     pub(crate) completed_levels: HashSet<String>,
+    /// Tracks which player acted last (for note priority). None if no moves yet.
+    /// If both acted in sync, this is Some(0) (P1 priority).
+    pub(crate) last_acting_player: Option<usize>,
 }
 
 /// Game wrapper combining state and move handling.
@@ -145,6 +148,7 @@ impl GameState {
             history: vec![grid],
             queued_actions: None,
             completed_levels,
+            last_acting_player: None,
         }
     }
 
@@ -154,10 +158,36 @@ impl GameState {
         self.grid.get_portal(player_pos)
     }
 
-    /// Returns the note text if the player is currently standing on a note cell.
+    /// Returns the note text if a player is currently standing on a note cell.
+    /// Priority: if both players are on notes, prefer whichever acted last.
+    /// If both acted in sync, prefer P1.
     pub(crate) fn standing_on_note(&self) -> Option<&NoteText> {
-        let (player_pos, _) = self.find_player()?;
-        self.grid.get_note(player_pos)
+        // Find all players and their notes
+        let p1_note = self
+            .grid
+            .find_entities(|cell| matches!(cell, Cell::Player(_)))
+            .next()
+            .and_then(|(pos, _)| self.grid.get_note(pos));
+
+        let p2_note = self
+            .grid
+            .find_entities(|cell| matches!(cell, Cell::Player2(_)))
+            .next()
+            .and_then(|(pos, _)| self.grid.get_note(pos));
+
+        match (p1_note, p2_note) {
+            (Some(_), Some(_)) => {
+                // Both on notes: use last_acting_player preference (defaults to P1 if None)
+                if self.last_acting_player == Some(1) {
+                    p2_note
+                } else {
+                    p1_note
+                }
+            }
+            (Some(_), None) => p1_note,
+            (None, Some(_)) => p2_note,
+            (None, None) => None,
+        }
     }
 
     fn is_level_completed(&self, level: &str) -> bool {
@@ -259,6 +289,7 @@ impl Game {
         self.state.history = vec![self.state.grid.clone()];
         self.animation = None;
         self.state.queued_actions = None;
+        self.state.last_acting_player = None;
     }
 
     pub(crate) fn undo(&mut self) {
@@ -267,6 +298,7 @@ impl Game {
             self.state.grid = self.state.history.last().unwrap().clone();
             self.animation = None;
             self.state.queued_actions = None;
+            self.state.last_acting_player = None;
         }
     }
 
@@ -281,6 +313,22 @@ impl Game {
         if !self.apply_actions(actions) {
             return;
         }
+
+        // Track which player(s) acted for note priority
+        let acting_players: Vec<usize> = actions
+            .iter()
+            .enumerate()
+            .filter_map(|(i, action)| action.as_ref().map(|_| i))
+            .collect();
+
+        if acting_players.len() > 1 {
+            // Both acted in sync → prefer P1
+            self.state.last_acting_player = Some(0);
+        } else if acting_players.len() == 1 {
+            // Only one acted → prefer that player
+            self.state.last_acting_player = Some(acting_players[0]);
+        }
+        // If no one acted, keep previous preference
 
         // Handler #2: for animation
         let mut animator = MoveHandler::new(prev_grid);

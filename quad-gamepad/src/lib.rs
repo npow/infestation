@@ -249,6 +249,11 @@ impl GamepadContext {
         self.gamepads.get(index)
     }
 
+    /// Returns the number of connected gamepads (0-4).
+    pub fn connected_count(&self) -> usize {
+        self.gamepads.iter().filter(|g| g.is_connected()).count()
+    }
+
     /// Polls for gamepad events. Call this once per frame.
     pub fn poll(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
