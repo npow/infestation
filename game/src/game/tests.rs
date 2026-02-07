@@ -7,7 +7,7 @@ fn game_from_csv(csv: &str) -> Game {
 }
 
 fn player_pos(game: &Game) -> Position {
-    game.state.find_player().unwrap().0
+    game.state.grid.find_players()[0].pos
 }
 
 #[test]

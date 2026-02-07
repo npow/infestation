@@ -6,6 +6,12 @@ use crate::position::Position;
 mod parse;
 pub(crate) use parse::{LevelMetadata, NoteText};
 
+pub(crate) struct FoundPlayer {
+    pub(crate) pos: Position,
+    pub(crate) dir: Dir4,
+    pub(crate) player_index: usize,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Cell {
     Empty,
@@ -146,6 +152,22 @@ impl Grid {
 
     pub(crate) fn at_mut(&mut self, pos: Position) -> &mut Cell {
         &mut self.cells[pos.y as usize][pos.x as usize]
+    }
+
+    /// Find all players in the grid, sorted by player index.
+    pub(crate) fn find_players(&self) -> Vec<FoundPlayer> {
+        let mut players: Vec<_> = self
+            .entries()
+            .filter_map(|(pos, cell)| {
+                cell.as_player().map(|(player_index, dir)| FoundPlayer {
+                    pos,
+                    dir,
+                    player_index,
+                })
+            })
+            .collect();
+        players.sort_by_key(|p| p.player_index);
+        players
     }
 
     pub(crate) fn entries(&self) -> impl Iterator<Item = (Position, Cell)> {

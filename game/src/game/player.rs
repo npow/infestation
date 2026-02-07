@@ -4,31 +4,11 @@ use crate::grid::Cell;
 use crate::position::Position;
 use crate::{direction::Dir4, grid::Grid};
 
-use super::{Action, Game, GameState, MoveHandler, Moving, PlayerInfo};
-
-pub(crate) struct FoundPlayer {
-    pub(crate) pos: Position,
-    pub(crate) dir: Dir4,
-    pub(crate) player_index: usize,
-}
+use super::{Action, Game, MoveHandler, Moving, PlayerInfo};
 
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
-    /// Find all players in the grid, sorted by player index.
-    pub(crate) fn find_players(&self) -> Vec<FoundPlayer> {
-        let mut players: Vec<_> = self
-            .grid
-            .borrow()
-            .entries()
-            .filter_map(|(pos, cell)| {
-                cell.as_player().map(|(player_index, dir)| FoundPlayer {
-                    pos,
-                    dir,
-                    player_index,
-                })
-            })
-            .collect();
-        players.sort_by_key(|p| p.player_index);
-        players
+    pub(crate) fn find_players(&self) -> Vec<crate::grid::FoundPlayer> {
+        self.grid.borrow().find_players()
     }
 
     /// Execute player moves. Takes a slice of Option<Action>, one per player found in the grid.
@@ -141,19 +121,6 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         for m in &self.moving {
             *curr_grid.at_mut(m.from) = Cell::Empty;
         }
-    }
-}
-
-impl GameState {
-    pub(crate) fn find_player(&self) -> Option<(Position, Dir4)> {
-        let (pos, player) = self
-            .grid
-            .find_entities(|cell| matches!(cell, Cell::Player(_)))
-            .next()?;
-        let Cell::Player(dir) = player else {
-            unreachable!();
-        };
-        Some((pos, dir))
     }
 }
 

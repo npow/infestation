@@ -152,10 +152,15 @@ impl GameState {
         }
     }
 
-    /// Returns the portal destination if the player is currently standing on a portal.
+    /// Returns the portal destination if any player is currently standing on a portal.
+    /// If both players are on portals, prefers P1.
     pub(crate) fn standing_on_portal(&self) -> Option<&str> {
-        let (player_pos, _) = self.find_player()?;
-        self.grid.get_portal(player_pos)
+        self.grid
+            .entries()
+            .filter_map(|(pos, cell)| cell.as_player().map(|(idx, _)| (idx, pos)))
+            .filter_map(|(idx, pos)| self.grid.get_portal(pos).map(|p| (idx, p)))
+            .min_by_key(|(idx, _)| *idx)
+            .map(|(_, portal)| portal)
     }
 
     /// Returns the note text if a player is currently standing on a note cell.
@@ -206,31 +211,38 @@ impl GameState {
             .then(|| levels::get_level(portal).map(|l| l.display_name.as_str()))?
     }
 
-    /// Returns the portal destination if the player just stepped onto an unvisited portal (auto-enter).
+    /// Returns the portal destination if any player just stepped onto an unvisited portal (auto-enter).
+    /// If both players stepped onto portals, prefers P1.
     pub(crate) fn portal_destination(&self) -> Option<&str> {
-        // Check for auto-enter: player just stepped onto an unvisited portal
-        let (player_pos, _) = self.find_player()?;
-        let current_portal = self.grid.get_portal(player_pos)?;
-
-        // Don't auto-enter if already completed
-        if self.is_level_completed(current_portal) {
+        if self.history.len() < 2 {
             return None;
         }
+        let prev_grid = &self.history[self.history.len() - 2];
 
-        // Check if player was on a different position before (just moved onto portal)
-        if self.history.len() >= 2 {
-            let prev_grid = &self.history[self.history.len() - 2];
-            let prev_player_pos = prev_grid.entries().find_map(|(pos, cell)| {
-                if matches!(cell, Cell::Player(_)) {
-                    Some(pos)
-                } else {
-                    None
-                }
-            });
+        // Collect all players on portals, sorted by player index (P1 first)
+        let mut candidates: Vec<_> = self
+            .grid
+            .entries()
+            .filter_map(|(pos, cell)| cell.as_player().map(|(idx, _)| (idx, pos)))
+            .filter_map(|(idx, pos)| self.grid.get_portal(pos).map(|p| (idx, pos, p)))
+            .collect();
+        candidates.sort_by_key(|(idx, _, _)| *idx);
 
-            // Only auto-enter if player moved to this position
-            if prev_player_pos != Some(player_pos) {
-                return Some(current_portal);
+        for (idx, player_pos, portal) in candidates {
+            if self.is_level_completed(portal) {
+                continue;
+            }
+            // Check if this player moved to this position (was elsewhere before)
+            let cell_matcher: fn(&Cell) -> bool = if idx == 0 {
+                |c| matches!(c, Cell::Player(_))
+            } else {
+                |c| matches!(c, Cell::Player2(_))
+            };
+            let prev_pos = prev_grid
+                .entries()
+                .find_map(|(pos, cell)| cell_matcher(&cell).then_some(pos));
+            if prev_pos != Some(player_pos) {
+                return Some(portal);
             }
         }
 
