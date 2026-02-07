@@ -16,8 +16,8 @@ const ARROW_KEYS: [KeyCode; 4] = [KeyCode::Up, KeyCode::Down, KeyCode::Left, Key
 const WASD_KEYS: [KeyCode; 4] = [KeyCode::W, KeyCode::S, KeyCode::A, KeyCode::D];
 const ARROW_STALL: KeyCode = KeyCode::Space;
 const WASD_STALL: KeyCode = KeyCode::Tab;
-const ARROW_SYNC: KeyCode = KeyCode::RightAlt;
-const WASD_SYNC: KeyCode = KeyCode::LeftAlt;
+const ARROW_SYNC: KeyCode = KeyCode::RightShift;
+const WASD_SYNC: KeyCode = KeyCode::LeftShift;
 
 const DIRS: [Dir4; 4] = [Dir4::North, Dir4::South, Dir4::West, Dir4::East];
 const DPAD_BUTTONS: [GamepadButton; 4] = [
