@@ -3,6 +3,11 @@
   "notes": [
     {
       "x": 3,
+      "y": 1,
+      "text": "Rats can't catch me from behind if I keep moving. And they can't attack me head-on if I keep them at swordpoint..."
+    },
+    {
+      "x": 3,
       "y": 2,
       "text": "That's a LOT more rats!"
     }
