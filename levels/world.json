@@ -82,6 +82,11 @@
       "level": "tinderrectangle"
     },
     {
+      "x": 6,
+      "y": 14,
+      "level": "no_retreat"
+    },
+    {
       "x": 3,
       "y": 15,
       "level": "guidance"
