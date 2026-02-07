@@ -109,11 +109,11 @@ impl ControllerType {
 pub enum GamepadAxis {
     /// Left stick horizontal (-1 = left, 1 = right)
     LeftX,
-    /// Left stick vertical (-1 = up, 1 = down)
+    /// Left stick vertical (-1 = down, 1 = up)
     LeftY,
     /// Right stick horizontal (-1 = left, 1 = right)
     RightX,
-    /// Right stick vertical (-1 = up, 1 = down)
+    /// Right stick vertical (-1 = down, 1 = up)
     RightY,
 }
 
@@ -375,14 +375,15 @@ impl GamepadContext {
             state.set_axis(GamepadAxis::LeftX, unsafe {
                 sapp_gamepad_axis(i as i32, 0)
             });
+            // W3C Gamepad API uses +Y = down; negate to match gilrs convention (+Y = up)
             state.set_axis(GamepadAxis::LeftY, unsafe {
-                sapp_gamepad_axis(i as i32, 1)
+                -sapp_gamepad_axis(i as i32, 1)
             });
             state.set_axis(GamepadAxis::RightX, unsafe {
                 sapp_gamepad_axis(i as i32, 2)
             });
             state.set_axis(GamepadAxis::RightY, unsafe {
-                sapp_gamepad_axis(i as i32, 3)
+                -sapp_gamepad_axis(i as i32, 3)
             });
         }
     }
