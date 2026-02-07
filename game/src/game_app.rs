@@ -5,7 +5,7 @@ use macroquad::prelude::*;
 use quad_gamepad::GamepadContext;
 
 use crate::game::{Action, Game, PlayState};
-use crate::input::{Input, InputState, TouchGesture};
+use crate::input::{InputState, MetaInput, TouchGesture};
 use crate::level_stack::LevelStack;
 use crate::levels;
 use crate::render::{
@@ -20,13 +20,10 @@ fn load_level(name: &str, completed_levels: &mut HashSet<String>) -> Game {
     Game::new(level.grid.clone(), mem::take(completed_levels))
 }
 
-fn button_action_to_input(action: ButtonAction) -> Input {
-    match action {
-        ButtonAction::Reset => Input::Restart,
-        ButtonAction::Undo => Input::Undo,
-        ButtonAction::Exit => Input::Exit,
-        ButtonAction::Stall => Input::Confirm,
-    }
+#[derive(Clone, Copy)]
+struct PendingAction {
+    action: Action,
+    synced: bool,
 }
 
 pub struct App {
@@ -36,6 +33,8 @@ pub struct App {
     gamepad: GamepadContext,
     sprites: Sprites,
     confirm_dialog: ConfirmDialog,
+    /// Per-player buffered actions (sync or immediate).
+    pending: [Option<PendingAction>; 2],
 }
 
 impl App {
@@ -53,6 +52,7 @@ impl App {
             gamepad: GamepadContext::new(),
             sprites,
             confirm_dialog: ConfirmDialog::None,
+            pending: [None; 2],
         }
     }
 
@@ -87,44 +87,56 @@ impl App {
             }
             self.game = restored;
             self.input.reset();
+            self.pending = [None; 2];
         }
     }
 
-    fn handle_input(&mut self, action: Input) {
+    fn handle_meta_input(&mut self, action: MetaInput) {
         match action {
-            Input::Restart => {
+            MetaInput::Restart => {
                 if self.game.state.history.len() > 1 {
                     self.confirm_dialog = ConfirmDialog::Restart;
                 }
             }
-            Input::Undo => {
+            MetaInput::Undo => {
                 self.game.undo();
+                self.pending = [None; 2];
             }
-            Input::Exit => {
+            MetaInput::Exit => {
                 self.confirm_dialog = if self.stack.can_exit() {
                     ConfirmDialog::Exit
                 } else {
                     ConfirmDialog::QuitGame
                 };
             }
-            Input::Confirm => {
+            MetaInput::Confirm => {
                 let play_state = self.game.state.play_state();
                 if !self.game.is_animating()
                     && play_state == PlayState::Won
                     && self.stack.can_exit()
                 {
                     self.exit_level();
-                } else if play_state == PlayState::Playing {
-                    if let Some(level) = self.game.enter_portal().map(str::to_string) {
-                        self.do_portal_transition(&level);
-                    } else {
-                        self.game.try_begin_action(Action::Stall);
-                    }
+                } else if play_state == PlayState::Playing
+                    && let Some(level) = self.game.enter_portal().map(str::to_string)
+                {
+                    self.do_portal_transition(&level);
                 }
             }
-            Input::Move(dir) => {
+        }
+    }
+
+    fn handle_button_action(&mut self, action: ButtonAction) {
+        match action {
+            ButtonAction::Reset => self.handle_meta_input(MetaInput::Restart),
+            ButtonAction::Undo => self.handle_meta_input(MetaInput::Undo),
+            ButtonAction::Exit => self.handle_meta_input(MetaInput::Exit),
+            ButtonAction::Stall => {
+                // UI stall button acts as P1 non-synced stall
                 if self.game.state.play_state() == PlayState::Playing {
-                    self.game.try_begin_action(Action::Move(dir));
+                    self.pending[0] = Some(PendingAction {
+                        action: Action::Stall,
+                        synced: false,
+                    });
                 }
             }
         }
@@ -140,7 +152,7 @@ impl App {
         if let Some(action) =
             button_at_position(pos, &ui, is_playing, hints, bar_y, self.sprites.font())
         {
-            self.handle_input(button_action_to_input(action));
+            self.handle_button_action(action);
             return;
         }
 
@@ -150,8 +162,39 @@ impl App {
                 self.exit_level();
             } else if play_state == PlayState::GameOver {
                 self.game.undo();
+                self.pending = [None; 2];
             }
         }
+    }
+
+    /// Try to execute pending actions if the trigger condition is met.
+    fn try_execute_pending(&mut self) {
+        if self.game.is_animating() {
+            return;
+        }
+
+        let player_count = self.game.state.player_count();
+        if player_count == 0 {
+            return;
+        }
+
+        let has_non_synced = self.pending[..player_count]
+            .iter()
+            .any(|p| p.is_some_and(|pa| !pa.synced));
+        let all_synced = self.pending[..player_count]
+            .iter()
+            .all(|p| p.is_some_and(|pa| pa.synced));
+
+        if !has_non_synced && !all_synced {
+            return;
+        }
+
+        // Build actions and consume all pending
+        let actions: Vec<Option<Action>> = (0..player_count)
+            .map(|i| self.pending[i].take().map(|pa| pa.action))
+            .collect();
+
+        self.game.try_begin_actions(actions);
     }
 
     fn do_portal_transition(&mut self, level: &str) {
@@ -169,6 +212,7 @@ impl App {
         }
 
         self.input.reset();
+        self.pending = [None; 2];
     }
 
     fn handle_portal_transition(&mut self) {
@@ -193,13 +237,18 @@ impl App {
         // Handle confirmation dialog input
         if self.confirm_dialog != ConfirmDialog::None {
             let mut should_confirm = false;
-            for action in self.input.poll_keyboard_gamepad(&self.gamepad, dt) {
+            for action in self.input.poll_meta_inputs(&self.gamepad, dt) {
                 match action {
-                    Input::Confirm => should_confirm = true,
-                    Input::Undo | Input::Exit => self.confirm_dialog = ConfirmDialog::None,
+                    MetaInput::Confirm => should_confirm = true,
+                    MetaInput::Undo | MetaInput::Exit => {
+                        self.confirm_dialog = ConfirmDialog::None;
+                    }
                     _ => {}
                 }
             }
+            // Consume player actions during dialog (don't let them queue)
+            self.input.poll_player_actions(&self.gamepad, dt);
+
             if let Some(gesture) = self.input.poll_touch()
                 && matches!(gesture, TouchGesture::Tap(_))
             {
@@ -212,6 +261,7 @@ impl App {
                     ConfirmDialog::Restart => {
                         self.game.restart();
                         self.input.reset();
+                        self.pending = [None; 2];
                     }
                     ConfirmDialog::Exit => {
                         self.exit_level();
@@ -224,13 +274,38 @@ impl App {
                 self.confirm_dialog = ConfirmDialog::None;
             }
         } else {
-            for action in self.input.poll_keyboard_gamepad(&self.gamepad, dt) {
-                self.handle_input(action);
+            // Poll meta inputs
+            for action in self.input.poll_meta_inputs(&self.gamepad, dt) {
+                self.handle_meta_input(action);
             }
 
+            // Poll per-player actions
+            if self.game.state.play_state() == PlayState::Playing {
+                let player_actions = self.input.poll_player_actions(&self.gamepad, dt);
+                let player_count = self.game.state.player_count();
+                for (i, player_action) in
+                    player_actions.iter().enumerate().take(player_count.min(2))
+                {
+                    if let Some((action, synced)) = player_action {
+                        self.pending[i] = Some(PendingAction {
+                            action: *action,
+                            synced: *synced,
+                        });
+                    }
+                }
+            }
+
+            // Touch gestures: swipe → P1 non-synced move, tap → button/overlay
             if let Some(gesture) = self.input.poll_touch() {
                 match gesture {
-                    TouchGesture::Swipe(dir) => self.handle_input(Input::Move(dir)),
+                    TouchGesture::Swipe(dir) => {
+                        if self.game.state.play_state() == PlayState::Playing {
+                            self.pending[0] = Some(PendingAction {
+                                action: Action::Move(dir),
+                                synced: false,
+                            });
+                        }
+                    }
                     TouchGesture::Tap(pos) => self.handle_tap_or_click(pos),
                 }
             }
@@ -238,9 +313,13 @@ impl App {
             if let Some(pos) = self.input.poll_mouse_click() {
                 self.handle_tap_or_click(pos);
             }
+
+            self.try_execute_pending();
         }
 
         self.game.animate(dt);
+        self.handle_portal_transition();
+        self.try_execute_pending();
         self.render();
 
         true

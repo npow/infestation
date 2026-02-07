@@ -76,11 +76,6 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             *curr_grid.at_mut(m.from) = Cell::Empty;
         }
     }
-
-    /// Legacy single-player move - delegates to do_player_moves
-    pub(crate) fn do_player_move(&mut self, m: Action) {
-        self.do_player_moves(&[Some(m)]);
-    }
 }
 
 impl GameState {

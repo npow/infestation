@@ -120,7 +120,7 @@ pub struct GameState {
     pub(crate) grid: Grid,
     pub(crate) initial_grid: Grid,
     pub(crate) history: Vec<Grid>,
-    pub(crate) queued_move: Option<Action>,
+    pub(crate) queued_actions: Option<Vec<Option<Action>>>,
     pub(crate) completed_levels: HashSet<String>,
 }
 
@@ -134,12 +134,16 @@ pub struct Game {
 }
 
 impl GameState {
+    pub(crate) fn player_count(&self) -> usize {
+        Self::count_players(&self.initial_grid)
+    }
+
     pub(crate) fn new(grid: Grid, completed_levels: HashSet<String>) -> Self {
         Self {
             initial_grid: grid.clone(),
             grid: grid.clone(),
             history: vec![grid],
-            queued_move: None,
+            queued_actions: None,
             completed_levels,
         }
     }
@@ -254,7 +258,7 @@ impl Game {
         self.state.grid = self.state.initial_grid.clone();
         self.state.history = vec![self.state.grid.clone()];
         self.animation = None;
-        self.state.queued_move = None;
+        self.state.queued_actions = None;
     }
 
     pub(crate) fn undo(&mut self) {
@@ -262,7 +266,7 @@ impl Game {
             self.state.history.pop();
             self.state.grid = self.state.history.last().unwrap().clone();
             self.animation = None;
-            self.state.queued_move = None;
+            self.state.queued_actions = None;
         }
     }
 
@@ -270,30 +274,30 @@ impl Game {
         self.animation.is_some()
     }
 
-    pub(crate) fn begin_action(&mut self, m: Action) {
+    pub(crate) fn begin_actions(&mut self, actions: &[Option<Action>]) {
         let prev_grid = self.state.grid.clone();
 
         // Handler #1: resolve instantly
-        if !self.apply_action(m) {
+        if !self.apply_actions(actions) {
             return;
         }
 
         // Handler #2: for animation
         let mut animator = MoveHandler::new(prev_grid);
-        animator.do_player_move(m);
+        animator.do_player_moves(actions);
 
         if !animator.is_empty() {
             self.animation = Some(animator);
         }
     }
 
-    pub(crate) fn try_begin_action(&mut self, m: Action) {
+    pub(crate) fn try_begin_actions(&mut self, actions: Vec<Option<Action>>) {
         if self.is_animating() {
-            if self.state.queued_move.is_none() {
-                self.state.queued_move = Some(m);
+            if self.state.queued_actions.is_none() {
+                self.state.queued_actions = Some(actions);
             }
         } else {
-            self.begin_action(m);
+            self.begin_actions(&actions);
         }
     }
 

@@ -132,14 +132,14 @@ impl Game {
             if !done {
                 break;
             }
-            // Animation complete - check portal before processing queued move
+            // Animation complete - check portal before processing queued actions
             self.animation = None;
             if self.state.portal_destination().is_some() {
-                // Player just stepped on uncompleted portal - drop queued move
+                // Player just stepped on uncompleted portal - drop queued actions
                 // to allow portal transition to happen
-                self.state.queued_move = None;
-            } else if let Some(dir) = self.state.queued_move.take() {
-                self.begin_action(dir);
+                self.state.queued_actions = None;
+            } else if let Some(actions) = self.state.queued_actions.take() {
+                self.begin_actions(&actions);
             }
         }
     }
