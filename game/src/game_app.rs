@@ -203,21 +203,19 @@ impl App {
             return;
         }
 
-        let all_synced = self.pending[..player_count]
+        let any_synced = self.pending[..player_count]
             .iter()
-            .all(|p| p.is_some_and(|pa| pa.synced));
+            .any(|p| p.is_some_and(|pa| pa.synced));
 
-        // In 2-player, if not all players have acted yet, wait for grace period
-        // (unless explicitly synced — those wait indefinitely)
-        if player_count > 1 && !all_pending && !all_synced {
-            if self.pending_timer < SYNC_GRACE_PERIOD {
+        if !all_pending {
+            // Explicitly synced: wait indefinitely for all players
+            if any_synced {
                 return;
             }
-        }
-
-        // All synced: wait indefinitely for all players
-        if all_synced && !all_pending {
-            return;
+            // In 2-player, grace period for natural simultaneous input
+            if player_count > 1 && self.pending_timer < SYNC_GRACE_PERIOD {
+                return;
+            }
         }
 
         // Fire
