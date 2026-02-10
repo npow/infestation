@@ -1,0 +1,15 @@
+{
+  "name": "Cooperation",
+  "portals": [
+    {
+      "x": 2,
+      "y": 3,
+      "level": "cooperation/blocked"
+    },
+    {
+      "x": 2,
+      "y": 5,
+      "level": "cooperation/cooperation"
+    }
+  ]
+}
