@@ -1694,26 +1694,12 @@ impl App {
             }
         }
 
-        // Resize grid (Shift+Arrow)
-        if is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift) {
-            if is_key_pressed(KeyCode::Up) {
-                self.editor.resize(0, -1);
-            }
-            if is_key_pressed(KeyCode::Down) {
-                self.editor.resize(0, 1);
-            }
-            if is_key_pressed(KeyCode::Left) {
-                self.editor.resize(-1, 0);
-            }
-            if is_key_pressed(KeyCode::Right) {
-                self.editor.resize(1, 0);
-            }
-        } else if !is_key_down(KeyCode::LeftControl) && !is_key_down(KeyCode::RightControl) {
+        if !is_key_down(KeyCode::LeftControl) && !is_key_down(KeyCode::RightControl) {
             // Movement input - behavior depends on mode (skip when Ctrl held)
             match &mut self.editor.mode {
                 EditorMode::Level { .. } => {
-                    let synced_p1 = is_key_down(KeyCode::RightAlt);
-                    let synced_p2 = is_key_down(KeyCode::LeftAlt);
+                    let synced_p1 = is_key_down(KeyCode::RightShift);
+                    let synced_p2 = is_key_down(KeyCode::LeftShift);
 
                     // P1: arrow keys + space
                     if is_key_pressed(KeyCode::Up) {
