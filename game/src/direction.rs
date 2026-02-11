@@ -1,6 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use crate::position::PositionDelta;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Dir4 {
     North,
     South,

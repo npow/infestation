@@ -1,3 +1,6 @@
+#[cfg(target_arch = "wasm32")]
+pub(crate) mod email_button;
+
 use crate::game::{Game, PlayState};
 use crate::grid::Cell;
 use crate::sprites::Sprites;
@@ -380,6 +383,9 @@ pub(crate) fn render(
             32,
             WHITE,
         );
+
+        #[cfg(target_arch = "wasm32")]
+        email_button::draw(grid_center_x, grid_center_y, font);
     }
 
     // Dialogue area at bottom
@@ -714,3 +720,4 @@ pub(crate) fn button_at_position(
     }
     None
 }
+

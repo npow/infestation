@@ -97,6 +97,16 @@ impl App {
         }
     }
 
+    #[cfg(target_arch = "wasm32")]
+    fn email_solution(&self) {
+        let csv = self.game.state.initial_grid.to_csv();
+        let level_name = &self.stack.current_level;
+        let encoded =
+            crate::solution::encode_solution(level_name, &csv, &self.game.state.action_history);
+        let url = crate::solution::mailto_url(level_name, &encoded);
+        crate::open_url::open(&url);
+    }
+
     fn handle_meta_input(&mut self, action: MetaInput) {
         match action {
             MetaInput::Restart => {
@@ -159,6 +169,16 @@ impl App {
             button_at_position(pos, &ui, is_playing, hints, bar_y, self.sprites.font())
         {
             self.handle_button_action(action);
+            return;
+        }
+
+        // Email Solution button on win screen (WASM only)
+        #[cfg(target_arch = "wasm32")]
+        if !self.game.is_animating()
+            && play_state == PlayState::Won
+            && crate::render::email_button::hit(pos, &self.game, self.sprites.font())
+        {
+            self.email_solution();
             return;
         }
 

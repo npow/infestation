@@ -22,6 +22,8 @@ log = "*"
 macroquad = "*"
 quad-gamepad = { path = "../quad-gamepad" }
 quad-touch = { path = "../quad-touch" }
+base64 = "*"
+flate2 = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 

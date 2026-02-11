@@ -162,6 +162,9 @@ struct Editor {
     dragging_selection: Option<(Position, Vec<DraggedItem>)>,
     // Two-player sync buffering
     pending: [Option<PendingAction>; 2],
+    // Solution replay: pre-loaded actions to step through
+    replay_actions: Option<Vec<Vec<Option<Action>>>>,
+    replay_index: usize,
 }
 
 impl Editor {
@@ -185,6 +188,8 @@ impl Editor {
             selection: HashSet::new(),
             dragging_selection: None,
             pending: [None; 2],
+            replay_actions: None,
+            replay_index: 0,
         }
     }
 
@@ -216,6 +221,18 @@ impl Editor {
             selection: HashSet::new(),
             dragging_selection: None,
             pending: [None; 2],
+            replay_actions: None,
+            replay_index: 0,
+        }
+    }
+
+    fn step_replay_forward(&mut self) {
+        if let Some(ref actions) = self.replay_actions
+            && self.replay_index < actions.len()
+        {
+            let action = actions[self.replay_index].clone();
+            self.replay_index += 1;
+            self.add_actions(action);
         }
     }
 
@@ -314,6 +331,9 @@ impl Editor {
         } = self.mode
             && input_history.pop().is_some()
         {
+            if self.replay_index > 0 {
+                self.replay_index -= 1;
+            }
             self.replay_inputs();
         }
     }
@@ -1173,6 +1193,12 @@ impl Editor {
                 // Move count
                 let moves_text = format!("Moves: {}", input_history.len());
                 draw_text(&moves_text, PADDING, content_y, 26.0, WHITE);
+
+                // Replay progress
+                if let Some(ref actions) = self.replay_actions {
+                    let text = format!("Replay: {}/{}", self.replay_index, actions.len());
+                    draw_text(&text, PADDING, content_y + 25.0, 22.0, YELLOW);
+                }
             }
             EditorMode::Scenario {
                 p1_action,
@@ -1490,6 +1516,20 @@ impl App {
         }
     }
 
+    pub fn new_solution(sprites: Sprites, decoded: crate::solution::DecodedSolution) -> Self {
+        let grid = Grid::from_csv(&decoded.grid);
+        let mut editor = Editor::new_level(grid, sprites);
+        editor.replay_actions = Some(decoded.actions);
+        Self {
+            editor,
+            mode: AppMode::Level {
+                csv_path: String::new(),
+                json_path: String::new(),
+                level_name: decoded.level,
+            },
+        }
+    }
+
     pub fn new_scenario(sprites: Sprites, filter: &[&str]) -> Self {
         let scenario_dirs = [
             "scenario_tests/scenarios",
@@ -1660,7 +1700,13 @@ impl App {
                 '2' => self.editor.tool = Tool::Player2,
                 'c' => self.editor.tool = Tool::CyborgRat,
                 'g' => self.editor.tool = Tool::Portal,
-                'n' => self.editor.tool = Tool::Note,
+                'n' => {
+                    if self.editor.replay_actions.is_some() {
+                        self.editor.step_replay_forward();
+                    } else {
+                        self.editor.tool = Tool::Note;
+                    }
+                }
                 '=' => self.editor.tool = Tool::Plank,
                 'o' => self.editor.tool = Tool::BlackHole,
                 'x' => self.editor.tool = Tool::Explosive,
@@ -1773,6 +1819,7 @@ impl App {
         {
             input_history.clear();
             self.editor.pending = [None; 2];
+            self.editor.replay_index = 0;
             self.editor.replay_inputs();
         }
 

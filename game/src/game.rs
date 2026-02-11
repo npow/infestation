@@ -56,7 +56,8 @@ pub(crate) struct Zapping {
     pub(crate) progress: f32,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Action {
     Move(Dir4),
     Stall,
@@ -120,6 +121,7 @@ pub struct GameState {
     pub(crate) grid: Grid,
     pub(crate) initial_grid: Grid,
     pub(crate) history: Vec<Grid>,
+    pub(crate) action_history: Vec<Vec<Option<Action>>>,
     pub(crate) queued_actions: Option<Vec<Option<Action>>>,
     pub(crate) completed_levels: HashSet<String>,
     /// Tracks which player acted last (for note priority). None if no moves yet.
@@ -146,6 +148,7 @@ impl GameState {
             initial_grid: grid.clone(),
             grid: grid.clone(),
             history: vec![grid],
+            action_history: Vec::new(),
             queued_actions: None,
             completed_levels,
             last_acting_player: None,
@@ -308,6 +311,7 @@ impl Game {
     pub(crate) fn restart(&mut self) {
         self.state.grid = self.state.initial_grid.clone();
         self.state.history = vec![self.state.grid.clone()];
+        self.state.action_history.clear();
         self.animation = None;
         self.state.queued_actions = None;
         self.state.last_acting_player = None;
@@ -316,6 +320,7 @@ impl Game {
     pub(crate) fn undo(&mut self) {
         if self.state.history.len() > 1 {
             self.state.history.pop();
+            self.state.action_history.pop();
             self.state.grid = self.state.history.last().unwrap().clone();
             self.animation = None;
             self.state.queued_actions = None;
@@ -394,6 +399,7 @@ impl Game {
         resolver.resolve_all();
 
         self.state.history.push(self.state.grid.clone());
+        self.state.action_history.push(actions.to_vec());
 
         true
     }

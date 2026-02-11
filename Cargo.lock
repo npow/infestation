@@ -695,9 +695,11 @@ dependencies = [
 name = "infestation"
 version = "0.1.0"
 dependencies = [
+ "base64",
  "bzip2",
  "csv",
  "directories",
+ "flate2",
  "keepawake",
  "log",
  "macroquad",
