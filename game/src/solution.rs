@@ -1,16 +1,11 @@
-use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use base64::engine::general_purpose::STANDARD;
 use flate2::read::ZlibDecoder;
 use serde::Deserialize;
 use std::io::Read;
 
 #[cfg(any(test, target_arch = "wasm32"))]
-use {
-    flate2::write::ZlibEncoder,
-    flate2::Compression,
-    serde::Serialize,
-    std::io::Write,
-};
+use {flate2::Compression, flate2::write::ZlibEncoder, serde::Serialize, std::io::Write};
 
 use crate::game::Action;
 

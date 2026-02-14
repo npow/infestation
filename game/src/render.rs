@@ -1,5 +1,6 @@
 #[cfg(target_arch = "wasm32")]
 pub(crate) mod email_button;
+pub(crate) mod progress_buttons;
 
 use crate::game::{Game, PlayState};
 use crate::grid::Cell;
@@ -391,6 +392,9 @@ pub(crate) fn render(
     // Dialogue area at bottom
     render_dialogue(description, dialogue_y(game), sprites.font());
 
+    // Progress export/import buttons
+    progress_buttons::draw(sprites.font());
+
     // Confirmation dialog on top of everything
     if confirm_dialog != ConfirmDialog::None {
         render_confirm_dialog(confirm_dialog, hints, sprites.font());
@@ -720,4 +724,3 @@ pub(crate) fn button_at_position(
     }
     None
 }
-

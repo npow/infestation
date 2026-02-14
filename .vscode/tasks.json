@@ -47,6 +47,22 @@
       "command": "prettier --write '**/*.json'",
       "group": "build",
       "problemMatcher": []
+    },
+    {
+      "label": "target wasm",
+      "type": "shell",
+      "command": "python3",
+      "args": ["scripts/generate_settings.py", "--wasm"],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "target native",
+      "type": "shell",
+      "command": "python3",
+      "args": ["scripts/generate_settings.py"],
+      "group": "build",
+      "problemMatcher": []
     }
   ]
 }

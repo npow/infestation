@@ -8,6 +8,7 @@ use crate::game::{Action, Game, PlayState};
 use crate::input::{InputState, MetaInput, TouchGesture};
 use crate::level_stack::LevelStack;
 use crate::levels;
+use crate::render::progress_buttons::ExportOverlay;
 use crate::render::{
     ButtonAction, ConfirmDialog, InputHints, UiState, button_at_position, button_bar_y, render,
 };
@@ -40,6 +41,10 @@ pub struct App {
     pending: [Option<PendingAction>; 2],
     /// Time elapsed since the first pending action was set, for the 2P grace period.
     pending_timer: f32,
+    /// Whether a clipboard import is in progress (async on WASM).
+    import_pending: bool,
+    /// Export overlay showing the encoded progress string.
+    export_overlay: ExportOverlay,
 }
 
 impl App {
@@ -59,6 +64,8 @@ impl App {
             confirm_dialog: ConfirmDialog::None,
             pending: [None; 2],
             pending_timer: 0.0,
+            import_pending: false,
+            export_overlay: ExportOverlay::default(),
         }
     }
 
@@ -95,6 +102,36 @@ impl App {
             self.input.reset();
             self.pending = [None; 2];
         }
+    }
+
+    fn handle_progress_action(&mut self, action: crate::render::progress_buttons::ProgressAction) {
+        use crate::render::progress_buttons::ProgressAction;
+        use crate::storage::progress;
+
+        match action {
+            ProgressAction::Export => {
+                let encoded = progress::encode(&self.game.state.completed_levels);
+                self.export_overlay = ExportOverlay::Showing(encoded);
+            }
+            ProgressAction::Import => {
+                progress::start_import();
+                self.import_pending = true;
+            }
+        }
+    }
+
+    fn handle_overlay_click(&mut self, pos: Vec2) {
+        use crate::render::progress_buttons::overlay_copy_hit;
+
+        if let ExportOverlay::Showing(ref encoded) = self.export_overlay {
+            if overlay_copy_hit(pos, encoded, self.sprites.font()) {
+                crate::storage::progress::copy_to_clipboard(encoded);
+                let encoded = encoded.clone();
+                self.export_overlay = ExportOverlay::Copied(encoded);
+                return;
+            }
+        }
+        self.export_overlay = ExportOverlay::Hidden;
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -179,6 +216,12 @@ impl App {
             && crate::render::email_button::hit(pos, &self.game, self.sprites.font())
         {
             self.email_solution();
+            return;
+        }
+
+        // Progress export/import buttons
+        if let Some(action) = crate::render::progress_buttons::hit(pos, self.sprites.font()) {
+            self.handle_progress_action(action);
             return;
         }
 
@@ -284,8 +327,24 @@ impl App {
 
         self.handle_portal_transition();
 
+        // Export overlay: consume all input, handle tap/click/esc to copy or dismiss
+        if self.export_overlay.is_visible() {
+            for action in self.input.poll_meta_inputs(&self.gamepad, dt) {
+                if matches!(action, MetaInput::Exit) {
+                    self.export_overlay = ExportOverlay::Hidden;
+                }
+            }
+            self.input.poll_player_actions(&self.gamepad, dt);
+            if let Some(gesture) = self.input.poll_touch() {
+                if let TouchGesture::Tap(pos) = gesture {
+                    self.handle_overlay_click(pos);
+                }
+            }
+            if let Some(pos) = self.input.poll_mouse_click() {
+                self.handle_overlay_click(pos);
+            }
         // Handle confirmation dialog input
-        if self.confirm_dialog != ConfirmDialog::None {
+        } else if self.confirm_dialog != ConfirmDialog::None {
             let mut should_confirm = false;
             for action in self.input.poll_meta_inputs(&self.gamepad, dt) {
                 match action {
@@ -371,6 +430,16 @@ impl App {
         self.game.animate(dt);
         self.handle_portal_transition();
         self.try_execute_pending();
+
+        // Poll for async clipboard import result
+        if self.import_pending {
+            if let Some(imported) = crate::storage::progress::poll_import() {
+                self.game.state.completed_levels.extend(imported);
+                save_completed_levels(&self.game.state.completed_levels);
+                self.import_pending = false;
+            }
+        }
+
         self.render();
 
         true
@@ -400,6 +469,7 @@ impl App {
             hints,
             self.confirm_dialog,
         );
+        crate::render::progress_buttons::draw_overlay(&self.export_overlay, self.sprites.font());
         self.gamepad.end_frame();
     }
 }

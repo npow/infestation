@@ -17,8 +17,21 @@ fn button_rect(grid_center_x: f32, grid_center_y: f32, font: &Font) -> (f32, f32
 
 pub(crate) fn draw(grid_center_x: f32, grid_center_y: f32, font: &Font) {
     let (btn_x, btn_y, btn_w, btn_h) = button_rect(grid_center_x, grid_center_y, font);
-    draw_rectangle(btn_x, btn_y, btn_w, btn_h, Color::from_rgba(50, 120, 50, 255));
-    draw_rectangle_lines(btn_x, btn_y, btn_w, btn_h, 1.0, Color::from_rgba(80, 180, 80, 255));
+    draw_rectangle(
+        btn_x,
+        btn_y,
+        btn_w,
+        btn_h,
+        Color::from_rgba(50, 120, 50, 255),
+    );
+    draw_rectangle_lines(
+        btn_x,
+        btn_y,
+        btn_w,
+        btn_h,
+        1.0,
+        Color::from_rgba(80, 180, 80, 255),
+    );
     let dims = measure_text_f(LABEL, font, FONT_SIZE);
     draw_text_f(
         LABEL,

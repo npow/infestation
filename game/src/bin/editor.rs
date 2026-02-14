@@ -11,7 +11,9 @@ async fn main() {
     let sprites = Sprites::load().await;
 
     let mut app = if args.get(1).is_some_and(|a| a == "--solution") {
-        let encoded = args.get(2).expect("Usage: editor --solution <base64_string>");
+        let encoded = args
+            .get(2)
+            .expect("Usage: editor --solution <base64_string>");
         let decoded = infestation::solution::decode_solution(encoded);
         App::new_solution(sprites, decoded)
     } else {

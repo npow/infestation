@@ -1,4 +1,5 @@
-/target
 *.ttf
+/.vscode/settings.json
 /js/gl.js
 /js/sapp_jsutils.js
+/target
