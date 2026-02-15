@@ -28,18 +28,35 @@ const SWIPE_THRESHOLD: f32 = 30.0;
 /// Number of input sources: [0]=arrows, [1]=WASD, [2]=gamepad0, [3]=gamepad1.
 const NUM_SOURCES: usize = 4;
 
-const ARROW_KEYS: [KeyCode; 4] = [KeyCode::Up, KeyCode::Down, KeyCode::Left, KeyCode::Right];
-const WASD_KEYS: [KeyCode; 4] = [KeyCode::W, KeyCode::S, KeyCode::A, KeyCode::D];
 const ARROW_SYNC: KeyCode = KeyCode::RightShift;
 const WASD_SYNC: KeyCode = KeyCode::LeftShift;
 
-const DIRS: [Dir4; 4] = [Dir4::North, Dir4::South, Dir4::West, Dir4::East];
-const DPAD_BUTTONS: [GamepadButton; 4] = [
-    GamepadButton::DPadUp,
-    GamepadButton::DPadDown,
-    GamepadButton::DPadLeft,
-    GamepadButton::DPadRight,
-];
+fn arrow_key(dir: Dir4) -> KeyCode {
+    match dir {
+        Dir4::North => KeyCode::Up,
+        Dir4::South => KeyCode::Down,
+        Dir4::East => KeyCode::Right,
+        Dir4::West => KeyCode::Left,
+    }
+}
+
+fn wasd_key(dir: Dir4) -> KeyCode {
+    match dir {
+        Dir4::North => KeyCode::W,
+        Dir4::South => KeyCode::S,
+        Dir4::East => KeyCode::D,
+        Dir4::West => KeyCode::A,
+    }
+}
+
+fn dpad_button(dir: Dir4) -> GamepadButton {
+    match dir {
+        Dir4::North => GamepadButton::DPadUp,
+        Dir4::South => GamepadButton::DPadDown,
+        Dir4::East => GamepadButton::DPadRight,
+        Dir4::West => GamepadButton::DPadLeft,
+    }
+}
 
 /// A meta input action (not per-player).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -61,7 +78,7 @@ pub(crate) enum TouchGesture {
 /// Tracks held state for input repeat and touch gesture detection.
 pub(crate) struct InputState {
     /// Per-source directional held timers: [arrows, WASD, gamepad0, gamepad1][dir].
-    held_move: [[f32; 4]; NUM_SOURCES],
+    held_move: [EnumMap<Dir4, f32>; NUM_SOURCES],
     /// Stall held timer for spacebar.
     held_stall_space: f32,
     /// Stall held timers per gamepad.
@@ -70,7 +87,7 @@ pub(crate) struct InputState {
     held_undo: f32,
     held_confirm: EnumMap<Player, f32>,
     /// Per-gamepad analog stick edge detection.
-    stick_active: EnumMap<Gamepad, [bool; 4]>,
+    stick_active: EnumMap<Gamepad, EnumMap<Dir4, bool>>,
     touch_start: Option<(u64, Vec2)>,
     touch_handled_this_frame: bool,
 }
@@ -78,7 +95,7 @@ pub(crate) struct InputState {
 impl InputState {
     pub(crate) fn new() -> Self {
         Self {
-            held_move: [[0.0; 4]; NUM_SOURCES],
+            held_move: Default::default(),
             held_stall_space: 0.0,
             held_stall_gp: EnumMap::default(),
             held_undo: 0.0,
@@ -90,7 +107,7 @@ impl InputState {
     }
 
     pub(crate) fn reset(&mut self) {
-        self.held_move = [[0.0; 4]; NUM_SOURCES];
+        self.held_move = Default::default();
         self.held_stall_space = 0.0;
         self.held_stall_gp = EnumMap::default();
         self.held_undo = 0.0;
@@ -187,13 +204,13 @@ impl InputState {
         let mut result: EnumMap<Player, Option<(Action, bool)>> = EnumMap::default();
 
         // Source 0: Arrow keys → arrow_player
-        if let Some(action) = poll_keys_dir(&ARROW_KEYS, &mut self.held_move[0], dt) {
+        if let Some(action) = poll_keys_dir(arrow_key, &mut self.held_move[0], dt) {
             let synced = is_key_down(ARROW_SYNC);
             result[arrow_player] = Some((action, synced));
         }
 
         // Source 1: WASD → always P2
-        if let Some(action) = poll_keys_dir(&WASD_KEYS, &mut self.held_move[1], dt) {
+        if let Some(action) = poll_keys_dir(wasd_key, &mut self.held_move[1], dt) {
             let synced = is_key_down(WASD_SYNC);
             result[Player::Player2] = Some((action, synced));
         }
@@ -300,12 +317,16 @@ impl Default for InputState {
 // --- Shared polling functions ---
 
 /// Poll keyboard keys for a directional action.
-fn poll_keys_dir(keys: &[KeyCode; 4], held_move: &mut [f32; 4], dt: f32) -> Option<Action> {
-    for (i, &key) in keys.iter().enumerate() {
-        let down = is_key_down(key);
-        let pressed = is_key_pressed(key);
-        if input_held(down, pressed, &mut held_move[i], dt) {
-            return Some(Action::Move(DIRS[i]));
+fn poll_keys_dir(
+    key_for: fn(Dir4) -> KeyCode,
+    held_move: &mut EnumMap<Dir4, f32>,
+    dt: f32,
+) -> Option<Action> {
+    for (dir, held) in held_move.iter_mut() {
+        let down = is_key_down(key_for(dir));
+        let pressed = is_key_pressed(key_for(dir));
+        if input_held(down, pressed, held, dt) {
+            return Some(Action::Move(dir));
         }
     }
 
@@ -316,17 +337,18 @@ fn poll_keys_dir(keys: &[KeyCode; 4], held_move: &mut [f32; 4], dt: f32) -> Opti
 fn poll_gamepad_action(
     gp: &GamepadContext,
     index: usize,
-    held_move: &mut [f32; 4],
+    held_move: &mut EnumMap<Dir4, f32>,
     held_stall: &mut f32,
-    stick_active: &mut [bool; 4],
+    stick_active: &mut EnumMap<Dir4, bool>,
     dt: f32,
 ) -> Option<Action> {
     // D-pad with repeat
-    for i in 0..4 {
-        let down = gp_btn_down(gp, index, DPAD_BUTTONS[i]);
-        let pressed = gp_btn_pressed(gp, index, DPAD_BUTTONS[i]);
-        if input_held(down, pressed, &mut held_move[i], dt) {
-            return Some(Action::Move(DIRS[i]));
+    for (dir, held) in held_move.iter_mut() {
+        let btn = dpad_button(dir);
+        let down = gp_btn_down(gp, index, btn);
+        let pressed = gp_btn_pressed(gp, index, btn);
+        if input_held(down, pressed, held, dt) {
+            return Some(Action::Move(dir));
         }
     }
 
@@ -336,29 +358,28 @@ fn poll_gamepad_action(
 
     let stick_dir = if stick_y.abs() > stick_x.abs() {
         if stick_y > 0.0 {
-            Some((Dir4::North, 0))
+            Some(Dir4::North)
         } else if stick_y < 0.0 {
-            Some((Dir4::South, 1))
+            Some(Dir4::South)
         } else {
             None
         }
     } else if stick_x < 0.0 {
-        Some((Dir4::West, 2))
+        Some(Dir4::West)
     } else if stick_x > 0.0 {
-        Some((Dir4::East, 3))
+        Some(Dir4::East)
     } else {
         None
     };
 
     let mut result = None;
-    if let Some((dir, idx)) = stick_dir
-        && !stick_active[idx]
+    if let Some(dir) = stick_dir
+        && !stick_active[dir]
     {
         result = Some(Action::Move(dir));
     }
-    let active_idx = stick_dir.map(|(_, idx)| idx);
-    for (i, active) in stick_active.iter_mut().enumerate() {
-        *active = active_idx == Some(i);
+    for (dir, active) in stick_active.iter_mut() {
+        *active = stick_dir == Some(dir);
     }
     if result.is_some() {
         return result;

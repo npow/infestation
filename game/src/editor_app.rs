@@ -1567,8 +1567,7 @@ impl App {
             })
             .unwrap_or_else(|| {
                 let mut grid = Grid::create_empty(5, 5);
-                *grid.at_mut(Position::new(2, 2)) =
-                    Cell::Player(Player::Player1, Dir4::South);
+                *grid.at_mut(Position::new(2, 2)) = Cell::Player(Player::Player1, Dir4::South);
                 Editor::new_scenario(
                     grid.clone(),
                     grid,
@@ -1935,8 +1934,7 @@ impl App {
             if let Some(idx) = new_index {
                 *current_index = idx;
                 let name = &scenario_names[idx];
-                self.editor =
-                    Self::load_or_create_scenario(name, self.editor.sprites.clone());
+                self.editor = Self::load_or_create_scenario(name, self.editor.sprites.clone());
             }
         }
 
@@ -2008,7 +2006,7 @@ impl App {
                     "scenario_tests/two_player_scenarios"
                 };
                 for suffix in ["_1.csv", "_2.csv", "_i.json"] {
-                    let old_path = format!("{}/{}{}",other_dir, name, suffix);
+                    let old_path = format!("{}/{}{}", other_dir, name, suffix);
                     let _ = std::fs::remove_file(&old_path);
                 }
             }

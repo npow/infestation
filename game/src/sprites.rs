@@ -1,12 +1,14 @@
+use enum_map::{EnumMap, enum_map};
+
 use crate::direction::{Dir4, Dir8};
 use macroquad::prelude::*;
 
 #[derive(Clone)]
 pub struct Sprites {
-    player: [Texture2D; 4],
-    player2: [Texture2D; 4],
-    rat: [Texture2D; 8],
-    cyborg_rat: [Texture2D; 8],
+    player: EnumMap<Dir4, Texture2D>,
+    player2: EnumMap<Dir4, Texture2D>,
+    rat: EnumMap<Dir8, Texture2D>,
+    cyborg_rat: EnumMap<Dir8, Texture2D>,
     wall: Texture2D,
     portal_unvisited: Texture2D,
     portal_visited: Texture2D,
@@ -34,38 +36,38 @@ async fn load_font() -> Font {
 impl Sprites {
     pub async fn load() -> Self {
         Self {
-            player: [
-                load_png(include_bytes!("../../assets/player/north.png")),
-                load_png(include_bytes!("../../assets/player/south.png")),
-                load_png(include_bytes!("../../assets/player/east.png")),
-                load_png(include_bytes!("../../assets/player/west.png")),
-            ],
-            player2: [
-                load_png(include_bytes!("../../assets/player2/north.png")),
-                load_png(include_bytes!("../../assets/player2/south.png")),
-                load_png(include_bytes!("../../assets/player2/east.png")),
-                load_png(include_bytes!("../../assets/player2/west.png")),
-            ],
-            rat: [
-                load_png(include_bytes!("../../assets/rat/north.png")),
-                load_png(include_bytes!("../../assets/rat/south.png")),
-                load_png(include_bytes!("../../assets/rat/east.png")),
-                load_png(include_bytes!("../../assets/rat/west.png")),
-                load_png(include_bytes!("../../assets/rat/northeast.png")),
-                load_png(include_bytes!("../../assets/rat/northwest.png")),
-                load_png(include_bytes!("../../assets/rat/southeast.png")),
-                load_png(include_bytes!("../../assets/rat/southwest.png")),
-            ],
-            cyborg_rat: [
-                load_png(include_bytes!("../../assets/cyborgrat/north.png")),
-                load_png(include_bytes!("../../assets/cyborgrat/south.png")),
-                load_png(include_bytes!("../../assets/cyborgrat/east.png")),
-                load_png(include_bytes!("../../assets/cyborgrat/west.png")),
-                load_png(include_bytes!("../../assets/cyborgrat/northeast.png")),
-                load_png(include_bytes!("../../assets/cyborgrat/northwest.png")),
-                load_png(include_bytes!("../../assets/cyborgrat/southeast.png")),
-                load_png(include_bytes!("../../assets/cyborgrat/southwest.png")),
-            ],
+            player: enum_map! {
+                Dir4::North => load_png(include_bytes!("../../assets/player/north.png")),
+                Dir4::South => load_png(include_bytes!("../../assets/player/south.png")),
+                Dir4::East => load_png(include_bytes!("../../assets/player/east.png")),
+                Dir4::West => load_png(include_bytes!("../../assets/player/west.png")),
+            },
+            player2: enum_map! {
+                Dir4::North => load_png(include_bytes!("../../assets/player2/north.png")),
+                Dir4::South => load_png(include_bytes!("../../assets/player2/south.png")),
+                Dir4::East => load_png(include_bytes!("../../assets/player2/east.png")),
+                Dir4::West => load_png(include_bytes!("../../assets/player2/west.png")),
+            },
+            rat: enum_map! {
+                Dir8::North => load_png(include_bytes!("../../assets/rat/north.png")),
+                Dir8::South => load_png(include_bytes!("../../assets/rat/south.png")),
+                Dir8::East => load_png(include_bytes!("../../assets/rat/east.png")),
+                Dir8::West => load_png(include_bytes!("../../assets/rat/west.png")),
+                Dir8::Northeast => load_png(include_bytes!("../../assets/rat/northeast.png")),
+                Dir8::Northwest => load_png(include_bytes!("../../assets/rat/northwest.png")),
+                Dir8::Southeast => load_png(include_bytes!("../../assets/rat/southeast.png")),
+                Dir8::Southwest => load_png(include_bytes!("../../assets/rat/southwest.png")),
+            },
+            cyborg_rat: enum_map! {
+                Dir8::North => load_png(include_bytes!("../../assets/cyborgrat/north.png")),
+                Dir8::South => load_png(include_bytes!("../../assets/cyborgrat/south.png")),
+                Dir8::East => load_png(include_bytes!("../../assets/cyborgrat/east.png")),
+                Dir8::West => load_png(include_bytes!("../../assets/cyborgrat/west.png")),
+                Dir8::Northeast => load_png(include_bytes!("../../assets/cyborgrat/northeast.png")),
+                Dir8::Northwest => load_png(include_bytes!("../../assets/cyborgrat/northwest.png")),
+                Dir8::Southeast => load_png(include_bytes!("../../assets/cyborgrat/southeast.png")),
+                Dir8::Southwest => load_png(include_bytes!("../../assets/cyborgrat/southwest.png")),
+            },
             wall: load_png(include_bytes!("../../assets/wall.png")),
             portal_unvisited: load_png(include_bytes!("../../assets/portal/unvisited.png")),
             portal_visited: load_png(include_bytes!("../../assets/portal/visited.png")),
@@ -81,19 +83,19 @@ impl Sprites {
     }
 
     pub(crate) fn player(&self, dir: Dir4) -> &Texture2D {
-        &self.player[dir as usize]
+        &self.player[dir]
     }
 
     pub(crate) fn player2(&self, dir: Dir4) -> &Texture2D {
-        &self.player2[dir as usize]
+        &self.player2[dir]
     }
 
     pub(crate) fn rat(&self, dir: Dir8) -> &Texture2D {
-        &self.rat[dir as usize]
+        &self.rat[dir]
     }
 
     pub(crate) fn cyborg_rat(&self, dir: Dir8) -> &Texture2D {
-        &self.cyborg_rat[dir as usize]
+        &self.cyborg_rat[dir]
     }
 
     pub(crate) fn wall(&self) -> &Texture2D {

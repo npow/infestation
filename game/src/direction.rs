@@ -1,8 +1,9 @@
+use enum_map::Enum;
 use serde::{Deserialize, Serialize};
 
 use crate::position::PositionDelta;
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Enum, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Dir4 {
     North,
@@ -59,7 +60,7 @@ impl Dir4 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Enum)]
 pub(crate) enum Dir8 {
     North,
     South,
