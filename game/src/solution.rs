@@ -14,14 +14,14 @@ use crate::game::Action;
 struct Solution<'a> {
     level: &'a str,
     grid: &'a str,
-    actions: &'a [Vec<Option<Action>>],
+    actions: &'a [Vec<Action>],
 }
 
 #[derive(Deserialize)]
 pub struct DecodedSolution {
     pub level: String,
     pub grid: String,
-    pub actions: Vec<Vec<Option<Action>>>,
+    pub actions: Vec<Vec<Action>>,
 }
 
 /// Encode a solution as zlib-compressed, base64-encoded JSON.
@@ -29,7 +29,7 @@ pub struct DecodedSolution {
 pub(crate) fn encode_solution(
     level_name: &str,
     initial_grid_csv: &str,
-    action_history: &[Vec<Option<Action>>],
+    action_history: &[Vec<Action>],
 ) -> String {
     let solution = Solution {
         level: level_name,
@@ -90,10 +90,7 @@ mod tests {
 
     #[test]
     fn encode_decode_roundtrip() {
-        let actions = vec![
-            vec![Some(Action::Move(Dir4::North))],
-            vec![Some(Action::Stall)],
-        ];
+        let actions = vec![vec![Action::Move(Dir4::North)], vec![Action::Stall]];
         let encoded = encode_solution("test_level", ".,.\n▼,.", &actions);
         let decoded = decode_solution(&encoded);
 

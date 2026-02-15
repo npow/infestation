@@ -9,7 +9,7 @@ use super::{MoveHandler, Moving, PlayerInfo};
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
     /// Find the nearest player to a position using Euclidean distance.
     /// Returns the PlayerInfo for the nearest player.
-    /// If tied, prefers acting players. If still tied, prefers lower index.
+    /// If tied, prefers moving players, then lower index.
     fn nearest_player_euclidean<'a>(
         &self,
         pos: Position,
@@ -19,8 +19,8 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             .iter()
             .min_by_key(|p| {
                 let dist = pos.dist_sq(p.pos);
-                // Tie-break: prefer acting players, then lower index
-                (dist, !p.acted, p.player_index)
+                // Tie-break: prefer moving players, then lower index
+                (dist, !p.moved, p.player_index)
             })
             .unwrap()
     }
@@ -45,12 +45,6 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
         for rat_pos in rats {
             let nearest = self.nearest_player_euclidean(rat_pos, players);
-
-            // Only move if the nearest player acted
-            if !nearest.acted {
-                continue;
-            }
-
             let target = nearest.pos;
             let blocked_dir = nearest.dir.opposite();
             let face_dir = Dir8::from_delta(target - rat_pos).unwrap();

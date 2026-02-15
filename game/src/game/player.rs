@@ -11,9 +11,8 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         self.grid.borrow().find_players()
     }
 
-    /// Execute player moves. Takes a slice of Option<Action>, one per player found in the grid.
-    /// None means the player didn't act this turn. Some(action) means they did.
-    pub(crate) fn do_player_moves(&mut self, actions: &[Option<Action>]) {
+    /// Execute player moves. Takes a slice of Action, one per player found in the grid.
+    pub(crate) fn do_player_moves(&mut self, actions: &[Action]) {
         let players = self.find_players();
         if players.is_empty() {
             return;
@@ -29,21 +28,16 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
         for (i, player) in players.iter().enumerate() {
             let (player_pos, current_dir) = (player.pos, player.dir);
-            let action = actions.get(i).copied().flatten();
+            let action = actions.get(i).copied().unwrap_or(Action::Stall);
             match action {
-                Some(Action::Move(dir)) => {
+                Action::Move(dir) => {
                     let candidate = player_pos + dir.delta();
                     let wall_blocked = self.grid.borrow().at(candidate).blocks_player();
                     dests.push(if wall_blocked { player_pos } else { candidate });
                     move_dirs.push(Some(dir));
                     facing_dirs.push(dir);
                 }
-                Some(Action::Stall) => {
-                    dests.push(player_pos);
-                    move_dirs.push(None);
-                    facing_dirs.push(current_dir);
-                }
-                None => {
+                Action::Stall => {
                     dests.push(player_pos);
                     move_dirs.push(None);
                     facing_dirs.push(current_dir);
@@ -86,7 +80,6 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         let mut player_infos: Vec<PlayerInfo> = Vec::new();
         for (i, player) in players.iter().enumerate() {
             let (player_pos, player_index) = (player.pos, player.player_index);
-            let action = actions.get(i).copied().flatten();
             let dest = dests[i];
             let blocked = dest == player_pos;
 
@@ -103,7 +96,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             player_infos.push(PlayerInfo {
                 pos: dest,
                 dir: facing_dirs[i],
-                acted: action.is_some(),
+                moved: move_dirs[i].is_some(),
                 player_index,
             });
         }

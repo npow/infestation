@@ -283,8 +283,13 @@ impl App {
 
         // Fire
         self.pending_timer = 0.0;
-        let actions: Vec<Option<Action>> = (0..player_count)
-            .map(|i| self.pending[i].take().map(|pa| pa.action))
+        let actions: Vec<Action> = (0..player_count)
+            .map(|i| {
+                self.pending[i]
+                    .take()
+                    .map(|pa| pa.action)
+                    .unwrap_or(Action::Stall)
+            })
             .collect();
 
         self.game.try_begin_actions(actions);

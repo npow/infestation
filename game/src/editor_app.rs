@@ -8,6 +8,7 @@ use macroquad::prelude::*;
 use crate::direction::Dir4;
 use crate::game::{Action, Game, PlayState};
 use crate::grid::{Cell, Grid, LevelMetadata, NoteText};
+use crate::testing::ScenarioInput;
 use crate::position::{Position, PositionDelta};
 use crate::sprites::Sprites;
 
@@ -134,12 +135,12 @@ struct PendingAction {
 enum EditorMode {
     Level {
         game: Box<Game>,
-        input_history: Vec<Vec<Option<Action>>>,
+        input_history: Vec<Vec<Action>>,
     },
     Scenario {
         after_grid: Grid,
-        p1_action: Option<Action>,
-        p2_action: Option<Action>,
+        p1_action: Action,
+        p2_action: Action,
         expected_state: PlayState,
     },
 }
@@ -163,7 +164,7 @@ struct Editor {
     // Two-player sync buffering
     pending: [Option<PendingAction>; 2],
     // Solution replay: pre-loaded actions to step through
-    replay_actions: Option<Vec<Vec<Option<Action>>>>,
+    replay_actions: Option<Vec<Vec<Action>>>,
     replay_index: usize,
 }
 
@@ -196,8 +197,8 @@ impl Editor {
     fn new_scenario(
         before_grid: Grid,
         after_grid: Grid,
-        p1_action: Option<Action>,
-        p2_action: Option<Action>,
+        p1_action: Action,
+        p2_action: Action,
         expected_state: PlayState,
         sprites: Sprites,
     ) -> Self {
@@ -280,7 +281,7 @@ impl Editor {
         }
     }
 
-    fn add_actions(&mut self, actions: Vec<Option<Action>>) {
+    fn add_actions(&mut self, actions: Vec<Action>) {
         if let EditorMode::Level {
             ref mut game,
             ref mut input_history,
@@ -318,8 +319,13 @@ impl Editor {
             return;
         }
 
-        let actions: Vec<Option<Action>> = (0..player_count)
-            .map(|i| self.pending[i].take().map(|pa| pa.action))
+        let actions: Vec<Action> = (0..player_count)
+            .map(|i| {
+                self.pending[i]
+                    .take()
+                    .map(|pa| pa.action)
+                    .unwrap_or(Action::Stall)
+            })
             .collect();
         self.add_actions(actions);
     }
@@ -1083,13 +1089,12 @@ impl Editor {
             let p1_y = content_y + 5.0;
             let p2_y = p1_y + 25.0;
 
-            let actions: [Option<Action>; 6] = [
-                None,
-                Some(Action::Move(Dir4::North)),
-                Some(Action::Move(Dir4::South)),
-                Some(Action::Move(Dir4::East)),
-                Some(Action::Move(Dir4::West)),
-                Some(Action::Stall),
+            let actions: [Action; 5] = [
+                Action::Move(Dir4::North),
+                Action::Move(Dir4::South),
+                Action::Move(Dir4::East),
+                Action::Move(Dir4::West),
+                Action::Stall,
             ];
 
             // P1 action buttons
@@ -1207,13 +1212,12 @@ impl Editor {
                 ..
             } => {
                 // Action options: None (no input), or specific action
-                let actions: [(Option<Action>, &str); 6] = [
-                    (None, "·"),
-                    (Some(Action::Move(Dir4::North)), "N"),
-                    (Some(Action::Move(Dir4::South)), "S"),
-                    (Some(Action::Move(Dir4::East)), "E"),
-                    (Some(Action::Move(Dir4::West)), "W"),
-                    (Some(Action::Stall), "-"),
+                let actions: [(Action, &str); 5] = [
+                    (Action::Move(Dir4::North), "N"),
+                    (Action::Move(Dir4::South), "S"),
+                    (Action::Move(Dir4::East), "E"),
+                    (Action::Move(Dir4::West), "W"),
+                    (Action::Stall, "-"),
                 ];
                 let btn_w = 16.0;
                 let btn_h = 20.0;
@@ -1403,55 +1407,26 @@ impl Editor {
             // Save after grid
             write(after_path, after_grid.to_csv()).expect("Failed to save after CSV");
 
-            // Helper to convert action to string
-            fn action_to_str(action: Option<Action>) -> &'static str {
-                match action {
-                    Some(Action::Move(Dir4::North)) => "north",
-                    Some(Action::Move(Dir4::South)) => "south",
-                    Some(Action::Move(Dir4::East)) => "east",
-                    Some(Action::Move(Dir4::West)) => "west",
-                    Some(Action::Stall) => "stall",
-                    None => "null",
-                }
-            }
-
-            let state_str = match expected_state {
-                PlayState::Playing => "playing",
-                PlayState::GameOver => "gameover",
-                PlayState::Won => "won",
-            };
-
             // Use two-player format (p1/p2) for two-player scenarios
-            let is_two_player = p2_action.is_some()
-                || self
-                    .before_grid
-                    .entries()
-                    .any(|(_, c)| matches!(c, Cell::Player2(_)));
+            let is_two_player = self
+                .before_grid
+                .entries()
+                .any(|(_, c)| matches!(c, Cell::Player2(_)));
 
-            let json = if is_two_player {
-                let p1_str = action_to_str(p1_action);
-                let p2_str = action_to_str(p2_action);
-                let p1_val = if p1_str == "null" {
-                    "null".to_string()
-                } else {
-                    format!("\"{}\"", p1_str)
-                };
-                let p2_val = if p2_str == "null" {
-                    "null".to_string()
-                } else {
-                    format!("\"{}\"", p2_str)
-                };
-                format!(
-                    "{{\n  \"p1\": {},\n  \"p2\": {},\n  \"state\": \"{}\"\n}}\n",
-                    p1_val, p2_val, state_str
-                )
+            let input = if is_two_player {
+                ScenarioInput::TwoPlayer {
+                    p1: p1_action,
+                    p2: p2_action,
+                    state: expected_state,
+                }
             } else {
-                let action_str = action_to_str(p1_action);
-                format!(
-                    "{{\n  \"move\": \"{}\",\n  \"state\": \"{}\"\n}}\n",
-                    action_str, state_str
-                )
+                ScenarioInput::SinglePlayer {
+                    action: p1_action,
+                    state: expected_state,
+                }
             };
+            let json =
+                serde_json::to_string_pretty(&input).expect("Failed to serialize scenario") + "\n";
             write(json_path, json).expect("Failed to save JSON");
         }
     }
@@ -1608,35 +1583,12 @@ impl App {
         let before_grid = Grid::from_csv(&before_csv);
         let after_grid = Grid::from_csv(&after_csv);
 
-        let json: serde_json::Value =
-            serde_json::from_str(&json_str).expect("Failed to parse JSON");
+        let input: ScenarioInput =
+            serde_json::from_str(&json_str).expect("Failed to parse scenario JSON");
 
-        // Helper to parse action from JSON value
-        fn parse_action(val: &serde_json::Value) -> Option<Action> {
-            match val.as_str() {
-                Some("north") => Some(Action::Move(Dir4::North)),
-                Some("south") => Some(Action::Move(Dir4::South)),
-                Some("east") => Some(Action::Move(Dir4::East)),
-                Some("west") => Some(Action::Move(Dir4::West)),
-                Some("stall") => Some(Action::Stall),
-                _ => None, // null or missing = no action
-            }
-        }
-
-        // Check if it's two-player format (has p1/p2 fields) or single-player (has move field)
-        let (p1_action, p2_action) = if json.get("p1").is_some() || json.get("p2").is_some() {
-            // Two-player format
-            (parse_action(&json["p1"]), parse_action(&json["p2"]))
-        } else {
-            // Single-player format: "move" field maps to p1_action
-            (parse_action(&json["move"]), None)
-        };
-
-        let expected_state = match json["state"].as_str().expect("Missing 'state' field") {
-            "playing" => PlayState::Playing,
-            "gameover" => PlayState::GameOver,
-            "won" => PlayState::Won,
-            other => panic!("Unknown state: {}", other),
+        let (p1_action, p2_action, expected_state) = match input {
+            ScenarioInput::TwoPlayer { p1, p2, state } => (p1, p2, state),
+            ScenarioInput::SinglePlayer { action, state } => (action, Action::Stall, state),
         };
 
         Some(Editor::new_scenario(

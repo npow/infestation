@@ -2,10 +2,27 @@
 
 use std::collections::HashSet;
 
+use serde::{Deserialize, Serialize};
+
 use crate::grid::Grid;
 
 pub use crate::direction::Dir4;
 pub use crate::game::{Action, Game, PlayState};
+
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ScenarioInput {
+    TwoPlayer {
+        p1: Action,
+        p2: Action,
+        state: PlayState,
+    },
+    SinglePlayer {
+        #[serde(rename = "move")]
+        action: Action,
+        state: PlayState,
+    },
+}
 
 /// Create a game from CSV content.
 pub fn game_from_csv(csv: &str) -> Game {
@@ -23,6 +40,6 @@ pub fn play_state(game: &Game) -> PlayState {
 }
 
 /// Apply multiple player actions to a game.
-pub fn apply_actions(game: &mut Game, actions: &[Option<Action>]) -> bool {
+pub fn apply_actions(game: &mut Game, actions: &[Action]) -> bool {
     game.apply_actions(actions)
 }

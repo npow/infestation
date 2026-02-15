@@ -37,4 +37,4 @@ echo "$scenarios" | tr ' ' '\n'
 echo ""
 
 # Run the scenario editor with the list of scenarios
-exec cargo run --bin scenario_editor -- $scenarios
+exec cargo run -r --bin scenario_editor -- $scenarios

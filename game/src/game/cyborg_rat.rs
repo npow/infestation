@@ -96,11 +96,11 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 .filter_map(|(i, p)| {
                     player_distances[i]
                         .get(&cyborg_pos)
-                        .map(|&d| (i, d, p.acted))
+                        .map(|&d| (i, d, p.moved))
                 })
-                .min_by_key(|&(idx, dist, acted)| {
-                    // Tie-break: prefer acting players, then lower index
-                    (dist, !acted, idx)
+                .min_by_key(|&(idx, dist, moved)| {
+                    // Tie-break: prefer moving players, then lower index
+                    (dist, !moved, idx)
                 })
                 .map(|(idx, dist, _)| (idx, dist))
         };
@@ -138,12 +138,6 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         for (current_dist, cyborg_pos, player_idx) in movable_cyborgs {
             let player = &players[player_idx];
             let distances = &player_distances[player_idx];
-
-            // Only move if the assigned player acted
-            if !player.acted {
-                continue;
-            }
-
             let blocked_dir = player.dir.opposite();
 
             // Find best adjacent cell

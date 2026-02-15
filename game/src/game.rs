@@ -30,7 +30,8 @@ mod zap;
 pub struct PlayerInfo {
     pub pos: Position,
     pub dir: Dir4,
-    pub acted: bool,
+    /// True if the player moved (not just stalled) this turn.
+    pub moved: bool,
     pub player_index: usize,
 }
 
@@ -65,10 +66,31 @@ pub(crate) struct Zapping {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(into = "String", try_from = "String")]
 pub enum Action {
     Move(Dir4),
     Stall,
+}
+
+impl From<Action> for String {
+    fn from(action: Action) -> String {
+        match action {
+            Action::Move(dir) => serde_plain::to_string(&dir).unwrap(),
+            Action::Stall => "stall".to_string(),
+        }
+    }
+}
+
+impl TryFrom<String> for Action {
+    type Error = String;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        match s.as_str() {
+            "stall" => Ok(Action::Stall),
+            _ => serde_plain::from_str(&s)
+                .map(Action::Move)
+                .map_err(|_| format!("Unknown action: {s}")),
+        }
+    }
 }
 
 /// Handles move resolution and animation.
@@ -129,11 +151,11 @@ pub struct GameState {
     pub(crate) grid: Grid,
     pub(crate) initial_grid: Grid,
     pub(crate) history: Vec<Grid>,
-    pub(crate) action_history: Vec<Vec<Option<Action>>>,
-    pub(crate) queued_actions: Option<Vec<Option<Action>>>,
+    pub(crate) action_history: Vec<Vec<Action>>,
+    pub(crate) queued_actions: Option<Vec<Action>>,
     pub(crate) completed_levels: HashSet<String>,
-    /// Tracks which player acted last (for note priority). None if no moves yet.
-    /// If both acted in sync, this is Some(0) (P1 priority).
+    /// Tracks which player moved last (for note priority). None if no moves yet.
+    /// If both moved in sync, this is Some(0) (P1 priority).
     pub(crate) last_acting_player: Option<usize>,
 }
 
@@ -184,8 +206,8 @@ impl GameState {
     }
 
     /// Returns the note text if a player is currently standing on a note cell.
-    /// Priority: if both players are on notes, prefer whichever acted last.
-    /// If both acted in sync, prefer P1.
+    /// Priority: if both players are on notes, prefer whichever moved last.
+    /// If both moved in sync, prefer P1.
     pub(crate) fn standing_on_note(&self) -> Option<&NoteText> {
         // Find all players and their notes
         let p1_note = self
@@ -341,7 +363,7 @@ impl Game {
         self.animation.is_some()
     }
 
-    pub(crate) fn begin_actions(&mut self, actions: &[Option<Action>]) {
+    pub(crate) fn begin_actions(&mut self, actions: &[Action]) {
         let prev_grid = self.state.grid.clone();
 
         // Handler #1: resolve instantly
@@ -349,21 +371,22 @@ impl Game {
             return;
         }
 
-        // Track which player(s) acted for note priority
-        let acting_players: Vec<usize> = actions
+        // Track which player(s) moved for note priority
+        let moving_players: Vec<usize> = actions
             .iter()
             .enumerate()
-            .filter_map(|(i, action)| action.as_ref().map(|_| i))
+            .filter_map(|(i, action)| match action {
+                Action::Move(_) => Some(i),
+                _ => None,
+            })
             .collect();
 
-        if acting_players.len() > 1 {
-            // Both acted in sync → prefer P1
+        if moving_players.len() == 1 {
+            self.state.last_acting_player = Some(moving_players[0]);
+        } else {
+            // Both moved or neither moved → prefer P1
             self.state.last_acting_player = Some(0);
-        } else if acting_players.len() == 1 {
-            // Only one acted → prefer that player
-            self.state.last_acting_player = Some(acting_players[0]);
         }
-        // If no one acted, keep previous preference
 
         // Handler #2: for animation
         let mut animator = MoveHandler::new(prev_grid);
@@ -374,7 +397,7 @@ impl Game {
         }
     }
 
-    pub(crate) fn try_begin_actions(&mut self, actions: Vec<Option<Action>>) {
+    pub(crate) fn try_begin_actions(&mut self, actions: Vec<Action>) {
         if self.is_animating() {
             if self.state.queued_actions.is_none() {
                 self.state.queued_actions = Some(actions);
@@ -386,12 +409,11 @@ impl Game {
 
     /// Apply an input immediately without animation (for editor replay)
     pub fn apply_action(&mut self, m: Action) -> bool {
-        self.apply_actions(&[Some(m)])
+        self.apply_actions(&[m])
     }
 
     /// Apply multiple player actions immediately without animation.
-    /// Takes one Option<Action> per player in the grid.
-    pub fn apply_actions(&mut self, actions: &[Option<Action>]) -> bool {
+    pub fn apply_actions(&mut self, actions: &[Action]) -> bool {
         let play_state = self.state.play_state();
 
         if play_state != PlayState::Playing {
