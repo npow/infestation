@@ -8,7 +8,7 @@ use crate::position::Position;
 
 use crate::render::InputHints;
 
-use super::{Cell, Grid};
+use super::{Cell, Grid, Player};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -172,35 +172,35 @@ impl Grid {
                 let cell = match field.trim() {
                     "▲" => {
                         player_pos = Some(pos);
-                        Cell::Player(Dir4::North)
+                        Cell::Player(Player::Player1, Dir4::North)
                     }
                     "▼" => {
                         player_pos = Some(pos);
-                        Cell::Player(Dir4::South)
+                        Cell::Player(Player::Player1, Dir4::South)
                     }
                     "►" => {
                         player_pos = Some(pos);
-                        Cell::Player(Dir4::East)
+                        Cell::Player(Player::Player1, Dir4::East)
                     }
                     "◄" => {
                         player_pos = Some(pos);
-                        Cell::Player(Dir4::West)
+                        Cell::Player(Player::Player1, Dir4::West)
                     }
                     "△" => {
                         player2_pos = Some(pos);
-                        Cell::Player2(Dir4::North)
+                        Cell::Player(Player::Player2, Dir4::North)
                     }
                     "▽" => {
                         player2_pos = Some(pos);
-                        Cell::Player2(Dir4::South)
+                        Cell::Player(Player::Player2, Dir4::South)
                     }
                     "▷" => {
                         player2_pos = Some(pos);
-                        Cell::Player2(Dir4::East)
+                        Cell::Player(Player::Player2, Dir4::East)
                     }
                     "◁" => {
                         player2_pos = Some(pos);
-                        Cell::Player2(Dir4::West)
+                        Cell::Player(Player::Player2, Dir4::West)
                     }
                     "#" => Cell::Wall,
                     "=" => Cell::Plank,

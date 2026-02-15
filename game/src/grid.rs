@@ -1,23 +1,30 @@
 use std::collections::HashMap;
 
+use enum_map::Enum;
+
 use crate::direction::{Dir4, Dir8};
 use crate::position::Position;
 
 mod parse;
 pub(crate) use parse::{LevelMetadata, NoteText};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Enum)]
+pub(crate) enum Player {
+    Player1,
+    Player2,
+}
+
 pub(crate) struct FoundPlayer {
     pub(crate) pos: Position,
     pub(crate) dir: Dir4,
-    pub(crate) player_index: usize,
+    pub(crate) player: Player,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum Cell {
     Empty,
     Wall,
-    Player(Dir4),
-    Player2(Dir4),
+    Player(Player, Dir4),
     Rat(Dir8),
     CyborgRat(Dir8),
     Plank,
@@ -44,22 +51,17 @@ impl Cell {
         matches!(self, Cell::Wall | Cell::CyborgRat(_) | Cell::Spiderweb)
     }
 
-    /// Returns the player index (0 for Player, 1 for Player2) and direction if this is a player cell.
-    pub(crate) fn as_player(&self) -> Option<(usize, Dir4)> {
+    /// Returns the player identity and direction if this is a player cell.
+    pub(crate) fn as_player(&self) -> Option<(Player, Dir4)> {
         match self {
-            Cell::Player(dir) => Some((0, *dir)),
-            Cell::Player2(dir) => Some((1, *dir)),
+            Cell::Player(player, dir) => Some((*player, *dir)),
             _ => None,
         }
     }
 
-    /// Creates a player cell for the given index and direction.
-    pub(crate) fn player(index: usize, dir: Dir4) -> Cell {
-        match index {
-            0 => Cell::Player(dir),
-            1 => Cell::Player2(dir),
-            _ => panic!("Invalid player index: {}", index),
-        }
+    /// Creates a player cell for the given player and direction.
+    pub(crate) fn player(player: Player, dir: Dir4) -> Cell {
+        Cell::Player(player, dir)
     }
 }
 
@@ -109,14 +111,14 @@ impl Grid {
             let mut row = Vec::new();
             for x in 0..self.width {
                 let cell_str = match self.cells[y][x] {
-                    Cell::Player(Dir4::North) => "▲".to_string(),
-                    Cell::Player(Dir4::South) => "▼".to_string(),
-                    Cell::Player(Dir4::East) => "►".to_string(),
-                    Cell::Player(Dir4::West) => "◄".to_string(),
-                    Cell::Player2(Dir4::North) => "△".to_string(),
-                    Cell::Player2(Dir4::South) => "▽".to_string(),
-                    Cell::Player2(Dir4::East) => "▷".to_string(),
-                    Cell::Player2(Dir4::West) => "◁".to_string(),
+                    Cell::Player(Player::Player1, Dir4::North) => "▲".to_string(),
+                    Cell::Player(Player::Player1, Dir4::South) => "▼".to_string(),
+                    Cell::Player(Player::Player1, Dir4::East) => "►".to_string(),
+                    Cell::Player(Player::Player1, Dir4::West) => "◄".to_string(),
+                    Cell::Player(Player::Player2, Dir4::North) => "△".to_string(),
+                    Cell::Player(Player::Player2, Dir4::South) => "▽".to_string(),
+                    Cell::Player(Player::Player2, Dir4::East) => "▷".to_string(),
+                    Cell::Player(Player::Player2, Dir4::West) => "◁".to_string(),
                     Cell::Wall => "#".to_string(),
                     Cell::Rat(_) => "R".to_string(),
                     Cell::CyborgRat(_) => "C".to_string(),
@@ -154,19 +156,16 @@ impl Grid {
         &mut self.cells[pos.y as usize][pos.x as usize]
     }
 
-    /// Find all players in the grid, sorted by player index.
+    /// Find all players in the grid, sorted by player identity.
     pub(crate) fn find_players(&self) -> Vec<FoundPlayer> {
         let mut players: Vec<_> = self
             .entries()
             .filter_map(|(pos, cell)| {
-                cell.as_player().map(|(player_index, dir)| FoundPlayer {
-                    pos,
-                    dir,
-                    player_index,
-                })
+                cell.as_player()
+                    .map(|(player, dir)| FoundPlayer { pos, dir, player })
             })
             .collect();
-        players.sort_by_key(|p| p.player_index);
+        players.sort_by_key(|p| p.player);
         players
     }
 

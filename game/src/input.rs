@@ -1,8 +1,25 @@
+use enum_map::{Enum, EnumMap};
 use macroquad::prelude::*;
 use quad_gamepad::{GamepadAxis, GamepadButton, GamepadContext};
 
 use crate::direction::Dir4;
 use crate::game::Action;
+use crate::grid::Player;
+
+#[derive(Debug, Clone, Copy, Enum)]
+enum Gamepad {
+    Gamepad1,
+    Gamepad2,
+}
+
+impl Gamepad {
+    fn index(self) -> usize {
+        match self {
+            Gamepad::Gamepad1 => 0,
+            Gamepad::Gamepad2 => 1,
+        }
+    }
+}
 
 const REPEAT_DELAY: f32 = 0.2;
 const STICK_THRESHOLD: f32 = 0.5;
@@ -13,8 +30,6 @@ const NUM_SOURCES: usize = 4;
 
 const ARROW_KEYS: [KeyCode; 4] = [KeyCode::Up, KeyCode::Down, KeyCode::Left, KeyCode::Right];
 const WASD_KEYS: [KeyCode; 4] = [KeyCode::W, KeyCode::S, KeyCode::A, KeyCode::D];
-const ARROW_STALL: KeyCode = KeyCode::Space;
-const WASD_STALL: KeyCode = KeyCode::Tab;
 const ARROW_SYNC: KeyCode = KeyCode::RightShift;
 const WASD_SYNC: KeyCode = KeyCode::LeftShift;
 
@@ -32,8 +47,8 @@ pub(crate) enum MetaInput {
     Undo,
     Restart,
     Exit,
-    /// Confirm action from a specific player (0=P1, 1=P2).
-    Confirm(usize),
+    /// Confirm action from a specific player.
+    Confirm(Player),
 }
 
 /// A touch gesture result.
@@ -47,13 +62,15 @@ pub(crate) enum TouchGesture {
 pub(crate) struct InputState {
     /// Per-source directional held timers: [arrows, WASD, gamepad0, gamepad1][dir].
     held_move: [[f32; 4]; NUM_SOURCES],
-    /// Per-source stall held timers: [arrows(Space), WASD(Tab), gp0, gp1].
-    held_stall: [f32; NUM_SOURCES],
+    /// Stall held timer for spacebar.
+    held_stall_space: f32,
+    /// Stall held timers per gamepad.
+    held_stall_gp: EnumMap<Gamepad, f32>,
     /// Meta action held timers.
     held_undo: f32,
-    held_confirm: [f32; 2],
+    held_confirm: EnumMap<Player, f32>,
     /// Per-gamepad analog stick edge detection.
-    stick_active: [[bool; 4]; 2],
+    stick_active: EnumMap<Gamepad, [bool; 4]>,
     touch_start: Option<(u64, Vec2)>,
     touch_handled_this_frame: bool,
 }
@@ -62,10 +79,11 @@ impl InputState {
     pub(crate) fn new() -> Self {
         Self {
             held_move: [[0.0; 4]; NUM_SOURCES],
-            held_stall: [0.0; NUM_SOURCES],
+            held_stall_space: 0.0,
+            held_stall_gp: EnumMap::default(),
             held_undo: 0.0,
-            held_confirm: [0.0; 2],
-            stick_active: [[false; 4]; 2],
+            held_confirm: EnumMap::default(),
+            stick_active: EnumMap::default(),
             touch_start: None,
             touch_handled_this_frame: false,
         }
@@ -73,10 +91,11 @@ impl InputState {
 
     pub(crate) fn reset(&mut self) {
         self.held_move = [[0.0; 4]; NUM_SOURCES];
-        self.held_stall = [0.0; NUM_SOURCES];
+        self.held_stall_space = 0.0;
+        self.held_stall_gp = EnumMap::default();
         self.held_undo = 0.0;
-        self.held_confirm = [0.0; 2];
-        self.stick_active = [[false; 4]; 2];
+        self.held_confirm = EnumMap::default();
+        self.stick_active = EnumMap::default();
     }
 
     /// Poll meta actions (undo, restart, exit, confirm) from keyboard + any gamepad.
@@ -102,25 +121,37 @@ impl InputState {
             inputs.push(MetaInput::Undo);
         }
 
-        // Per-player confirm with repeat: Space/gp0 → P1, Tab/gp1 → P2
-        let controller_connected = gamepad.gamepad(0).is_some_and(|g| g.is_connected());
-        let arrow_player = if controller_connected { 1 } else { 0 };
-        let confirm_sources: [(bool, bool, usize); 4] = [
+        // Per-player confirm with repeat: Space → both, gp0 → P1, gp1 → P2
+        let space_down = is_key_down(KeyCode::Space);
+        let space_pressed = is_key_pressed(KeyCode::Space);
+        let confirm_sources: [(bool, bool, Player); 4] = [
+            (space_down, space_pressed, Player::Player1),
+            (space_down, space_pressed, Player::Player2),
             (
-                is_key_down(KeyCode::Space),
-                is_key_pressed(KeyCode::Space),
-                arrow_player,
+                gp_btn_down_multi(
+                    gamepad,
+                    Gamepad::Gamepad1.index(),
+                    &[GamepadButton::South, GamepadButton::East],
+                ),
+                gp_btn_pressed_multi(
+                    gamepad,
+                    Gamepad::Gamepad1.index(),
+                    &[GamepadButton::South, GamepadButton::East],
+                ),
+                Player::Player1,
             ),
-            (is_key_down(KeyCode::Tab), is_key_pressed(KeyCode::Tab), 1),
             (
-                gp_btn_down_multi(gamepad, 0, &[GamepadButton::South, GamepadButton::East]),
-                gp_btn_pressed_multi(gamepad, 0, &[GamepadButton::South, GamepadButton::East]),
-                0,
-            ),
-            (
-                gp_btn_down_multi(gamepad, 1, &[GamepadButton::South, GamepadButton::East]),
-                gp_btn_pressed_multi(gamepad, 1, &[GamepadButton::South, GamepadButton::East]),
-                1,
+                gp_btn_down_multi(
+                    gamepad,
+                    Gamepad::Gamepad2.index(),
+                    &[GamepadButton::South, GamepadButton::East],
+                ),
+                gp_btn_pressed_multi(
+                    gamepad,
+                    Gamepad::Gamepad2.index(),
+                    &[GamepadButton::South, GamepadButton::East],
+                ),
+                Player::Player2,
             ),
         ];
         for (down, pressed, player) in confirm_sources {
@@ -138,66 +169,78 @@ impl InputState {
     }
 
     /// Poll all input sources and return per-player actions.
-    /// Returns `[Option<(Action, synced)>; 2]` indexed by player (0=P1, 1=P2).
-    /// Arrow keys are P1 normally, but become P2 if gamepad 0 is connected.
+    /// Arrow keys are P1 normally, but become P2 if gamepad 1 is connected.
     pub(crate) fn poll_player_actions(
         &mut self,
         gamepad: &GamepadContext,
         dt: f32,
-    ) -> [Option<(Action, bool)>; 2] {
-        let controller_connected = gamepad.gamepad(0).is_some_and(|g| g.is_connected());
-        let arrow_player: usize = if controller_connected { 1 } else { 0 };
+    ) -> EnumMap<Player, Option<(Action, bool)>> {
+        let controller_connected = gamepad
+            .gamepad(Gamepad::Gamepad1.index())
+            .is_some_and(|g| g.is_connected());
+        let arrow_player = if controller_connected {
+            Player::Player2
+        } else {
+            Player::Player1
+        };
 
-        let mut result: [Option<(Action, bool)>; 2] = [None; 2];
+        let mut result: EnumMap<Player, Option<(Action, bool)>> = EnumMap::default();
 
         // Source 0: Arrow keys → arrow_player
-        if let Some(action) = poll_keys_action(
-            &ARROW_KEYS,
-            ARROW_STALL,
-            &mut self.held_move[0],
-            &mut self.held_stall[0],
-            dt,
-        ) {
+        if let Some(action) = poll_keys_dir(&ARROW_KEYS, &mut self.held_move[0], dt) {
             let synced = is_key_down(ARROW_SYNC);
             result[arrow_player] = Some((action, synced));
         }
 
         // Source 1: WASD → always P2
-        if let Some(action) = poll_keys_action(
-            &WASD_KEYS,
-            WASD_STALL,
-            &mut self.held_move[1],
-            &mut self.held_stall[1],
-            dt,
-        ) {
+        if let Some(action) = poll_keys_dir(&WASD_KEYS, &mut self.held_move[1], dt) {
             let synced = is_key_down(WASD_SYNC);
-            result[1] = Some((action, synced));
+            result[Player::Player2] = Some((action, synced));
         }
 
-        // Source 2: Gamepad 0 → always P1
+        // Spacebar stalls both players (not synced)
+        if input_held(
+            is_key_down(KeyCode::Space),
+            is_key_pressed(KeyCode::Space),
+            &mut self.held_stall_space,
+            dt,
+        ) {
+            result[Player::Player1] = result[Player::Player1].or(Some((Action::Stall, false)));
+            result[Player::Player2] = result[Player::Player2].or(Some((Action::Stall, false)));
+        }
+
+        // Source 2: Gamepad 1 → always P1
         if let Some(action) = poll_gamepad_action(
             gamepad,
-            0,
+            Gamepad::Gamepad1.index(),
             &mut self.held_move[2],
-            &mut self.held_stall[2],
-            &mut self.stick_active[0],
+            &mut self.held_stall_gp[Gamepad::Gamepad1],
+            &mut self.stick_active[Gamepad::Gamepad1],
             dt,
         ) {
-            let synced = gp_btn_down(gamepad, 0, GamepadButton::RightShoulder);
-            result[0] = Some((action, synced));
+            let synced = gp_btn_down(
+                gamepad,
+                Gamepad::Gamepad1.index(),
+                GamepadButton::RightShoulder,
+            );
+            result[Player::Player1] = Some((action, synced));
         }
 
-        // Source 3: Gamepad 1 → always P2
+        // Source 3: Gamepad 2 → always P2
         if let Some(action) = poll_gamepad_action(
             gamepad,
-            1,
+            Gamepad::Gamepad2.index(),
             &mut self.held_move[3],
-            &mut self.held_stall[3],
-            &mut self.stick_active[1],
+            &mut self.held_stall_gp[Gamepad::Gamepad2],
+            &mut self.stick_active[Gamepad::Gamepad2],
             dt,
         ) {
-            let synced = gp_btn_down(gamepad, 1, GamepadButton::RightShoulder);
-            result[1] = Some((action, synced));
+            let synced = gp_btn_down(
+                gamepad,
+                Gamepad::Gamepad2.index(),
+                GamepadButton::RightShoulder,
+            );
+            result[Player::Player2] = Some((action, synced));
         }
 
         result
@@ -256,26 +299,14 @@ impl Default for InputState {
 
 // --- Shared polling functions ---
 
-/// Poll keyboard keys for a directional action or stall.
-fn poll_keys_action(
-    keys: &[KeyCode; 4],
-    stall_key: KeyCode,
-    held_move: &mut [f32; 4],
-    held_stall: &mut f32,
-    dt: f32,
-) -> Option<Action> {
+/// Poll keyboard keys for a directional action.
+fn poll_keys_dir(keys: &[KeyCode; 4], held_move: &mut [f32; 4], dt: f32) -> Option<Action> {
     for (i, &key) in keys.iter().enumerate() {
         let down = is_key_down(key);
         let pressed = is_key_pressed(key);
         if input_held(down, pressed, &mut held_move[i], dt) {
             return Some(Action::Move(DIRS[i]));
         }
-    }
-
-    let stall_down = is_key_down(stall_key);
-    let stall_pressed = is_key_pressed(stall_key);
-    if input_held(stall_down, stall_pressed, held_stall, dt) {
-        return Some(Action::Stall);
     }
 
     None

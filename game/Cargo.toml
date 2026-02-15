@@ -17,13 +17,14 @@ name = "editor"
 path = "src/bin/editor.rs"
 
 [dependencies]
+base64 = "*"
 csv = "*"
+enum-map = "*"
+flate2 = "*"
 log = "*"
 macroquad = "*"
 quad-gamepad = { path = "../quad-gamepad" }
 quad-touch = { path = "../quad-touch" }
-base64 = "*"
-flate2 = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 serde_plain = "*"
@@ -37,6 +38,6 @@ directories = "*"
 keepawake = "*"
 
 [build-dependencies]
-ureq = "*"
 bzip2 = "*"
 tar = "*"
+ureq = "*"

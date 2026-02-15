@@ -19,8 +19,8 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             .iter()
             .min_by_key(|p| {
                 let dist = pos.dist_sq(p.pos);
-                // Tie-break: prefer moving players, then lower index
-                (dist, !p.moved, p.player_index)
+                // Tie-break: prefer moving players, then lower player (P1 < P2)
+                (dist, !p.moved, p.player)
             })
             .unwrap()
     }

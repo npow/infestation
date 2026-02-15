@@ -1,6 +1,6 @@
 use std::borrow::BorrowMut;
 
-use crate::grid::Cell;
+use crate::grid::{Cell, Player};
 use crate::position::Position;
 use crate::{direction::Dir4, grid::Grid};
 
@@ -78,16 +78,15 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
         // Phase 3: Create Moving entities and build PlayerInfos
         let mut player_infos: Vec<PlayerInfo> = Vec::new();
-        for (i, player) in players.iter().enumerate() {
-            let (player_pos, player_index) = (player.pos, player.player_index);
+        for (i, found) in players.iter().enumerate() {
             let dest = dests[i];
-            let blocked = dest == player_pos;
+            let blocked = dest == found.pos;
 
             if move_dirs[i].is_some() {
                 let dir = facing_dirs[i];
                 self.begin_move(Moving {
-                    cell: Cell::player(player_index, dir),
-                    from: player_pos,
+                    cell: Cell::player(found.player, dir),
+                    from: found.pos,
                     progress: if blocked { 1.0 } else { 0.0 },
                     to: dest,
                 });
@@ -97,7 +96,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 pos: dest,
                 dir: facing_dirs[i],
                 moved: move_dirs[i].is_some(),
-                player_index,
+                player: found.player,
             });
         }
 
@@ -118,7 +117,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 }
 
 impl Game {
-    pub(crate) fn enter_portal(&self, player_index: usize) -> Option<&str> {
-        self.state.player_standing_on_portal(player_index)
+    pub(crate) fn enter_portal(&self, player: Player) -> Option<&str> {
+        self.state.player_standing_on_portal(player)
     }
 }

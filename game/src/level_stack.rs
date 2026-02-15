@@ -57,7 +57,7 @@ mod tests {
     use super::*;
     use crate::direction::Dir4;
     use crate::game::Action;
-    use crate::grid::{Cell, Grid};
+    use crate::grid::{Cell, Grid, Player};
     use crate::position::Position;
     use std::collections::HashSet;
 
@@ -69,13 +69,13 @@ mod tests {
         game.state
             .grid
             .entries()
-            .find_map(|(pos, cell)| matches!(cell, Cell::Player(_)).then_some(pos))
+            .find_map(|(pos, cell)| matches!(cell, Cell::Player(Player::Player1, _)).then_some(pos))
             .unwrap()
     }
 
     fn game_with_portal_at(portal_pos: Position, portal_target: &str) -> Game {
         let mut grid = Grid::create_empty(3, 3);
-        *grid.at_mut(Position::new(0, 1)) = Cell::Player(Dir4::East);
+        *grid.at_mut(Position::new(0, 1)) = Cell::Player(Player::Player1, Dir4::East);
         grid.insert_portal(portal_pos, portal_target.to_string());
         Game::new(grid, HashSet::new())
     }

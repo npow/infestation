@@ -4,7 +4,10 @@ use std::mem;
 use macroquad::prelude::*;
 use quad_gamepad::GamepadContext;
 
+use enum_map::EnumMap;
+
 use crate::game::{Action, Game, PlayState};
+use crate::grid::Player;
 use crate::input::{InputState, MetaInput, TouchGesture};
 use crate::level_stack::LevelStack;
 use crate::levels;
@@ -38,7 +41,7 @@ pub struct App {
     sprites: Sprites,
     confirm_dialog: ConfirmDialog,
     /// Per-player buffered actions (sync or immediate).
-    pending: [Option<PendingAction>; 2],
+    pending: EnumMap<Player, Option<PendingAction>>,
     /// Time elapsed since the first pending action was set, for the 2P grace period.
     pending_timer: f32,
     /// Whether a clipboard import is in progress (async on WASM).
@@ -62,7 +65,7 @@ impl App {
             gamepad: GamepadContext::new(),
             sprites,
             confirm_dialog: ConfirmDialog::None,
-            pending: [None; 2],
+            pending: EnumMap::default(),
             pending_timer: 0.0,
             import_pending: false,
             export_overlay: ExportOverlay::default(),
@@ -100,7 +103,7 @@ impl App {
             }
             self.game = restored;
             self.input.reset();
-            self.pending = [None; 2];
+            self.pending = EnumMap::default();
         }
     }
 
@@ -123,13 +126,13 @@ impl App {
     fn handle_overlay_click(&mut self, pos: Vec2) {
         use crate::render::progress_buttons::overlay_copy_hit;
 
-        if let ExportOverlay::Showing(ref encoded) = self.export_overlay {
-            if overlay_copy_hit(pos, encoded, self.sprites.font()) {
-                crate::storage::progress::copy_to_clipboard(encoded);
-                let encoded = encoded.clone();
-                self.export_overlay = ExportOverlay::Copied(encoded);
-                return;
-            }
+        if let ExportOverlay::Showing(ref encoded) = self.export_overlay
+            && overlay_copy_hit(pos, encoded, self.sprites.font())
+        {
+            crate::storage::progress::copy_to_clipboard(encoded);
+            let encoded = encoded.clone();
+            self.export_overlay = ExportOverlay::Copied(encoded);
+            return;
         }
         self.export_overlay = ExportOverlay::Hidden;
     }
@@ -153,7 +156,7 @@ impl App {
             }
             MetaInput::Undo => {
                 self.game.undo();
-                self.pending = [None; 2];
+                self.pending = EnumMap::default();
             }
             MetaInput::Exit => {
                 self.confirm_dialog = if self.stack.can_exit() {
@@ -186,7 +189,7 @@ impl App {
             ButtonAction::Stall => {
                 // UI stall button acts as P1 non-synced stall
                 if self.game.state.play_state() == PlayState::Playing {
-                    self.pending[0] = Some(PendingAction {
+                    self.pending[Player::Player1] = Some(PendingAction {
                         action: Action::Stall,
                         synced: false,
                     });
@@ -231,7 +234,7 @@ impl App {
                 self.exit_level();
             } else if play_state == PlayState::GameOver {
                 self.game.undo();
-                self.pending = [None; 2];
+                self.pending = EnumMap::default();
             }
         }
     }
@@ -240,7 +243,11 @@ impl App {
     /// Called every frame regardless of animation state.
     fn advance_pending_timer(&mut self, dt: f32) {
         let player_count = self.game.state.player_count();
-        let any_pending = self.pending[..player_count].iter().any(|p| p.is_some());
+        let any_pending = self
+            .pending
+            .values()
+            .take(player_count)
+            .any(|p| p.is_some());
         if any_pending {
             self.pending_timer += dt;
         } else {
@@ -259,16 +266,17 @@ impl App {
             return;
         }
 
-        let any_pending = self.pending[..player_count].iter().any(|p| p.is_some());
-        let all_pending = self.pending[..player_count].iter().all(|p| p.is_some());
+        let players = &[Player::Player1, Player::Player2][..player_count];
+        let any_pending = players.iter().any(|&p| self.pending[p].is_some());
+        let all_pending = players.iter().all(|&p| self.pending[p].is_some());
 
         if !any_pending {
             return;
         }
 
-        let any_synced = self.pending[..player_count]
+        let any_synced = players
             .iter()
-            .any(|p| p.is_some_and(|pa| pa.synced));
+            .any(|&p| self.pending[p].is_some_and(|pa| pa.synced));
 
         if !all_pending {
             // Explicitly synced: wait indefinitely for all players
@@ -283,9 +291,10 @@ impl App {
 
         // Fire
         self.pending_timer = 0.0;
-        let actions: Vec<Action> = (0..player_count)
-            .map(|i| {
-                self.pending[i]
+        let actions: Vec<Action> = players
+            .iter()
+            .map(|&p| {
+                self.pending[p]
                     .take()
                     .map(|pa| pa.action)
                     .unwrap_or(Action::Stall)
@@ -310,7 +319,7 @@ impl App {
         }
 
         self.input.reset();
-        self.pending = [None; 2];
+        self.pending = EnumMap::default();
     }
 
     fn handle_portal_transition(&mut self) {
@@ -340,10 +349,8 @@ impl App {
                 }
             }
             self.input.poll_player_actions(&self.gamepad, dt);
-            if let Some(gesture) = self.input.poll_touch() {
-                if let TouchGesture::Tap(pos) = gesture {
-                    self.handle_overlay_click(pos);
-                }
+            if let Some(TouchGesture::Tap(pos)) = self.input.poll_touch() {
+                self.handle_overlay_click(pos);
             }
             if let Some(pos) = self.input.poll_mouse_click() {
                 self.handle_overlay_click(pos);
@@ -375,7 +382,7 @@ impl App {
                     ConfirmDialog::Restart => {
                         self.game.restart();
                         self.input.reset();
-                        self.pending = [None; 2];
+                        self.pending = EnumMap::default();
                     }
                     ConfirmDialog::Exit => {
                         self.exit_level();
@@ -397,11 +404,9 @@ impl App {
             if self.game.state.play_state() == PlayState::Playing {
                 let player_actions = self.input.poll_player_actions(&self.gamepad, dt);
                 let player_count = self.game.state.player_count();
-                for (i, player_action) in
-                    player_actions.iter().enumerate().take(player_count.min(2))
-                {
+                for (player, player_action) in player_actions.iter().take(player_count) {
                     if let Some((action, synced)) = player_action {
-                        self.pending[i] = Some(PendingAction {
+                        self.pending[player] = Some(PendingAction {
                             action: *action,
                             synced: *synced,
                         });
@@ -414,7 +419,7 @@ impl App {
                 match gesture {
                     TouchGesture::Swipe(dir) => {
                         if self.game.state.play_state() == PlayState::Playing {
-                            self.pending[0] = Some(PendingAction {
+                            self.pending[Player::Player1] = Some(PendingAction {
                                 action: Action::Move(dir),
                                 synced: false,
                             });
@@ -437,12 +442,12 @@ impl App {
         self.try_execute_pending();
 
         // Poll for async clipboard import result
-        if self.import_pending {
-            if let Some(imported) = crate::storage::progress::poll_import() {
-                self.game.state.completed_levels.extend(imported);
-                save_completed_levels(&self.game.state.completed_levels);
-                self.import_pending = false;
-            }
+        if self.import_pending
+            && let Some(imported) = crate::storage::progress::poll_import()
+        {
+            self.game.state.completed_levels.extend(imported);
+            save_completed_levels(&self.game.state.completed_levels);
+            self.import_pending = false;
         }
 
         self.render();

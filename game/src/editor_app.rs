@@ -6,11 +6,13 @@ use std::str;
 use macroquad::prelude::*;
 
 use crate::direction::Dir4;
+use enum_map::EnumMap;
+
 use crate::game::{Action, Game, PlayState};
-use crate::grid::{Cell, Grid, LevelMetadata, NoteText};
-use crate::testing::ScenarioInput;
+use crate::grid::{Cell, Grid, LevelMetadata, NoteText, Player};
 use crate::position::{Position, PositionDelta};
 use crate::sprites::Sprites;
+use crate::testing::ScenarioInput;
 
 const PADDING: f32 = 8.0;
 const TOOLBAR_WIDTH: f32 = 150.0;
@@ -105,8 +107,8 @@ impl Tool {
         match self {
             Tool::Move | Tool::Portal | Tool::Note => None,
             Tool::Wall => Some(Cell::Wall),
-            Tool::Player => Some(Cell::Player(player_dir)),
-            Tool::Player2 => Some(Cell::Player2(player_dir)),
+            Tool::Player => Some(Cell::Player(Player::Player1, player_dir)),
+            Tool::Player2 => Some(Cell::Player(Player::Player2, player_dir)),
             Tool::Rat => Some(Cell::Rat(pos.direction_to(Position::new(0, 0)))),
             Tool::CyborgRat => Some(Cell::CyborgRat(pos.direction_to(Position::new(0, 0)))),
             Tool::Plank => Some(Cell::Plank),
@@ -162,7 +164,7 @@ struct Editor {
     // Multi-item dragging state (anchor_pos, items with offsets from anchor)
     dragging_selection: Option<(Position, Vec<DraggedItem>)>,
     // Two-player sync buffering
-    pending: [Option<PendingAction>; 2],
+    pending: EnumMap<Player, Option<PendingAction>>,
     // Solution replay: pre-loaded actions to step through
     replay_actions: Option<Vec<Vec<Action>>>,
     replay_index: usize,
@@ -188,7 +190,7 @@ impl Editor {
             selecting_rect: None,
             selection: HashSet::new(),
             dragging_selection: None,
-            pending: [None; 2],
+            pending: EnumMap::default(),
             replay_actions: None,
             replay_index: 0,
         }
@@ -221,7 +223,7 @@ impl Editor {
             selecting_rect: None,
             selection: HashSet::new(),
             dragging_selection: None,
-            pending: [None; 2],
+            pending: EnumMap::default(),
             replay_actions: None,
             replay_index: 0,
         }
@@ -293,7 +295,7 @@ impl Editor {
         }
     }
 
-    fn register_action(&mut self, player: usize, action: Action, synced: bool) {
+    fn register_action(&mut self, player: Player, action: Action, synced: bool) {
         self.pending[player] = Some(PendingAction { action, synced });
         self.try_execute_pending();
     }
@@ -302,26 +304,28 @@ impl Editor {
         let player_count = self
             .before_grid
             .entries()
-            .filter(|(_, cell)| cell.as_player().is_some())
+            .filter(|(_, cell)| matches!(cell, Cell::Player(..)))
             .count();
         if player_count == 0 {
             return;
         }
 
-        let has_non_synced = self.pending[..player_count]
+        let players = &[Player::Player1, Player::Player2][..player_count];
+        let has_non_synced = players
             .iter()
-            .any(|p| p.is_some_and(|pa| !pa.synced));
-        let all_synced = self.pending[..player_count]
+            .any(|&p| self.pending[p].is_some_and(|pa| !pa.synced));
+        let all_synced = players
             .iter()
-            .all(|p| p.is_some_and(|pa| pa.synced));
+            .all(|&p| self.pending[p].is_some_and(|pa| pa.synced));
 
         if !has_non_synced && !all_synced {
             return;
         }
 
-        let actions: Vec<Action> = (0..player_count)
-            .map(|i| {
-                self.pending[i]
+        let actions: Vec<Action> = players
+            .iter()
+            .map(|&p| {
+                self.pending[p]
                     .take()
                     .map(|pa| pa.action)
                     .unwrap_or(Action::Stall)
@@ -361,11 +365,11 @@ impl Editor {
         self.tool = match grid.at(pos) {
             Cell::Empty => Tool::Move,
             Cell::Wall => Tool::Wall,
-            Cell::Player(dir) => {
+            Cell::Player(Player::Player1, dir) => {
                 self.player_dir = dir;
                 Tool::Player
             }
-            Cell::Player2(dir) => {
+            Cell::Player(Player::Player2, dir) => {
                 self.player_dir = dir;
                 Tool::Player2
             }
@@ -385,23 +389,13 @@ impl Editor {
     fn place_cell(&mut self, pos: Position, cell: Cell, pane: usize) {
         let grid = self.grid_for_pane_mut(pane);
         // If placing player, remove existing player of same type first
-        if matches!(cell, Cell::Player(_)) {
-            let players: Vec<_> = grid
+        if let Cell::Player(who, _) = cell {
+            let existing: Vec<_> = grid
                 .entries()
-                .filter(|(_, c)| matches!(c, Cell::Player(_)))
+                .filter(|(_, c)| matches!(c, Cell::Player(p, _) if *p == who))
                 .map(|(p, _)| p)
                 .collect();
-            for p in players {
-                *grid.at_mut(p) = Cell::Empty;
-            }
-        }
-        if matches!(cell, Cell::Player2(_)) {
-            let players: Vec<_> = grid
-                .entries()
-                .filter(|(_, c)| matches!(c, Cell::Player2(_)))
-                .map(|(p, _)| p)
-                .collect();
-            for p in players {
+            for p in existing {
                 *grid.at_mut(p) = Cell::Empty;
             }
         }
@@ -909,8 +903,8 @@ impl Editor {
                 Color::from_rgba(255, 255, 255, alpha),
             );
         } else if let Some(texture) = match cell {
-            Cell::Player(dir) => Some(self.sprites.player(dir)),
-            Cell::Player2(dir) => Some(self.sprites.player2(dir)),
+            Cell::Player(Player::Player1, dir) => Some(self.sprites.player(dir)),
+            Cell::Player(Player::Player2, dir) => Some(self.sprites.player2(dir)),
             Cell::Rat(dir) => Some(self.sprites.rat(dir)),
             Cell::CyborgRat(dir) => Some(self.sprites.cyborg_rat(dir)),
             Cell::Wall => Some(self.sprites.wall()),
@@ -1010,8 +1004,8 @@ impl Editor {
                 draw_text(text, tx, ty, font_size, WHITE);
             } else {
                 let texture = match cell {
-                    Cell::Player(dir) => self.sprites.player(dir),
-                    Cell::Player2(dir) => self.sprites.player2(dir),
+                    Cell::Player(Player::Player1, dir) => self.sprites.player(dir),
+                    Cell::Player(Player::Player2, dir) => self.sprites.player2(dir),
                     Cell::Rat(dir) => self.sprites.rat(dir),
                     Cell::CyborgRat(dir) => self.sprites.cyborg_rat(dir),
                     Cell::Wall => self.sprites.wall(),
@@ -1411,7 +1405,7 @@ impl Editor {
             let is_two_player = self
                 .before_grid
                 .entries()
-                .any(|(_, c)| matches!(c, Cell::Player2(_)));
+                .any(|(_, c)| matches!(c, Cell::Player(Player::Player2, _)));
 
             let input = if is_two_player {
                 ScenarioInput::TwoPlayer {
@@ -1475,7 +1469,7 @@ impl App {
             (Grid::from_csv_and_metadata(&csv, &metadata), name)
         } else {
             let mut grid = Grid::create_empty(10, 10);
-            *grid.at_mut(Position::new(5, 5)) = Cell::Player(Dir4::South);
+            *grid.at_mut(Position::new(5, 5)) = Cell::Player(Player::Player1, Dir4::South);
             (grid, level_name.to_string())
         };
 
@@ -1701,44 +1695,70 @@ impl App {
 
                     // P1: arrow keys + space
                     if is_key_pressed(KeyCode::Up) {
-                        self.editor
-                            .register_action(0, Action::Move(Dir4::North), synced_p1);
+                        self.editor.register_action(
+                            Player::Player1,
+                            Action::Move(Dir4::North),
+                            synced_p1,
+                        );
                     }
                     if is_key_pressed(KeyCode::Down) {
-                        self.editor
-                            .register_action(0, Action::Move(Dir4::South), synced_p1);
+                        self.editor.register_action(
+                            Player::Player1,
+                            Action::Move(Dir4::South),
+                            synced_p1,
+                        );
                     }
                     if is_key_pressed(KeyCode::Left) {
-                        self.editor
-                            .register_action(0, Action::Move(Dir4::West), synced_p1);
+                        self.editor.register_action(
+                            Player::Player1,
+                            Action::Move(Dir4::West),
+                            synced_p1,
+                        );
                     }
                     if is_key_pressed(KeyCode::Right) {
-                        self.editor
-                            .register_action(0, Action::Move(Dir4::East), synced_p1);
+                        self.editor.register_action(
+                            Player::Player1,
+                            Action::Move(Dir4::East),
+                            synced_p1,
+                        );
                     }
                     if is_key_pressed(KeyCode::Space) {
-                        self.editor.register_action(0, Action::Stall, synced_p1);
+                        self.editor
+                            .register_action(Player::Player1, Action::Stall, synced_p1);
                     }
 
                     // P2: WASD + tab
                     if is_key_pressed(KeyCode::W) {
-                        self.editor
-                            .register_action(1, Action::Move(Dir4::North), synced_p2);
+                        self.editor.register_action(
+                            Player::Player2,
+                            Action::Move(Dir4::North),
+                            synced_p2,
+                        );
                     }
                     if is_key_pressed(KeyCode::S) {
-                        self.editor
-                            .register_action(1, Action::Move(Dir4::South), synced_p2);
+                        self.editor.register_action(
+                            Player::Player2,
+                            Action::Move(Dir4::South),
+                            synced_p2,
+                        );
                     }
                     if is_key_pressed(KeyCode::A) {
-                        self.editor
-                            .register_action(1, Action::Move(Dir4::West), synced_p2);
+                        self.editor.register_action(
+                            Player::Player2,
+                            Action::Move(Dir4::West),
+                            synced_p2,
+                        );
                     }
                     if is_key_pressed(KeyCode::D) {
-                        self.editor
-                            .register_action(1, Action::Move(Dir4::East), synced_p2);
+                        self.editor.register_action(
+                            Player::Player2,
+                            Action::Move(Dir4::East),
+                            synced_p2,
+                        );
                     }
                     if is_key_pressed(KeyCode::Tab) {
-                        self.editor.register_action(1, Action::Stall, synced_p2);
+                        self.editor
+                            .register_action(Player::Player2, Action::Stall, synced_p2);
                     }
                 }
                 EditorMode::Scenario { .. } => {
@@ -1749,7 +1769,7 @@ impl App {
 
         // Undo last move (u or backspace) - level mode only
         if is_key_pressed(KeyCode::U) || is_key_pressed(KeyCode::Backspace) {
-            self.editor.pending = [None; 2];
+            self.editor.pending = EnumMap::default();
             self.editor.remove_last_input();
         }
 
@@ -1770,7 +1790,7 @@ impl App {
             } = self.editor.mode
         {
             input_history.clear();
-            self.editor.pending = [None; 2];
+            self.editor.pending = EnumMap::default();
             self.editor.replay_index = 0;
             self.editor.replay_inputs();
         }

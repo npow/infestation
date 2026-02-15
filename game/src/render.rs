@@ -3,7 +3,7 @@ pub(crate) mod email_button;
 pub(crate) mod progress_buttons;
 
 use crate::game::{Game, PlayState};
-use crate::grid::Cell;
+use crate::grid::{Cell, Player};
 use crate::sprites::Sprites;
 use macroquad::prelude::*;
 use quad_gamepad::ControllerType;
@@ -107,8 +107,8 @@ fn draw_cell(cell: Cell, px: f32, py: f32, size: f32, sprites: &Sprites) {
         Cell::Empty => {}
         _ => {
             let texture = match cell {
-                Cell::Player(dir) => sprites.player(dir),
-                Cell::Player2(dir) => sprites.player2(dir),
+                Cell::Player(Player::Player1, dir) => sprites.player(dir),
+                Cell::Player(Player::Player2, dir) => sprites.player2(dir),
                 Cell::Rat(dir) => sprites.rat(dir),
                 Cell::CyborgRat(dir) => sprites.cyborg_rat(dir),
                 Cell::Wall => sprites.wall(),

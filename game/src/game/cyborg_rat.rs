@@ -2,8 +2,10 @@ use std::borrow::BorrowMut;
 use std::collections::hash_map::Entry;
 use std::collections::{BinaryHeap, HashMap};
 
+use enum_map::EnumMap;
+
 use crate::direction::Dir8;
-use crate::grid::{Cell, Grid};
+use crate::grid::{Cell, Grid, Player};
 use crate::position::Position;
 
 use super::cyborg_distance::{CyborgDistance, DijkstraEntry};
@@ -51,8 +53,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     | Cell::Rat(_)
                     | Cell::CyborgRat(_)
                     | Cell::Trigger(_)
-                    | Cell::Player(_)
-                    | Cell::Player2(_) => true,
+                    | Cell::Player(..) => true,
                 };
 
                 if !traversable {
@@ -75,10 +76,13 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         }
 
         // Compute distances from each player
-        let player_distances: Vec<_> = players
-            .iter()
-            .map(|p| self.compute_cyborg_distances(p.pos))
-            .collect();
+        let player_distances: EnumMap<Player, Option<HashMap<Position, CyborgDistance>>> =
+            EnumMap::from_fn(|player| {
+                players
+                    .iter()
+                    .find(|p| p.player == player)
+                    .map(|p| self.compute_cyborg_distances(p.pos))
+            });
 
         let cyborg_positions: Vec<_> = self
             .grid
@@ -88,21 +92,20 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             .collect();
 
         // For each cyborg, find nearest player by path distance
-        // Returns (player_index, distance) or None if unreachable from all
-        let nearest_player = |cyborg_pos: Position| -> Option<(usize, CyborgDistance)> {
+        let nearest_player = |cyborg_pos: Position| -> Option<(Player, CyborgDistance)> {
             players
                 .iter()
-                .enumerate()
-                .filter_map(|(i, p)| {
-                    player_distances[i]
-                        .get(&cyborg_pos)
-                        .map(|&d| (i, d, p.moved))
+                .filter_map(|p| {
+                    player_distances[p.player]
+                        .as_ref()
+                        .and_then(|dists| dists.get(&cyborg_pos))
+                        .map(|&d| (p.player, d, p.moved))
                 })
-                .min_by_key(|&(idx, dist, moved)| {
-                    // Tie-break: prefer moving players, then lower index
-                    (dist, !moved, idx)
+                .min_by_key(|&(player, dist, moved)| {
+                    // Tie-break: prefer moving players, then lower player (P1 < P2)
+                    (dist, !moved, player)
                 })
-                .map(|(idx, dist, _)| (idx, dist))
+                .map(|(player, dist, _)| (player, dist))
         };
 
         // Partition into reachable and unreachable
@@ -129,15 +132,15 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         let mut movable_cyborgs: Vec<_> = reachable
             .into_iter()
             .map(|pos| {
-                let (player_idx, dist) = nearest_player(pos).unwrap();
-                (dist, pos, player_idx)
+                let (target_player, dist) = nearest_player(pos).unwrap();
+                (dist, pos, target_player)
             })
             .collect();
         movable_cyborgs.sort_by_key(|&(dist, pos, _)| (dist, pos));
 
-        for (current_dist, cyborg_pos, player_idx) in movable_cyborgs {
-            let player = &players[player_idx];
-            let distances = &player_distances[player_idx];
+        for (current_dist, cyborg_pos, target_player) in movable_cyborgs {
+            let player = players.iter().find(|p| p.player == target_player).unwrap();
+            let distances = player_distances[target_player].as_ref().unwrap();
             let blocked_dir = player.dir.opposite();
 
             // Find best adjacent cell

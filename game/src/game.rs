@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Deserialize, Serialize};
 
 use crate::direction::Dir4;
-use crate::grid::{Cell, Grid, NoteText};
+use crate::grid::{Cell, Grid, NoteText, Player};
 use crate::levels;
 use crate::position::Position;
 use crate::storage::strip_path_prefix;
@@ -32,7 +32,7 @@ pub struct PlayerInfo {
     pub dir: Dir4,
     /// True if the player moved (not just stalled) this turn.
     pub moved: bool,
-    pub player_index: usize,
+    pub player: Player,
 }
 
 const MOVE_SPEED: f32 = 15.0;
@@ -155,8 +155,8 @@ pub struct GameState {
     pub(crate) queued_actions: Option<Vec<Action>>,
     pub(crate) completed_levels: HashSet<String>,
     /// Tracks which player moved last (for note priority). None if no moves yet.
-    /// If both moved in sync, this is Some(0) (P1 priority).
-    pub(crate) last_acting_player: Option<usize>,
+    /// If both moved in sync, this is Some(Player1) (P1 priority).
+    pub(crate) last_acting_player: Option<Player>,
 }
 
 /// Game wrapper combining state and move handling.
@@ -186,23 +186,18 @@ impl GameState {
     }
 
     /// Returns the portal destination for a specific player.
-    pub(crate) fn player_standing_on_portal(&self, player_index: usize) -> Option<&str> {
-        let cell_matcher: fn(&Cell) -> bool = if player_index == 0 {
-            |c| matches!(c, Cell::Player(_))
-        } else {
-            |c| matches!(c, Cell::Player2(_))
-        };
+    pub(crate) fn player_standing_on_portal(&self, player: Player) -> Option<&str> {
         self.grid
             .entries()
-            .find(|(_, cell)| cell_matcher(cell))
+            .find(|(_, cell)| matches!(cell, Cell::Player(p, _) if *p == player))
             .and_then(|(pos, _)| self.grid.get_portal(pos))
     }
 
     /// Returns the portal destination if any player is currently standing on a portal.
     /// If both players are on portals, prefers P1.
     pub(crate) fn standing_on_portal(&self) -> Option<&str> {
-        self.player_standing_on_portal(0)
-            .or_else(|| self.player_standing_on_portal(1))
+        self.player_standing_on_portal(Player::Player1)
+            .or_else(|| self.player_standing_on_portal(Player::Player2))
     }
 
     /// Returns the note text if a player is currently standing on a note cell.
@@ -212,20 +207,20 @@ impl GameState {
         // Find all players and their notes
         let p1_note = self
             .grid
-            .find_entities(|cell| matches!(cell, Cell::Player(_)))
+            .find_entities(|cell| matches!(cell, Cell::Player(Player::Player1, _)))
             .next()
             .and_then(|(pos, _)| self.grid.get_note(pos));
 
         let p2_note = self
             .grid
-            .find_entities(|cell| matches!(cell, Cell::Player2(_)))
+            .find_entities(|cell| matches!(cell, Cell::Player(Player::Player2, _)))
             .next()
             .and_then(|(pos, _)| self.grid.get_note(pos));
 
         match (p1_note, p2_note) {
             (Some(_), Some(_)) => {
                 // Both on notes: use last_acting_player preference (defaults to P1 if None)
-                if self.last_acting_player == Some(1) {
+                if self.last_acting_player == Some(Player::Player2) {
                     p2_note
                 } else {
                     p1_note
@@ -262,28 +257,23 @@ impl GameState {
         }
         let prev_grid = &self.history[self.history.len() - 2];
 
-        // Collect all players on portals, sorted by player index (P1 first)
+        // Collect all players on portals, sorted by player (P1 first)
         let mut candidates: Vec<_> = self
             .grid
             .entries()
-            .filter_map(|(pos, cell)| cell.as_player().map(|(idx, _)| (idx, pos)))
-            .filter_map(|(idx, pos)| self.grid.get_portal(pos).map(|p| (idx, pos, p)))
+            .filter_map(|(pos, cell)| cell.as_player().map(|(player, _)| (player, pos)))
+            .filter_map(|(player, pos)| self.grid.get_portal(pos).map(|p| (player, pos, p)))
             .collect();
-        candidates.sort_by_key(|(idx, _, _)| *idx);
+        candidates.sort_by_key(|(player, _, _)| *player);
 
-        for (idx, player_pos, portal) in candidates {
+        for (player, player_pos, portal) in candidates {
             if self.is_level_completed(portal) {
                 continue;
             }
             // Check if this player moved to this position (was elsewhere before)
-            let cell_matcher: fn(&Cell) -> bool = if idx == 0 {
-                |c| matches!(c, Cell::Player(_))
-            } else {
-                |c| matches!(c, Cell::Player2(_))
-            };
-            let prev_pos = prev_grid
-                .entries()
-                .find_map(|(pos, cell)| cell_matcher(&cell).then_some(pos));
+            let prev_pos = prev_grid.entries().find_map(|(pos, cell)| {
+                matches!(cell, Cell::Player(p, _) if p == player).then_some(pos)
+            });
             if prev_pos != Some(player_pos) {
                 return Some(portal);
             }
@@ -300,7 +290,7 @@ impl GameState {
 
     fn count_players(grid: &Grid) -> usize {
         grid.entries()
-            .filter(|(_, cell)| cell.as_player().is_some())
+            .filter(|(_, cell)| matches!(cell, Cell::Player(..)))
             .count()
     }
 
@@ -372,20 +362,17 @@ impl Game {
         }
 
         // Track which player(s) moved for note priority
-        let moving_players: Vec<usize> = actions
-            .iter()
-            .enumerate()
-            .filter_map(|(i, action)| match action {
-                Action::Move(_) => Some(i),
-                _ => None,
-            })
+        let moving_players: Vec<Player> = [Player::Player1, Player::Player2]
+            .into_iter()
+            .zip(actions.iter())
+            .filter_map(|(player, action)| matches!(action, Action::Move(_)).then_some(player))
             .collect();
 
         if moving_players.len() == 1 {
             self.state.last_acting_player = Some(moving_players[0]);
         } else {
             // Both moved or neither moved → prefer P1
-            self.state.last_acting_player = Some(0);
+            self.state.last_acting_player = Some(Player::Player1);
         }
 
         // Handler #2: for animation
