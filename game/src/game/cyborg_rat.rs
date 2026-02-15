@@ -2,8 +2,6 @@ use std::borrow::BorrowMut;
 use std::collections::hash_map::Entry;
 use std::collections::{BinaryHeap, HashMap};
 
-use enum_map::EnumMap;
-
 use crate::direction::Dir8;
 use crate::grid::{Cell, Grid, Player};
 use crate::position::Position;
@@ -12,23 +10,40 @@ use super::cyborg_distance::{CyborgDistance, DijkstraEntry};
 use super::{MoveHandler, Moving, PlayerInfo};
 
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
-    /// Compute shortest path distances from target using Dijkstra with A + B*sqrt(2) metric
-    fn compute_cyborg_distances(&self, target: Position) -> HashMap<Position, CyborgDistance> {
-        let mut distances: HashMap<Position, CyborgDistance> = HashMap::new();
+    /// Compute shortest path distances from all players using multi-source Dijkstra.
+    /// Returns each position's distance to the nearest player and which player that is.
+    /// Ties broken by: prefer moved players, then P1.
+    fn compute_cyborg_distances(
+        &self,
+        players: &[PlayerInfo],
+    ) -> HashMap<Position, (CyborgDistance, Player)> {
+        let mut distances: HashMap<Position, (CyborgDistance, Player)> = HashMap::new();
         let mut heap: BinaryHeap<DijkstraEntry> = BinaryHeap::new();
 
-        heap.push(DijkstraEntry {
-            dist: CyborgDistance::ZERO,
-            pos: target,
-        });
+        for p in players {
+            heap.push(DijkstraEntry {
+                dist: CyborgDistance::ZERO,
+                pos: p.pos,
+                player: p.player,
+                moved: p.moved,
+            });
+        }
 
         let grid = self.grid.borrow();
         let bounds = grid.bounds();
 
-        while let Some(DijkstraEntry { dist, pos }) = heap.pop() {
+        while let Some(DijkstraEntry {
+            dist,
+            pos,
+            player,
+            moved,
+        }) = heap.pop()
+        {
             match distances.entry(pos) {
-                Entry::Vacant(vacant_entry) => vacant_entry.insert(dist), // Finalize this position
-                Entry::Occupied(_) => continue,                           // Already finalized
+                Entry::Vacant(vacant_entry) => {
+                    vacant_entry.insert((dist, player));
+                }
+                Entry::Occupied(_) => continue,
             };
 
             // Check all 8 neighbors
@@ -63,6 +78,8 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 heap.push(DijkstraEntry {
                     dist: dist.add_step(dir),
                     pos: neighbor,
+                    player,
+                    moved,
                 });
             }
         }
@@ -75,14 +92,8 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             return;
         }
 
-        // Compute distances from each player
-        let player_distances: EnumMap<Player, Option<HashMap<Position, CyborgDistance>>> =
-            EnumMap::from_fn(|player| {
-                players
-                    .iter()
-                    .find(|p| p.player == player)
-                    .map(|p| self.compute_cyborg_distances(p.pos))
-            });
+        // Single multi-source Dijkstra from all players
+        let distances = self.compute_cyborg_distances(players);
 
         let cyborg_positions: Vec<_> = self
             .grid
@@ -91,27 +102,10 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             .map(|(pos, _)| pos)
             .collect();
 
-        // For each cyborg, find nearest player by path distance
-        let nearest_player = |cyborg_pos: Position| -> Option<(Player, CyborgDistance)> {
-            players
-                .iter()
-                .filter_map(|p| {
-                    player_distances[p.player]
-                        .as_ref()
-                        .and_then(|dists| dists.get(&cyborg_pos))
-                        .map(|&d| (p.player, d, p.moved))
-                })
-                .min_by_key(|&(player, dist, moved)| {
-                    // Tie-break: prefer moving players, then lower player (P1 < P2)
-                    (dist, !moved, player)
-                })
-                .map(|(player, dist, _)| (player, dist))
-        };
-
         // Partition into reachable and unreachable
         let (reachable, unreachable): (Vec<_>, Vec<_>) = cyborg_positions
             .into_iter()
-            .partition(|&pos| nearest_player(pos).is_some());
+            .partition(|pos| distances.contains_key(pos));
 
         // Unreachable cyborg rats just turn to face the nearest player (by Euclidean)
         for cyborg_pos in unreachable {
@@ -132,7 +126,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         let mut movable_cyborgs: Vec<_> = reachable
             .into_iter()
             .map(|pos| {
-                let (target_player, dist) = nearest_player(pos).unwrap();
+                let &(dist, target_player) = distances.get(&pos).unwrap();
                 (dist, pos, target_player)
             })
             .collect();
@@ -140,7 +134,6 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
         for (current_dist, cyborg_pos, target_player) in movable_cyborgs {
             let player = players.iter().find(|p| p.player == target_player).unwrap();
-            let distances = player_distances[target_player].as_ref().unwrap();
             let blocked_dir = player.dir.opposite();
 
             // Find best adjacent cell
@@ -149,9 +142,14 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             for dir in Dir8::all() {
                 let new_pos = cyborg_pos + dir.delta();
 
-                let Some(&target_dist) = distances.get(&new_pos) else {
+                let Some(&(target_dist, assigned)) = distances.get(&new_pos) else {
                     continue;
                 };
+
+                // Only follow gradient toward our target player
+                if assigned != target_player {
+                    continue;
+                }
 
                 // Must be an improvement (to allow moving toward goal)
                 // unless the player is about to kill us
