@@ -135,4 +135,8 @@ impl Dir8 {
         delta.dx = 0;
         Self::from_delta(delta)
     }
+
+    pub(crate) fn dist_sq(&self) -> i32 {
+        if self.is_diagonal() { 2 } else { 1 }
+    }
 }

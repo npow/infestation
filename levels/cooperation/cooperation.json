@@ -12,7 +12,7 @@
       }
     },
     {
-      "x": 20,
+      "x": 21,
       "y": 5,
       "text": {
         "keyboard_only": "Hold right shift (player 1) or left shift (player 2) while moving to synchronize your move with the other player. When synchronized, your move won't execute until both players have moved.",
@@ -32,7 +32,7 @@
       }
     },
     {
-      "x": 21,
+      "x": 22,
       "y": 7,
       "text": {
         "keyboard_only": "Two players! Player 1: arrow keys to move. Player 2: WASD to move.",

@@ -4,13 +4,13 @@
 set -e
 cd "$(dirname "$0")/.."
 
-# Get list of changed scenario JSON files from git status
+# Get list of changed scenario files (_1.csv, _2.csv, _i.json) from git status
 # This handles both tracked modifications and untracked files
 scenarios=""
 
-# Check for modified tracked files
-for f in $(git status --porcelain | grep '_i\.json$' | sed 's/^...//'); do
-    name=$(basename "$f" _i.json)
+# Check for modified tracked files (any of _1.csv, _2.csv, _i.json)
+for f in $(git status --porcelain | grep -E '(_1\.csv|_2\.csv|_i\.json)$' | sed 's/^...//'); do
+    name=$(basename "$f" | sed -E 's/_(1\.csv|2\.csv|i\.json)$//')
     scenarios="$scenarios $name"
 done
 
@@ -24,8 +24,8 @@ for dir in $(git status --porcelain | grep '^??' | sed 's/^?? //' | grep 'scenar
     done
 done
 
-# Trim leading whitespace
-scenarios=$(echo $scenarios | xargs)
+# Deduplicate and trim whitespace
+scenarios=$(echo $scenarios | tr ' ' '\n' | sort -u | xargs)
 
 if [ -z "$scenarios" ]; then
     echo "No new or modified scenarios found"
