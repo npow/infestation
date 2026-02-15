@@ -2000,6 +2000,17 @@ impl App {
                 let json_path = format!("{}/{}_i.json", scenarios_dir, name);
                 self.editor
                     .save_scenario(&before_path, &after_path, &json_path);
+
+                // Clean up files from the other directory if the scenario moved
+                let other_dir = if is_two_player {
+                    "scenario_tests/scenarios"
+                } else {
+                    "scenario_tests/two_player_scenarios"
+                };
+                for suffix in ["_1.csv", "_2.csv", "_i.json"] {
+                    let old_path = format!("{}/{}{}",other_dir, name, suffix);
+                    let _ = std::fs::remove_file(&old_path);
+                }
             }
         }
     }
