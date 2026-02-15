@@ -1525,15 +1525,14 @@ impl App {
         scenario_names.sort();
         scenario_names.dedup();
 
-        // Validate each filter argument exists (fail-fast)
+        // Add any filtered names that don't exist yet (will be created)
         for &name in filter {
-            assert!(
-                scenario_names.iter().any(|s| s == name),
-                "Scenario '{}' not found. Available: {:?}",
-                name,
-                scenario_names
-            );
+            if !scenario_names.iter().any(|s| s == name) {
+                scenario_names.push(name.to_string());
+            }
         }
+        scenario_names.sort();
+        scenario_names.dedup();
 
         // Filter to specified scenarios if any provided
         if !filter.is_empty() {
@@ -1546,7 +1545,7 @@ impl App {
             scenario_dirs
         );
 
-        let editor = Self::load_scenario(&scenario_names[0], sprites);
+        let editor = Self::load_or_create_scenario(&scenario_names[0], sprites);
 
         Self {
             editor,
@@ -1557,12 +1556,28 @@ impl App {
         }
     }
 
-    fn load_scenario(name: &str, sprites: Sprites) -> Editor {
+    fn load_or_create_scenario(name: &str, sprites: Sprites) -> Editor {
         Self::load_scenario_from_dir(name, "scenario_tests/scenarios", sprites.clone())
             .or_else(|| {
-                Self::load_scenario_from_dir(name, "scenario_tests/two_player_scenarios", sprites)
+                Self::load_scenario_from_dir(
+                    name,
+                    "scenario_tests/two_player_scenarios",
+                    sprites.clone(),
+                )
             })
-            .expect("Failed to load scenario")
+            .unwrap_or_else(|| {
+                let mut grid = Grid::create_empty(5, 5);
+                *grid.at_mut(Position::new(2, 2)) =
+                    Cell::Player(Player::Player1, Dir4::South);
+                Editor::new_scenario(
+                    grid.clone(),
+                    grid,
+                    Action::Stall,
+                    Action::Stall,
+                    PlayState::Playing,
+                    sprites,
+                )
+            })
     }
 
     fn load_scenario_from_dir(name: &str, scenarios_dir: &str, sprites: Sprites) -> Option<Editor> {
@@ -1920,7 +1935,8 @@ impl App {
             if let Some(idx) = new_index {
                 *current_index = idx;
                 let name = &scenario_names[idx];
-                self.editor = Self::load_scenario(name, self.editor.sprites.clone());
+                self.editor =
+                    Self::load_or_create_scenario(name, self.editor.sprites.clone());
             }
         }
 
@@ -1930,6 +1946,7 @@ impl App {
         if let AppMode::Scenario {
             ref scenario_names,
             current_index,
+            ..
         } = self.mode
         {
             let name = &scenario_names[current_index];
@@ -1958,14 +1975,21 @@ impl App {
             AppMode::Scenario {
                 scenario_names,
                 current_index,
+                ..
             } => {
                 let name = &scenario_names[*current_index];
                 // Determine which directory the scenario belongs to
+                let is_two_player = self
+                    .editor
+                    .before_grid
+                    .entries()
+                    .any(|(_, c)| matches!(c, Cell::Player(Player::Player2, _)));
                 let scenarios_dir = if Path::new(&format!(
                     "scenario_tests/two_player_scenarios/{}_i.json",
                     name
                 ))
                 .exists()
+                    || is_two_player
                 {
                     "scenario_tests/two_player_scenarios"
                 } else {
