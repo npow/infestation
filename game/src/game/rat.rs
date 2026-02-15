@@ -29,10 +29,6 @@ struct RatMoveKey {
 
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
     pub(crate) fn move_rats(&mut self, players: &[PlayerInfo]) {
-        if players.is_empty() {
-            return;
-        }
-
         let mut rats: Vec<_> = self
             .grid
             .borrow()
@@ -64,10 +60,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
             // Generate move options for each player
             for player_info in players {
-                let Some(face_dir) = Dir8::from_delta(player_info.pos - rat_pos) else {
-                    continue; // rat is on top of player
-                };
-
+                let face_dir = Dir8::from_delta(player_info.pos - rat_pos).unwrap();
                 let dirs: Vec<Dir8> = if face_dir.is_diagonal() {
                     vec![
                         face_dir,
@@ -117,7 +110,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 // Rat stays: face nearest player
                 let nearest = players
                     .iter()
-                    .min_by_key(|p| (rat_pos.dist_sq(p.pos), p.player))
+                    .min_by_key(|p| (rat_pos.dist_sq(p.pos), !p.moved, p.player))
                     .unwrap();
                 let face_dir = Dir8::from_delta(nearest.pos - rat_pos).unwrap_or(Dir8::South);
                 self.begin_move(Moving {

@@ -14,9 +14,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
     /// Execute player moves. Takes a slice of Action, one per player found in the grid.
     pub(crate) fn do_player_moves(&mut self, actions: &[Action]) {
         let players = self.find_players();
-        if players.is_empty() {
-            return;
-        }
+        assert!(!players.is_empty());
 
         let grid = self.grid.borrow();
         let prev_grid = grid.clone();

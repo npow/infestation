@@ -88,10 +88,6 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
     }
 
     pub(crate) fn move_cyborg_rats(&mut self, players: &[PlayerInfo]) {
-        if players.is_empty() {
-            return;
-        }
-
         // Single multi-source Dijkstra from all players
         let distances = self.compute_cyborg_distances(players);
 
