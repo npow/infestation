@@ -103,7 +103,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     .iter()
                     .min_by_key(|p| (rat_pos.dist_sq(p.pos), !p.moved, p.player))
                     .unwrap();
-                let face_dir = Dir8::from_delta(nearest.pos - rat_pos).unwrap_or(Dir8::South);
+                let face_dir = Dir8::from_delta(nearest.pos - rat_pos).unwrap();
                 self.begin_move(Moving {
                     cell: Cell::Rat(face_dir),
                     from: rat_pos,

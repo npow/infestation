@@ -27,15 +27,18 @@ impl Position {
         x_in_bounds && y_in_bounds
     }
 
-    pub(crate) fn direction_to(self, to: Position) -> Dir8 {
-        let mut best_dir = Dir8::South;
+    pub(crate) fn direction_to(self, to: Position) -> Option<Dir8> {
+        if self == to {
+            return None;
+        }
+        let mut best_dir = None;
         let mut best_dist = i32::MAX;
         for dir in Dir8::all() {
             let new_pos = self + dir.delta();
             let d = new_pos.dist_sq(to);
             if d < best_dist {
                 best_dist = d;
-                best_dir = dir;
+                best_dir = Some(dir);
             }
         }
         best_dir

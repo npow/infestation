@@ -5,7 +5,7 @@ use std::str;
 
 use macroquad::prelude::*;
 
-use crate::direction::Dir4;
+use crate::direction::{Dir4, Dir8};
 use enum_map::EnumMap;
 
 use crate::game::{Action, Game, PlayState};
@@ -103,14 +103,14 @@ impl Tool {
         }
     }
 
-    fn to_cell(self, pos: Position, player_dir: Dir4, trigger_digit: u8) -> Option<Cell> {
+    fn to_cell(self, player_dir: Dir4, trigger_digit: u8) -> Option<Cell> {
         match self {
             Tool::Move | Tool::Portal | Tool::Note => None,
             Tool::Wall => Some(Cell::Wall),
             Tool::Player => Some(Cell::Player(Player::Player1, player_dir)),
             Tool::Player2 => Some(Cell::Player(Player::Player2, player_dir)),
-            Tool::Rat => Some(Cell::Rat(pos.direction_to(Position::new(0, 0)))),
-            Tool::CyborgRat => Some(Cell::CyborgRat(pos.direction_to(Position::new(0, 0)))),
+            Tool::Rat => Some(Cell::Rat(Dir8::Northeast)),
+            Tool::CyborgRat => Some(Cell::CyborgRat(Dir8::Northeast)),
             Tool::Plank => Some(Cell::Plank),
             Tool::Spiderweb => Some(Cell::Spiderweb),
             Tool::BlackHole => Some(Cell::BlackHole),
@@ -180,7 +180,7 @@ impl Editor {
                 input_history: Vec::new(),
             },
             tool: Tool::Move,
-            player_dir: Dir4::South,
+            player_dir: Dir4::North,
             trigger_digit: 1,
             portal_dialog: None,
             note_dialog: None,
@@ -213,7 +213,7 @@ impl Editor {
                 expected_state,
             },
             tool: Tool::Move,
-            player_dir: Dir4::South,
+            player_dir: Dir4::North,
             trigger_digit: 1,
             portal_dialog: None,
             note_dialog: None,
@@ -866,7 +866,7 @@ impl Editor {
         let preview_cell = if let Some((_, cell)) = self.dragging {
             Some(cell)
         } else {
-            self.tool.to_cell(pos, self.player_dir, self.trigger_digit)
+            self.tool.to_cell(self.player_dir, self.trigger_digit)
         };
 
         let Some(cell) = preview_cell else {
@@ -1469,7 +1469,7 @@ impl App {
             (Grid::from_csv_and_metadata(&csv, &metadata), name)
         } else {
             let mut grid = Grid::create_empty(10, 10);
-            *grid.at_mut(Position::new(5, 5)) = Cell::Player(Player::Player1, Dir4::South);
+            *grid.at_mut(Position::new(5, 5)) = Cell::Player(Player::Player1, Dir4::North);
             (grid, level_name.to_string())
         };
 
@@ -1567,7 +1567,7 @@ impl App {
             })
             .unwrap_or_else(|| {
                 let mut grid = Grid::create_empty(5, 5);
-                *grid.at_mut(Position::new(2, 2)) = Cell::Player(Player::Player1, Dir4::South);
+                *grid.at_mut(Position::new(2, 2)) = Cell::Player(Player::Player1, Dir4::North);
                 Editor::new_scenario(
                     grid.clone(),
                     grid,
@@ -1866,7 +1866,7 @@ impl App {
                         tool => {
                             // Place cell and start tracking drag-painting
                             if let Some(cell) =
-                                tool.to_cell(pos, self.editor.player_dir, self.editor.trigger_digit)
+                                tool.to_cell(self.editor.player_dir, self.editor.trigger_digit)
                             {
                                 self.editor.place_cell(pos, cell, pane);
                                 self.editor.last_paint_pos = Some(pos);
@@ -1887,11 +1887,10 @@ impl App {
                     && self.editor.dragging.is_none()
                     && let Some((pos, pane)) = self.editor.screen_to_grid(mx, my)
                     && self.editor.last_paint_pos != Some(pos)
-                    && let Some(cell) = self.editor.tool.to_cell(
-                        pos,
-                        self.editor.player_dir,
-                        self.editor.trigger_digit,
-                    )
+                    && let Some(cell) = self
+                        .editor
+                        .tool
+                        .to_cell(self.editor.player_dir, self.editor.trigger_digit)
                 {
                     // Continue drag-painting for non-Move/Portal tools
                     self.editor.place_cell(pos, cell, pane);

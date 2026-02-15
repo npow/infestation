@@ -235,11 +235,11 @@ impl Grid {
         // Use player1 position if available, otherwise player2
         let target = player_pos.or(player2_pos).unwrap();
         for rat in rat_positions {
-            let dir = rat.direction_to(target);
+            let dir = rat.direction_to(target).unwrap();
             *grid.at_mut(rat) = Cell::Rat(dir);
         }
         for cyborg in cyborg_rat_positions {
-            let dir = cyborg.direction_to(target);
+            let dir = cyborg.direction_to(target).unwrap();
             *grid.at_mut(cyborg) = Cell::CyborgRat(dir);
         }
         grid
