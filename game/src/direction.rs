@@ -60,12 +60,12 @@ impl Dir4 {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Enum)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Enum)]
 pub(crate) enum Dir8 {
-    North,
-    South,
     East,
     West,
+    North,
+    South,
     Northeast,
     Northwest,
     Southeast,

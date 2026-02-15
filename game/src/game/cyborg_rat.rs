@@ -1,47 +1,50 @@
 use std::borrow::BorrowMut;
+use std::cmp::{Ordering, Reverse};
 use std::collections::hash_map::Entry;
 use std::collections::{BinaryHeap, HashMap};
 
 use crate::direction::Dir8;
-use crate::grid::{Cell, Grid, Player};
+use crate::game::rat::RatMoveKey;
+use crate::grid::{Cell, Grid};
 use crate::position::Position;
 
-use super::cyborg_distance::{CyborgDistance, DijkstraEntry};
+use super::cyborg_distance::{CyborgDistance, CyborgEntry};
 use super::{MoveHandler, Moving, PlayerInfo};
 
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
     /// Compute shortest path distances from all players using multi-source Dijkstra.
     /// Returns each position's distance to the nearest player and which player that is.
     /// Ties broken by: prefer moved players, then P1.
-    fn compute_cyborg_distances(
-        &self,
-        players: &[PlayerInfo],
-    ) -> HashMap<Position, (CyborgDistance, Player)> {
-        let mut distances: HashMap<Position, (CyborgDistance, Player)> = HashMap::new();
-        let mut heap: BinaryHeap<DijkstraEntry> = BinaryHeap::new();
+    fn compute_cyborg_distances(&self, players: &[PlayerInfo]) -> HashMap<Position, CyborgEntry> {
+        let mut distances: HashMap<Position, CyborgEntry> = HashMap::new();
+        let mut heap: BinaryHeap<Reverse<(CyborgEntry, Position)>> = BinaryHeap::new();
 
         for p in players {
-            heap.push(DijkstraEntry {
-                dist: CyborgDistance::ZERO,
-                pos: p.pos,
-                player: p.player,
-                moved: p.moved,
-            });
+            heap.push(Reverse((
+                CyborgEntry {
+                    dist: CyborgDistance::ZERO,
+                    player: p.player,
+                    still: !p.moved,
+                },
+                p.pos,
+            )));
         }
 
         let grid = self.grid.borrow();
         let bounds = grid.bounds();
 
-        while let Some(DijkstraEntry {
-            dist,
+        while let Some(Reverse((
+            entry @ CyborgEntry {
+                dist,
+                player,
+                still,
+            },
             pos,
-            player,
-            moved,
-        }) = heap.pop()
+        ))) = heap.pop()
         {
             match distances.entry(pos) {
                 Entry::Vacant(vacant_entry) => {
-                    vacant_entry.insert((dist, player));
+                    vacant_entry.insert(entry);
                 }
                 Entry::Occupied(_) => continue,
             };
@@ -75,12 +78,14 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     continue;
                 }
 
-                heap.push(DijkstraEntry {
-                    dist: dist.add_step(dir),
-                    pos: neighbor,
-                    player,
-                    moved,
-                });
+                heap.push(Reverse((
+                    CyborgEntry {
+                        dist: dist.add_step(dir),
+                        player,
+                        still,
+                    },
+                    neighbor,
+                )));
             }
         }
 
@@ -107,7 +112,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         for cyborg_pos in unreachable {
             let nearest = players
                 .iter()
-                .min_by_key(|p| cyborg_pos.dist_sq(p.pos))
+                .min_by_key(|p| (cyborg_pos.dist_sq(p.pos), !p.moved, p.player))
                 .unwrap();
             let face_dir = Dir8::from_delta(nearest.pos - cyborg_pos).unwrap();
             self.begin_move(Moving {
@@ -118,50 +123,46 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             });
         }
 
-        // Sort reachable cyborg rats by distance to their nearest player
+        // Sort reachable cyborg rats
         let mut movable_cyborgs: Vec<_> = reachable
             .into_iter()
             .map(|pos| {
-                let &(dist, target_player) = distances.get(&pos).unwrap();
-                (dist, pos, target_player)
+                let &entry = distances.get(&pos).unwrap();
+                (entry, pos)
             })
             .collect();
-        movable_cyborgs.sort_by_key(|&(dist, pos, _)| (dist, pos));
+        movable_cyborgs.sort_by_key(|&(entry, pos)| (entry, pos));
 
-        for (current_dist, cyborg_pos, target_player) in movable_cyborgs {
-            let player = players.iter().find(|p| p.player == target_player).unwrap();
-            let blocked_dir = player.dir.opposite();
-
-            // Find best adjacent cell
-            let mut best_move: Option<(Dir8, CyborgDistance)> = None;
-
-            for dir in Dir8::all() {
+        for (entry, cyborg_pos) in movable_cyborgs {
+            let CyborgEntry {
+                dist: current_dist,
+                still,
+                player,
+            } = entry;
+            let mut best_move: RatMoveKey<Dist> = RatMoveKey {
+                score: Dist(current_dist),
+                move_d2: 0,
+                player_still: still,
+                player,
+                dir: None,
+            };
+            'outer: for dir in Dir8::all() {
                 let new_pos = cyborg_pos + dir.delta();
 
-                let Some(&(target_dist, assigned)) = distances.get(&new_pos) else {
+                let Some(&CyborgEntry {
+                    dist,
+                    still,
+                    player,
+                }) = distances.get(&new_pos)
+                else {
                     continue;
                 };
 
-                // Only follow gradient toward our target player
-                if assigned != target_player {
-                    continue;
-                }
-
-                // Must be an improvement (to allow moving toward goal)
-                // unless the player is about to kill us
-                if target_dist >= current_dist && current_dist != CyborgDistance::ONE_ORTHO {
-                    continue;
-                }
-
-                // Don't move to orthogonally adjacent to player where they can reach us
-                // (distance (1, 0))
-                if target_dist == CyborgDistance::ONE_ORTHO {
-                    continue;
-                }
-
                 // Can't attack from in front of player (sword blocks)
-                if new_pos == player.pos && dir == blocked_dir {
-                    continue;
+                for player_info in players {
+                    if new_pos == player_info.pos && dir == player_info.dir.opposite() {
+                        continue 'outer;
+                    }
                 }
 
                 // Check if cell is available
@@ -172,13 +173,21 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     continue;
                 }
 
+                let target_move = RatMoveKey {
+                    score: Dist(dist),
+                    move_d2: dir.dist_sq(),
+                    player_still: still,
+                    player,
+                    dir: Some(dir),
+                };
+
                 // This is a valid move - check if it's the best
-                if best_move.is_none_or(|(_, best_dist)| target_dist < best_dist) {
-                    best_move = Some((dir, target_dist));
+                if target_move < best_move {
+                    best_move = target_move;
                 }
             }
 
-            if let Some((dir, _)) = best_move {
+            if let Some(dir) = best_move.dir {
                 self.begin_move(Moving {
                     cell: Cell::CyborgRat(dir),
                     from: cyborg_pos,
@@ -186,7 +195,11 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     to: cyborg_pos + dir.delta(),
                 });
             } else {
-                let face_dir = Dir8::from_delta(player.pos - cyborg_pos).unwrap();
+                let nearest = players
+                    .iter()
+                    .min_by_key(|p| (cyborg_pos.dist_sq(p.pos), !p.moved, p.player))
+                    .unwrap();
+                let face_dir = Dir8::from_delta(nearest.pos - cyborg_pos).unwrap();
                 // Cyborg rat can't move - turn to face the player
                 self.begin_move(Moving {
                     cell: Cell::CyborgRat(face_dir),
@@ -196,5 +209,22 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 });
             }
         }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Dist(CyborgDistance);
+
+impl PartialOrd for Dist {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Dist {
+    fn cmp(&self, other: &Self) -> Ordering {
+        (self.0 == CyborgDistance::ONE_ORTHO)
+            .cmp(&(other.0 == CyborgDistance::ONE_ORTHO))
+            .then_with(|| self.0.cmp(&other.0))
     }
 }

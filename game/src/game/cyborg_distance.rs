@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, ops::Sub};
 
-use crate::{direction::Dir8, grid::Player, position::Position};
+use crate::{direction::Dir8, grid::Player};
 
 /// Distance metric for cyborg rat pathfinding: A + B*sqrt(2)
 /// Stored as (orthogonal_count, diagonal_count)
@@ -49,28 +49,9 @@ impl PartialOrd for CyborgDistance {
 }
 
 /// Entry for the priority queue in Dijkstra (min-heap via Reverse ordering)
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub(crate) struct DijkstraEntry {
+#[derive(Clone, Copy, Eq, PartialEq, PartialOrd, Ord)]
+pub(crate) struct CyborgEntry {
     pub(crate) dist: CyborgDistance,
-    pub(crate) pos: Position,
+    pub(crate) still: bool,
     pub(crate) player: Player,
-    pub(crate) moved: bool,
-}
-
-impl Ord for DijkstraEntry {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Reverse for min-heap; tie-break: prefer moved players, then P1
-        other
-            .dist
-            .cmp(&self.dist)
-            .then_with(|| self.moved.cmp(&other.moved))
-            .then_with(|| other.player.cmp(&self.player))
-            .then_with(|| other.pos.cmp(&self.pos))
-    }
-}
-
-impl PartialOrd for DijkstraEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
 }

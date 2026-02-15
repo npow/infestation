@@ -5,26 +5,19 @@ use crate::grid::{Cell, Grid, Player};
 
 use super::{MoveHandler, Moving, PlayerInfo};
 
-mod never_compared;
-
-use self::never_compared::NeverCompared;
-
 /// Sort key for choosing the best rat move option.
 /// Fields are ordered for derived Ord: lower values are preferred.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct RatMoveKey {
-    /// Euclidean distance² to target player after moving
-    score: i32,
+pub(super) struct RatMoveKey<T = i32> {
+    pub(super) score: T,
     /// Euclidean distance² the rat has to move
-    move_d2: i32,
+    pub(super) move_d2: i32,
     /// Did the target player stall this turn? (false < true)
-    player_still: bool,
+    pub(super) player_still: bool,
     /// Which player this option targets (Player1 < Player2).
-    player: Player,
-    /// true if the move direction is vertical; horizontal is preferred (false < true).
-    is_vertical: bool,
-    /// None for stay, Some(dir) for a move. All ties are already broken at this point.
-    dir: NeverCompared<Option<Dir8>>,
+    pub(super) player: Player,
+    /// None for stay, Some(dir) for a move.
+    pub(super) dir: Option<Dir8>,
 }
 
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
@@ -54,8 +47,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 move_d2: 0,
                 player_still: true,
                 player: Player::Player1,
-                is_vertical: false,
-                dir: NeverCompared(None),
+                dir: None,
             }];
 
             // Generate move options for each player
@@ -91,15 +83,14 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                         move_d2: dir.dist_sq(),
                         player_still: !player_info.moved,
                         player: player_info.player,
-                        is_vertical: dir.delta().dx == 0,
-                        dir: NeverCompared(Some(dir)),
+                        dir: Some(dir),
                     });
                 }
             }
 
             let best = candidates.into_iter().min().unwrap();
 
-            if let Some(dir) = best.dir.0 {
+            if let Some(dir) = best.dir {
                 self.begin_move(Moving {
                     cell: Cell::Rat(dir),
                     from: rat_pos,
