@@ -58,6 +58,15 @@ fn dpad_button(dir: Dir4) -> GamepadButton {
     }
 }
 
+/// A player action with metadata from input polling.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PlayerInput {
+    pub(crate) action: Action,
+    pub(crate) synced: bool,
+    /// Whether this was triggered by a fresh key press (not a held-repeat).
+    pub(crate) fresh: bool,
+}
+
 /// A meta input action (not per-player).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum MetaInput {
@@ -106,13 +115,28 @@ impl InputState {
         }
     }
 
+    /// Reset all held timers, suppressing currently-held keys until they are released.
+    /// This prevents key presses from "carrying over" across level transitions.
     pub(crate) fn reset(&mut self) {
-        self.held_move = Default::default();
-        self.held_stall_space = 0.0;
-        self.held_stall_gp = EnumMap::default();
-        self.held_undo = 0.0;
-        self.held_confirm = EnumMap::default();
-        self.stick_active = EnumMap::default();
+        for source in &mut self.held_move {
+            for (_, held) in source.iter_mut() {
+                *held = SUPPRESSED;
+            }
+        }
+        self.held_stall_space = SUPPRESSED;
+        for (_, held) in self.held_stall_gp.iter_mut() {
+            *held = SUPPRESSED;
+        }
+        self.held_undo = SUPPRESSED;
+        for (_, held) in self.held_confirm.iter_mut() {
+            *held = SUPPRESSED;
+        }
+        // Set all stick directions as active so edge-detection won't fire until released.
+        for (_, dirs) in self.stick_active.iter_mut() {
+            for (_, active) in dirs.iter_mut() {
+                *active = true;
+            }
+        }
     }
 
     /// Poll meta actions (undo, restart, exit, confirm) from keyboard + any gamepad.
@@ -191,7 +215,7 @@ impl InputState {
         &mut self,
         gamepad: &GamepadContext,
         dt: f32,
-    ) -> EnumMap<Player, Option<(Action, bool)>> {
+    ) -> EnumMap<Player, Option<PlayerInput>> {
         let controller_connected = gamepad
             .gamepad(Gamepad::Gamepad1.index())
             .is_some_and(|g| g.is_connected());
@@ -201,33 +225,46 @@ impl InputState {
             Player::Player1
         };
 
-        let mut result: EnumMap<Player, Option<(Action, bool)>> = EnumMap::default();
+        let mut result: EnumMap<Player, Option<PlayerInput>> = EnumMap::default();
 
         // Source 0: Arrow keys → arrow_player
-        if let Some(action) = poll_keys_dir(arrow_key, &mut self.held_move[0], dt) {
+        if let Some((action, fresh)) = poll_keys_dir(arrow_key, &mut self.held_move[0], dt) {
             let synced = is_key_down(ARROW_SYNC);
-            result[arrow_player] = Some((action, synced));
+            result[arrow_player] = Some(PlayerInput {
+                action,
+                synced,
+                fresh,
+            });
         }
 
         // Source 1: WASD → always P2
-        if let Some(action) = poll_keys_dir(wasd_key, &mut self.held_move[1], dt) {
+        if let Some((action, fresh)) = poll_keys_dir(wasd_key, &mut self.held_move[1], dt) {
             let synced = is_key_down(WASD_SYNC);
-            result[Player::Player2] = Some((action, synced));
+            result[Player::Player2] = Some(PlayerInput {
+                action,
+                synced,
+                fresh,
+            });
         }
 
         // Spacebar stalls both players (not synced)
-        if input_held(
+        if let Some(fresh) = input_held(
             is_key_down(KeyCode::Space),
             is_key_pressed(KeyCode::Space),
             &mut self.held_stall_space,
             dt,
         ) {
-            result[Player::Player1] = result[Player::Player1].or(Some((Action::Stall, false)));
-            result[Player::Player2] = result[Player::Player2].or(Some((Action::Stall, false)));
+            let stall = PlayerInput {
+                action: Action::Stall,
+                synced: false,
+                fresh,
+            };
+            result[Player::Player1] = result[Player::Player1].or(Some(stall));
+            result[Player::Player2] = result[Player::Player2].or(Some(stall));
         }
 
         // Source 2: Gamepad 1 → always P1
-        if let Some(action) = poll_gamepad_action(
+        if let Some((action, fresh)) = poll_gamepad_action(
             gamepad,
             Gamepad::Gamepad1.index(),
             &mut self.held_move[2],
@@ -240,11 +277,15 @@ impl InputState {
                 Gamepad::Gamepad1.index(),
                 GamepadButton::RightShoulder,
             );
-            result[Player::Player1] = Some((action, synced));
+            result[Player::Player1] = Some(PlayerInput {
+                action,
+                synced,
+                fresh,
+            });
         }
 
         // Source 3: Gamepad 2 → always P2
-        if let Some(action) = poll_gamepad_action(
+        if let Some((action, fresh)) = poll_gamepad_action(
             gamepad,
             Gamepad::Gamepad2.index(),
             &mut self.held_move[3],
@@ -257,7 +298,11 @@ impl InputState {
                 Gamepad::Gamepad2.index(),
                 GamepadButton::RightShoulder,
             );
-            result[Player::Player2] = Some((action, synced));
+            result[Player::Player2] = Some(PlayerInput {
+                action,
+                synced,
+                fresh,
+            });
         }
 
         result
@@ -316,24 +361,24 @@ impl Default for InputState {
 
 // --- Shared polling functions ---
 
-/// Poll keyboard keys for a directional action.
+/// Poll keyboard keys for a directional action. Returns `(action, fresh)`.
 fn poll_keys_dir(
     key_for: fn(Dir4) -> KeyCode,
     held_move: &mut EnumMap<Dir4, f32>,
     dt: f32,
-) -> Option<Action> {
+) -> Option<(Action, bool)> {
     for (dir, held) in held_move.iter_mut() {
         let down = is_key_down(key_for(dir));
         let pressed = is_key_pressed(key_for(dir));
-        if input_held(down, pressed, held, dt) {
-            return Some(Action::Move(dir));
+        if let Some(fresh) = input_held(down, pressed, held, dt) {
+            return Some((Action::Move(dir), fresh));
         }
     }
 
     None
 }
 
-/// Poll a gamepad for a directional action or stall.
+/// Poll a gamepad for a directional action or stall. Returns `(action, fresh)`.
 fn poll_gamepad_action(
     gp: &GamepadContext,
     index: usize,
@@ -341,18 +386,18 @@ fn poll_gamepad_action(
     held_stall: &mut f32,
     stick_active: &mut EnumMap<Dir4, bool>,
     dt: f32,
-) -> Option<Action> {
+) -> Option<(Action, bool)> {
     // D-pad with repeat
     for (dir, held) in held_move.iter_mut() {
         let btn = dpad_button(dir);
         let down = gp_btn_down(gp, index, btn);
         let pressed = gp_btn_pressed(gp, index, btn);
-        if input_held(down, pressed, held, dt) {
-            return Some(Action::Move(dir));
+        if let Some(fresh) = input_held(down, pressed, held, dt) {
+            return Some((Action::Move(dir), fresh));
         }
     }
 
-    // Left analog stick (edge-triggered, no repeat)
+    // Left analog stick (edge-triggered, no repeat) — always fresh
     let stick_y = gp_stick_value(gp, index, GamepadAxis::LeftY);
     let stick_x = gp_stick_value(gp, index, GamepadAxis::LeftX);
 
@@ -376,7 +421,7 @@ fn poll_gamepad_action(
     if let Some(dir) = stick_dir
         && !stick_active[dir]
     {
-        result = Some(Action::Move(dir));
+        result = Some((Action::Move(dir), true));
     }
     for (dir, active) in stick_active.iter_mut() {
         *active = stick_dir == Some(dir);
@@ -390,8 +435,8 @@ fn poll_gamepad_action(
         gp_btn_down(gp, index, GamepadButton::South) || gp_btn_down(gp, index, GamepadButton::East);
     let stall_pressed = gp_btn_pressed(gp, index, GamepadButton::South)
         || gp_btn_pressed(gp, index, GamepadButton::East);
-    if input_held(stall_down, stall_pressed, held_stall, dt) {
-        return Some(Action::Stall);
+    if let Some(fresh) = input_held(stall_down, stall_pressed, held_stall, dt) {
+        return Some((Action::Stall, fresh));
     }
 
     None
@@ -444,17 +489,39 @@ fn any_gp_pressed_multi(gp: &GamepadContext, btns: &[GamepadButton]) -> bool {
 
 const UNDO_REPEAT_RATE: f32 = 0.05;
 
-fn input_held(down: bool, pressed: bool, held: &mut f32, dt: f32) -> bool {
+/// Sentinel value: input is suppressed until the key/button is released.
+const SUPPRESSED: f32 = -1.0;
+
+/// Returns `Some(true)` for a fresh press, `Some(false)` for a held-repeat, `None` for no input.
+fn input_held(down: bool, pressed: bool, held: &mut f32, dt: f32) -> Option<bool> {
+    if *held == SUPPRESSED {
+        if !down {
+            *held = 0.0;
+        }
+        return None;
+    }
     if down {
         *held += dt;
-        pressed || *held > REPEAT_DELAY
+        if pressed {
+            Some(true)
+        } else if *held > REPEAT_DELAY {
+            Some(false)
+        } else {
+            None
+        }
     } else {
         *held = 0.0;
-        false
+        None
     }
 }
 
 fn input_repeat(down: bool, pressed: bool, held: &mut f32, dt: f32) -> bool {
+    if *held == SUPPRESSED {
+        if !down {
+            *held = 0.0;
+        }
+        return false;
+    }
     if down {
         *held += dt;
         pressed || (*held > REPEAT_DELAY && *held % UNDO_REPEAT_RATE < dt)

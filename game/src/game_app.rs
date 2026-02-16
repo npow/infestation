@@ -31,6 +31,9 @@ fn load_level(name: &str, completed_levels: &mut HashSet<String>) -> Game {
 struct PendingAction {
     action: Action,
     synced: bool,
+    /// Whether this was from a fresh key press (not a held-repeat).
+    /// Held-repeat pending is cleared when the key is released.
+    fresh: bool,
 }
 
 pub struct App {
@@ -192,6 +195,7 @@ impl App {
                     self.pending[Player::Player1] = Some(PendingAction {
                         action: Action::Stall,
                         synced: false,
+                        fresh: true,
                     });
                 }
             }
@@ -405,11 +409,16 @@ impl App {
                 let player_actions = self.input.poll_player_actions(&self.gamepad, dt);
                 let player_count = self.game.state.player_count();
                 for (player, player_action) in player_actions.iter().take(player_count) {
-                    if let Some((action, synced)) = player_action {
+                    if let Some(input) = player_action {
                         self.pending[player] = Some(PendingAction {
-                            action: *action,
-                            synced: *synced,
+                            action: input.action,
+                            synced: input.synced,
+                            fresh: input.fresh,
                         });
+                    } else if self.pending[player].is_some_and(|p| !p.fresh) {
+                        // Key was released — clear held-repeat pending so it doesn't
+                        // fire as a stale buffered move after animation finishes.
+                        self.pending[player] = None;
                     }
                 }
             }
@@ -422,6 +431,7 @@ impl App {
                             self.pending[Player::Player1] = Some(PendingAction {
                                 action: Action::Move(dir),
                                 synced: false,
+                                fresh: true,
                             });
                         }
                     }
