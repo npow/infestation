@@ -2,9 +2,14 @@
   "name": "Cooperation",
   "portals": [
     {
-      "x": 2,
-      "y": 3,
+      "x": 1,
+      "y": 2,
       "level": "cooperation/tug_of_war"
+    },
+    {
+      "x": 3,
+      "y": 2,
+      "level": "cooperation/handoff"
     },
     {
       "x": 2,
