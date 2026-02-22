@@ -76,30 +76,13 @@ pub enum ControllerType {
 }
 
 impl ControllerType {
-    /// Detect controller type from device name string.
-    pub fn from_name(name: &str) -> Self {
-        let name_lower = name.to_lowercase();
-        if name_lower.contains("xbox")
-            || name_lower.contains("xinput")
-            || name_lower.contains("microsoft")
-        {
-            ControllerType::Xbox
-        } else if name_lower.contains("playstation")
-            || name_lower.contains("dualshock")
-            || name_lower.contains("dualsense")
-            || name_lower.contains("sony")
-            || name_lower.contains("ps4")
-            || name_lower.contains("ps5")
-        {
-            ControllerType::PlayStation
-        } else if name_lower.contains("nintendo")
-            || name_lower.contains("switch")
-            || name_lower.contains("joy-con")
-            || name_lower.contains("pro controller")
-        {
-            ControllerType::Nintendo
-        } else {
-            ControllerType::Generic
+    /// Detect controller type from USB vendor ID.
+    pub fn from_vendor_id(vendor_id: u16) -> Self {
+        match vendor_id {
+            0x045e => ControllerType::Xbox,
+            0x054c => ControllerType::PlayStation,
+            0x057e => ControllerType::Nintendo,
+            _ => ControllerType::Generic,
         }
     }
 }
@@ -234,8 +217,7 @@ impl GamepadContext {
                     if slot < 4 {
                         ctx.gilrs_mapping.insert(id, slot);
                         ctx.gamepads[slot].connected = true;
-                        ctx.gamepads[slot].controller_type =
-                            ControllerType::from_name(gamepad.name());
+                        ctx.gamepads[slot].controller_type = controller_type_from_gamepad(&gamepad);
                     }
                 }
             }
@@ -288,7 +270,7 @@ impl GamepadContext {
                             self.gamepads[slot].set_connected(true);
                             let gp = gilrs.gamepad(id);
                             self.gamepads[slot]
-                                .set_controller_type(ControllerType::from_name(gp.name()));
+                                .set_controller_type(controller_type_from_gamepad(&gp));
                         }
                     }
                 }
@@ -391,6 +373,14 @@ impl GamepadContext {
                 -sapp_gamepad_axis(i as i32, 3)
             });
         }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn controller_type_from_gamepad(gamepad: &gilrs::Gamepad) -> ControllerType {
+    match gamepad.vendor_id() {
+        Some(id) => ControllerType::from_vendor_id(id),
+        None => ControllerType::Generic,
     }
 }
 

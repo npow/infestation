@@ -3,19 +3,17 @@
 
 // Controller type detection from gamepad.id string
 // Returns: 0=Xbox, 1=PlayStation, 2=Nintendo, 3=Generic
+// Browsers embed USB vendor/product IDs in the id string:
+//   Chrome: "... (STANDARD GAMEPAD Vendor: 054c Product: 09cc)"
+//   Firefox/Safari: "054c-09cc-Wireless Controller"
+var VENDOR_TYPES = {"045e": 0, "054c": 1, "057e": 2}; // Xbox, PlayStation, Nintendo
 function detectControllerType(name) {
     if (!name) return 3;
     var lower = name.toLowerCase();
-    if (lower.includes("xbox") || lower.includes("xinput") || lower.includes("microsoft")) {
-        return 0;
-    } else if (lower.includes("playstation") || lower.includes("dualshock") ||
-               lower.includes("dualsense") || lower.includes("sony") ||
-               lower.includes("ps4") || lower.includes("ps5")) {
-        return 1;
-    } else if (lower.includes("nintendo") || lower.includes("switch") ||
-               lower.includes("joy-con") || lower.includes("pro controller")) {
-        return 2;
-    }
+    // Try to extract vendor ID
+    var match = lower.match(/vendor:?\s*([0-9a-f]{4})/) ||
+                lower.match(/^([0-9a-f]{4})-[0-9a-f]{4}-/);
+    if (match && match[1] in VENDOR_TYPES) return VENDOR_TYPES[match[1]];
     return 3;
 }
 
