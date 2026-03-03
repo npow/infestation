@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use enum_map::Enum;
+use serde::{Deserialize, Serialize};
 
 use crate::direction::{Dir4, Dir8};
 use crate::position::Position;
@@ -8,8 +9,11 @@ use crate::position::Position;
 mod parse;
 pub(crate) use parse::{LevelMetadata, NoteText};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Enum)]
-pub(crate) enum Player {
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Enum, Serialize, Deserialize,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum Player {
     Player1,
     Player2,
 }
@@ -105,7 +109,7 @@ impl Grid {
         }
     }
 
-    pub fn to_csv(&self) -> String {
+    pub(crate) fn to_csv(&self) -> String {
         let mut lines = Vec::new();
         for y in 0..self.height {
             let mut row = Vec::new();

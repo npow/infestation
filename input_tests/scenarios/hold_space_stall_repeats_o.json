@@ -1,0 +1,38 @@
+[
+  {
+    "frame": 0,
+    "output": {
+      "player_actions": ["stall"]
+    }
+  },
+  {
+    "frame": 16,
+    "output": {
+      "player_actions": ["stall"]
+    }
+  },
+  {
+    "frame": 19,
+    "output": {
+      "player_actions": ["stall"]
+    }
+  },
+  {
+    "frame": 22,
+    "output": {
+      "player_actions": ["stall"]
+    }
+  },
+  {
+    "frame": 25,
+    "output": {
+      "player_actions": ["stall"]
+    }
+  },
+  {
+    "frame": 28,
+    "output": {
+      "player_actions": ["stall"]
+    }
+  }
+]

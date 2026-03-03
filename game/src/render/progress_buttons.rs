@@ -16,7 +16,7 @@ pub(crate) enum ProgressAction {
     Import,
 }
 
-fn button_rects(font: &Font) -> [(f32, f32, f32, f32, ProgressAction); 2] {
+pub(crate) fn button_rects(font: &Font) -> [(f32, f32, f32, f32, ProgressAction); 2] {
     let export_w = measure_text_f(EXPORT_LABEL, font, FONT_SIZE).width + 20.0;
     let import_w = measure_text_f(IMPORT_LABEL, font, FONT_SIZE).width + 20.0;
     let btn_w = export_w.max(import_w);
@@ -58,15 +58,6 @@ pub(crate) fn draw(font: &Font) {
             text_color,
         );
     }
-}
-
-pub(crate) fn hit(pos: Vec2, font: &Font) -> Option<ProgressAction> {
-    for (bx, by, bw, bh, action) in button_rects(font) {
-        if pos.x >= bx && pos.x < bx + bw && pos.y >= by && pos.y < by + bh {
-            return Some(action);
-        }
-    }
-    None
 }
 
 // === Export Overlay ===
@@ -141,9 +132,9 @@ fn overlay_layout(
     )
 }
 
-pub(crate) fn overlay_copy_hit(pos: Vec2, encoded: &str, font: &Font) -> bool {
+pub(crate) fn overlay_copy_rect(encoded: &str, font: &Font) -> (f32, f32, f32, f32) {
     let (_, _, _, _, _, _, btn_x, btn_y, btn_w, btn_h) = overlay_layout(encoded, font);
-    pos.x >= btn_x && pos.x < btn_x + btn_w && pos.y >= btn_y && pos.y < btn_y + btn_h
+    (btn_x, btn_y, btn_w, btn_h)
 }
 
 pub(crate) fn draw_overlay(overlay: &ExportOverlay, font: &Font) {

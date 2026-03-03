@@ -4,10 +4,8 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
+use crate::game::{Action, Game, PlayState};
 use crate::grid::Grid;
-
-pub use crate::direction::Dir4;
-pub use crate::game::{Action, Game, PlayState};
 
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
@@ -29,17 +27,12 @@ pub fn game_from_csv(csv: &str) -> Game {
     Game::new(Grid::from_csv(csv), HashSet::new())
 }
 
-/// Get the grid as CSV.
-pub fn grid_to_csv(game: &Game) -> String {
-    game.state.grid.to_csv()
-}
+impl Game {
+    pub fn grid_to_csv(&self) -> String {
+        self.state.grid.to_csv()
+    }
 
-/// Get the current play state.
-pub fn play_state(game: &Game) -> PlayState {
-    game.state.play_state()
-}
-
-/// Apply multiple player actions to a game.
-pub fn apply_actions(game: &mut Game, actions: &[Action]) -> bool {
-    game.apply_actions(actions)
+    pub fn play_state(&self) -> PlayState {
+        self.state.play_state()
+    }
 }

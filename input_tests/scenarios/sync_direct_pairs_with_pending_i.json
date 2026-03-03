@@ -1,0 +1,16 @@
+{
+  "context": {
+    "player_count": 2,
+    "play_state": "playing",
+    "can_undo": true,
+    "can_exit": true
+  },
+  "events": [
+    { "t": 0.0, "key": "W", "action": "press" },
+    { "t": 0.0, "key": "LeftShift", "action": "press" },
+    { "t": 0.016, "key": "W", "action": "release" },
+    { "t": 0.016, "key": "LeftShift", "action": "release" },
+    { "t": 0.1, "key": "Right", "action": "press" },
+    { "t": 0.116, "key": "Right", "action": "release" }
+  ]
+}

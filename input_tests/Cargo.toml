@@ -1,0 +1,13 @@
+[package]
+name = "input_tests"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+infestation = { path = "../game" }
+
+enum-map = "*"
+macroquad = "*"
+quad-gamepad = { path = "../quad-gamepad" }
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"

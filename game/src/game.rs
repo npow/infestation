@@ -5,6 +5,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Deserialize, Serialize};
 
 use crate::direction::Dir4;
+use crate::enum_all::EnumAll;
 use crate::grid::{Cell, Grid, NoteText, Player};
 use crate::levels;
 use crate::position::Position;
@@ -13,7 +14,7 @@ use crate::storage::strip_path_prefix;
 static ALL_LEVELS_UNLOCKED: AtomicBool = AtomicBool::new(false);
 
 #[unsafe(no_mangle)]
-pub extern "C" fn unlock_all_levels() {
+pub(crate) extern "C" fn unlock_all_levels() {
     ALL_LEVELS_UNLOCKED.store(true, Ordering::Relaxed);
 }
 
@@ -27,12 +28,12 @@ mod zap;
 
 /// Information about a player for movement resolution.
 #[derive(Clone, Copy)]
-pub struct PlayerInfo {
-    pub pos: Position,
-    pub dir: Dir4,
+pub(crate) struct PlayerInfo {
+    pub(crate) pos: Position,
+    pub(crate) dir: Dir4,
     /// True if the player moved (not just stalled) this turn.
-    pub moved: bool,
-    pub player: Player,
+    pub(crate) moved: bool,
+    pub(crate) player: Player,
 }
 
 const MOVE_SPEED: f32 = 15.0;
@@ -147,7 +148,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
 /// Core game state without animation.
 #[derive(Clone)]
-pub struct GameState {
+pub(crate) struct GameState {
     pub(crate) grid: Grid,
     pub(crate) initial_grid: Grid,
     pub(crate) history: Vec<Grid>,
@@ -247,6 +248,12 @@ impl GameState {
         let portal = self.standing_on_portal()?;
         self.is_level_completed(portal)
             .then(|| levels::get_level(portal).map(|l| l.display_name.as_str()))?
+    }
+
+    /// Returns true if the given player is standing on a completed portal.
+    pub(crate) fn player_on_completed_portal(&self, player: Player) -> bool {
+        self.player_standing_on_portal(player)
+            .is_some_and(|portal| self.is_level_completed(portal))
     }
 
     /// Returns the portal destination if any player just stepped onto an unvisited portal (auto-enter).
@@ -362,8 +369,7 @@ impl Game {
         }
 
         // Track which player(s) moved for note priority
-        let moving_players: Vec<Player> = [Player::Player1, Player::Player2]
-            .into_iter()
+        let moving_players: Vec<Player> = Player::iter_all()
             .zip(actions.iter())
             .filter_map(|(player, action)| matches!(action, Action::Move(_)).then_some(player))
             .collect();

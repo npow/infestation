@@ -1,0 +1,8 @@
+[
+  {
+    "frame": 2,
+    "output": {
+      "player_actions": ["north", "stall"]
+    }
+  }
+]

@@ -6,6 +6,7 @@ use std::str;
 use macroquad::prelude::*;
 
 use crate::direction::{Dir4, Dir8};
+use crate::enum_all::EnumAll;
 use enum_map::EnumMap;
 
 use crate::game::{Action, Game, PlayState};
@@ -310,21 +311,16 @@ impl Editor {
             return;
         }
 
-        let players = &[Player::Player1, Player::Player2][..player_count];
-        let has_non_synced = players
-            .iter()
-            .any(|&p| self.pending[p].is_some_and(|pa| !pa.synced));
-        let all_synced = players
-            .iter()
-            .all(|&p| self.pending[p].is_some_and(|pa| pa.synced));
+        let players = || Player::iter_all().take(player_count);
+        let has_non_synced = players().any(|p| self.pending[p].is_some_and(|pa| !pa.synced));
+        let all_synced = players().all(|p| self.pending[p].is_some_and(|pa| pa.synced));
 
         if !has_non_synced && !all_synced {
             return;
         }
 
-        let actions: Vec<Action> = players
-            .iter()
-            .map(|&p| {
+        let actions: Vec<Action> = players()
+            .map(|p| {
                 self.pending[p]
                     .take()
                     .map(|pa| pa.action)

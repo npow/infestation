@@ -526,7 +526,7 @@ fn wrap_text(text: &str, font: &Font, font_size: u16, max_width: f32) -> Vec<Str
     lines
 }
 
-fn cell_size(game: &Game) -> f32 {
+pub(crate) fn cell_size(game: &Game) -> f32 {
     let width = screen_width();
     let height = screen_height() - DIALOGUE_HEIGHT - BUTTON_BAR_HEIGHT - BOTTOM_SAFE_AREA;
     let cell_w = (width - PADDING * 2.0) / game.grid_width() as f32;
@@ -534,7 +534,7 @@ fn cell_size(game: &Game) -> f32 {
     cell_w.min(cell_h)
 }
 
-fn grid_offset(game: &Game) -> (f32, f32) {
+pub(crate) fn grid_offset(game: &Game) -> (f32, f32) {
     let cell = cell_size(game);
     let grid_w = game.grid_width() as f32 * cell;
     let offset_x = (screen_width() - grid_w) / 2.0;
@@ -604,7 +604,7 @@ fn button_labels(on_portal: bool, hints: InputHints) -> [(&'static str, ButtonAc
     ]
 }
 
-fn button_rects(
+pub(crate) fn button_rects(
     on_portal: bool,
     hints: InputHints,
     bar_y: f32,
@@ -698,29 +698,4 @@ fn render_button_bar(ui: &UiState, is_playing: bool, hints: InputHints, bar_y: f
             text_color,
         );
     }
-}
-
-/// Returns the button action at the given screen position, if any
-pub(crate) fn button_at_position(
-    pos: Vec2,
-    ui: &UiState,
-    is_playing: bool,
-    hints: InputHints,
-    bar_y: f32,
-    font: &Font,
-) -> Option<ButtonAction> {
-    for (bx, by, bw, bh, action) in button_rects(ui.on_portal, hints, bar_y, font) {
-        if pos.x >= bx && pos.x < bx + bw && pos.y >= by && pos.y < by + bh {
-            let enabled = match action {
-                ButtonAction::Reset => ui.can_reset,
-                ButtonAction::Undo => ui.can_undo,
-                ButtonAction::Stall => is_playing,
-                ButtonAction::Exit => ui.can_exit,
-            };
-            if enabled {
-                return Some(action);
-            }
-        }
-    }
-    None
 }

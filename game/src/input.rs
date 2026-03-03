@@ -1,546 +1,862 @@
+use std::collections::HashSet;
+use std::mem;
+
 use enum_map::{Enum, EnumMap};
 use macroquad::prelude::*;
-use quad_gamepad::{GamepadAxis, GamepadButton, GamepadContext};
+use quad_gamepad::{GamepadAxis, GamepadButton, GamepadContext, GamepadState};
+use serde::{Deserialize, Serialize};
 
 use crate::direction::Dir4;
-use crate::game::Action;
+use crate::enum_all::EnumAll;
+use crate::game::{Action, PlayState};
 use crate::grid::Player;
 
-#[derive(Debug, Clone, Copy, Enum)]
-enum Gamepad {
-    Gamepad1,
-    Gamepad2,
-}
-
-impl Gamepad {
-    fn index(self) -> usize {
-        match self {
-            Gamepad::Gamepad1 => 0,
-            Gamepad::Gamepad2 => 1,
-        }
-    }
-}
-
-const REPEAT_DELAY: f32 = 0.2;
-const STICK_THRESHOLD: f32 = 0.5;
+const INITIAL_DELAY: f32 = 0.25;
+const REPEAT_INTERVAL: f32 = 0.05;
+const AUTO_SYNC_DELAY: f32 = 0.05;
+const STICK_DEADZONE: f32 = 0.5;
 const SWIPE_THRESHOLD: f32 = 30.0;
 
-/// Number of input sources: [0]=arrows, [1]=WASD, [2]=gamepad0, [3]=gamepad1.
-const NUM_SOURCES: usize = 4;
-
-const ARROW_SYNC: KeyCode = KeyCode::RightShift;
-const WASD_SYNC: KeyCode = KeyCode::LeftShift;
-
-fn arrow_key(dir: Dir4) -> KeyCode {
-    match dir {
-        Dir4::North => KeyCode::Up,
-        Dir4::South => KeyCode::Down,
-        Dir4::East => KeyCode::Right,
-        Dir4::West => KeyCode::Left,
-    }
-}
-
-fn wasd_key(dir: Dir4) -> KeyCode {
-    match dir {
-        Dir4::North => KeyCode::W,
-        Dir4::South => KeyCode::S,
-        Dir4::East => KeyCode::D,
-        Dir4::West => KeyCode::A,
-    }
-}
-
-fn dpad_button(dir: Dir4) -> GamepadButton {
-    match dir {
-        Dir4::North => GamepadButton::DPadUp,
-        Dir4::South => GamepadButton::DPadDown,
-        Dir4::East => GamepadButton::DPadRight,
-        Dir4::West => GamepadButton::DPadLeft,
-    }
-}
-
-/// A player action with metadata from input polling.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct PlayerInput {
-    pub(crate) action: Action,
-    pub(crate) synced: bool,
-    /// Whether this was triggered by a fresh key press (not a held-repeat).
-    pub(crate) fresh: bool,
-}
+// --- Output ---
 
 /// A meta input action (not per-player).
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub(crate) enum MetaInput {
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MetaInput {
     Undo,
     Restart,
     Exit,
-    /// Confirm action from a specific player.
-    Confirm(Player),
+    Confirm(Option<Player>), // None for spacebar if no controller is plugged in
+    Export,
+    Import,
+    OverlayCopy,
+    EmailSolution,
 }
 
-/// A touch gesture result.
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum TouchGesture {
-    Swipe(Dir4),
-    Tap(Vec2),
+/// What the input system produces each frame.
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FrameOutput {
+    /// No actionable input this frame.
+    None,
+    /// Player actions ready to execute (sync resolved).
+    PlayerActions(Vec<Action>),
+    /// A single meta action.
+    #[serde(rename = "meta")]
+    MetaAction(MetaInput),
 }
 
-/// Tracks held state for input repeat and touch gesture detection.
-pub(crate) struct InputState {
-    /// Per-source directional held timers: [arrows, WASD, gamepad0, gamepad1][dir].
-    held_move: [EnumMap<Dir4, f32>; NUM_SOURCES],
-    /// Stall held timer for spacebar.
-    held_stall_space: f32,
-    /// Stall held timers per gamepad.
-    held_stall_gp: EnumMap<Gamepad, f32>,
-    /// Meta action held timers.
-    held_undo: f32,
-    held_confirm: EnumMap<Player, f32>,
-    /// Per-gamepad analog stick edge detection.
-    stick_active: EnumMap<Gamepad, EnumMap<Dir4, bool>>,
-    touch_start: Option<(u64, Vec2)>,
-    touch_handled_this_frame: bool,
+/// A single player's input for one frame: a direction and whether it's synced.
+#[derive(Clone, Copy)]
+struct PlayerInput {
+    dir: Dir4,
+    synced: bool,
 }
 
-impl InputState {
-    pub(crate) fn new() -> Self {
-        Self {
-            held_move: Default::default(),
-            held_stall_space: 0.0,
-            held_stall_gp: EnumMap::default(),
-            held_undo: 0.0,
-            held_confirm: EnumMap::default(),
-            stick_active: EnumMap::default(),
-            touch_start: None,
-            touch_handled_this_frame: false,
+/// What the input system collected this frame (after polling all sources).
+#[derive(Clone, Copy)]
+enum HeldInput {
+    /// A player-agnostic "stall" (spacebar, click-stall, gamepad A with no dirs).
+    Stall,
+    /// Per-player directional inputs. `None` = that player provided nothing.
+    Independent(EnumMap<Player, Option<PlayerInput>>),
+}
+
+// --- Input ---
+
+/// All raw input for a single frame. Constructed by [`read_frame_input`].
+pub struct FrameInput {
+    /// Keys that transitioned to down this frame.
+    pub keys_pressed: HashSet<KeyCode>,
+    /// Keys currently held down.
+    pub keys_down: HashSet<KeyCode>,
+    /// Gamepad states (indices 0 and 1), cloned from GamepadContext.
+    pub gamepads: EnumMap<GamepadSource, GamepadState>,
+    /// Touch events this frame.
+    pub touches: Vec<Touch>,
+    /// Mouse left-click position (if pressed this frame).
+    pub mouse_click: Option<Vec2>,
+    /// Frame delta time.
+    pub dt: f32,
+}
+
+// --- Game context ---
+
+/// What a click/tap on a UI element should do.
+#[derive(Clone, Copy)]
+pub(crate) enum ClickAction {
+    Meta(MetaInput),
+    Stall,
+}
+
+/// Subset of game state the input processor needs to make decisions.
+#[derive(Clone, Deserialize)]
+pub struct GameContext {
+    pub player_count: usize,
+    #[serde(default)]
+    pub is_animating: bool,
+    #[serde(default = "default_play_state")]
+    pub play_state: PlayState,
+    #[serde(default)]
+    pub can_undo: bool,
+    #[serde(default)]
+    pub can_exit: bool,
+    /// A confirmation dialog is showing — suppress player actions,
+    /// only produce Confirm/Undo/Exit meta actions.
+    #[serde(default)]
+    pub dialog_active: bool,
+    /// An overlay is showing — suppress everything except Exit and
+    /// click-target hits (e.g. copy button).
+    #[serde(default)]
+    pub overlay_active: bool,
+    /// Which players are currently standing on a completed portal.
+    #[serde(skip)]
+    pub(crate) on_completed_portal: EnumMap<Player, bool>,
+    /// Clickable UI regions and their actions, computed by game_app
+    /// from the current layout each frame.
+    #[serde(skip)]
+    pub(crate) click_targets: Vec<(Rect, ClickAction)>,
+}
+
+fn default_play_state() -> PlayState {
+    PlayState::Playing
+}
+
+// --- Processor ---
+
+#[derive(Clone, Copy, Enum)]
+enum KeyboardSource {
+    Arrows,
+    Wasd,
+}
+
+#[derive(Clone, Copy, Enum)]
+pub enum GamepadSource {
+    Gamepad0,
+    Gamepad1,
+}
+impl GamepadSource {
+    fn from_player(player: Player) -> GamepadSource {
+        match player {
+            Player::Player1 => Self::Gamepad0,
+            Player::Player2 => Self::Gamepad1,
         }
     }
 
-    /// Reset all held timers, suppressing currently-held keys until they are released.
-    /// This prevents key presses from "carrying over" across level transitions.
-    pub(crate) fn reset(&mut self) {
-        for source in &mut self.held_move {
-            for (_, held) in source.iter_mut() {
-                *held = SUPPRESSED;
+    fn index(&self) -> usize {
+        match self {
+            GamepadSource::Gamepad0 => 0,
+            GamepadSource::Gamepad1 => 1,
+        }
+    }
+}
+
+impl KeyboardSource {
+    fn move_keys(&self) -> EnumMap<Dir4, KeyCode> {
+        match self {
+            Self::Arrows => enum_map::enum_map! {
+                Dir4::North => KeyCode::Up,
+                Dir4::South => KeyCode::Down,
+                Dir4::East => KeyCode::Right,
+                Dir4::West => KeyCode::Left,
+            },
+            Self::Wasd => enum_map::enum_map! {
+                Dir4::North => KeyCode::W,
+                Dir4::South => KeyCode::S,
+                Dir4::East => KeyCode::D,
+                Dir4::West => KeyCode::A,
+            },
+        }
+    }
+
+    fn sync_key(&self) -> KeyCode {
+        match self {
+            Self::Arrows => KeyCode::RightShift,
+            Self::Wasd => KeyCode::LeftShift,
+        }
+    }
+}
+
+struct RepeatTracker {
+    dir: Dir4,
+    delay: f32,
+}
+
+struct TouchState {
+    id: u64,
+    start: Vec2,
+    swiped: bool,
+}
+
+/// Processes raw input into game actions. Holds internal state for
+/// sync buffering, animation buffering, key repeat, and touch tracking.
+#[derive(Default)]
+pub struct InputProcessor {
+    pending_sync: EnumMap<Player, Option<Dir4>>,
+    animation_buffer: Option<HeldInput>,
+    /// Per-player: true if the buffer entry came from an edge trigger (not a repeat).
+    buffer_from_edge: EnumMap<Player, bool>,
+    /// True if the buffered stall came from an edge trigger (not a repeat).
+    stall_buffer_from_edge: bool,
+    auto_sync_timer: Option<f32>,
+    /// When true, the auto-sync timer was started from an edge trigger, so
+    /// both players pairing up should emit immediately (no original delay to preserve).
+    auto_sync_from_edge: bool,
+    repeat: EnumMap<Player, Option<RepeatTracker>>,
+    touch: Option<TouchState>,
+    stall_repeat: Option<f32>,
+    /// Suppress stall until all stall keys are released (after a meta action consumed the press).
+    suppress_stall: bool,
+    undo_repeat: Option<f32>,
+}
+
+impl InputProcessor {
+    fn emit_meta(&mut self, meta: MetaInput) -> FrameOutput {
+        self.animation_buffer = None;
+        self.pending_sync = EnumMap::default();
+        self.auto_sync_timer = None;
+        self.suppress_stall = true;
+        FrameOutput::MetaAction(meta)
+    }
+
+    /// Process one frame of input and return what happened.
+    pub fn process(&mut self, input: &FrameInput, ctx: &GameContext) -> FrameOutput {
+        let (swipe_dir, tap_pos) = self.update_touch(input);
+
+        // Click/tap on UI targets → meta actions take priority
+        let click_pos = input.mouse_click.or(tap_pos);
+        let mut stall_from_click = false;
+        if let Some(pos) = click_pos {
+            match hit_click_target(pos, &ctx.click_targets) {
+                Some(ClickAction::Meta(meta)) => return self.emit_meta(meta),
+                Some(ClickAction::Stall) => stall_from_click = true,
+                None => {}
             }
         }
-        self.held_stall_space = SUPPRESSED;
-        for (_, held) in self.held_stall_gp.iter_mut() {
-            *held = SUPPRESSED;
-        }
-        self.held_undo = SUPPRESSED;
-        for (_, held) in self.held_confirm.iter_mut() {
-            *held = SUPPRESSED;
-        }
-        // Set all stick directions as active so edge-detection won't fire until released.
-        for (_, dirs) in self.stick_active.iter_mut() {
-            for (_, active) in dirs.iter_mut() {
-                *active = true;
+
+        // Keyboard/gamepad meta actions
+        if let Some(meta) = check_meta(input, ctx) {
+            if matches!(meta, MetaInput::Undo) {
+                self.undo_repeat = Some(INITIAL_DELAY);
             }
-        }
-    }
-
-    /// Poll meta actions (undo, restart, exit, confirm) from keyboard + any gamepad.
-    pub(crate) fn poll_meta_inputs(&mut self, gamepad: &GamepadContext, dt: f32) -> Vec<MetaInput> {
-        let mut inputs = Vec::new();
-
-        // Restart (R / LB / LT on any gamepad)
-        if is_key_pressed(KeyCode::R)
-            || any_gp_pressed_multi(
-                gamepad,
-                &[GamepadButton::LeftShoulder, GamepadButton::LeftTrigger],
-            )
-        {
-            inputs.push(MetaInput::Restart);
+            return self.emit_meta(meta);
         }
 
-        // Undo with repeat (U / X / Y on any gamepad)
-        let undo_down = is_key_down(KeyCode::U)
-            || any_gp_down_multi(gamepad, &[GamepadButton::West, GamepadButton::North]);
-        let undo_pressed = is_key_pressed(KeyCode::U)
-            || any_gp_pressed_multi(gamepad, &[GamepadButton::West, GamepadButton::North]);
-        if input_repeat(undo_down, undo_pressed, &mut self.held_undo, dt) {
-            inputs.push(MetaInput::Undo);
-        }
-
-        // Per-player confirm with repeat: Space → both, gp0 → P1, gp1 → P2
-        let space_down = is_key_down(KeyCode::Space);
-        let space_pressed = is_key_pressed(KeyCode::Space);
-        let confirm_sources: [(bool, bool, Player); 4] = [
-            (space_down, space_pressed, Player::Player1),
-            (space_down, space_pressed, Player::Player2),
-            (
-                gp_btn_down_multi(
-                    gamepad,
-                    Gamepad::Gamepad1.index(),
-                    &[GamepadButton::South, GamepadButton::East],
-                ),
-                gp_btn_pressed_multi(
-                    gamepad,
-                    Gamepad::Gamepad1.index(),
-                    &[GamepadButton::South, GamepadButton::East],
-                ),
-                Player::Player1,
-            ),
-            (
-                gp_btn_down_multi(
-                    gamepad,
-                    Gamepad::Gamepad2.index(),
-                    &[GamepadButton::South, GamepadButton::East],
-                ),
-                gp_btn_pressed_multi(
-                    gamepad,
-                    Gamepad::Gamepad2.index(),
-                    &[GamepadButton::South, GamepadButton::East],
-                ),
-                Player::Player2,
-            ),
-        ];
-        for (down, pressed, player) in confirm_sources {
-            if input_repeat(down, pressed, &mut self.held_confirm[player], dt) {
-                inputs.push(MetaInput::Confirm(player));
-            }
-        }
-
-        // Exit (Escape / Start on any gamepad)
-        if is_key_pressed(KeyCode::Escape) || any_gp_pressed(gamepad, GamepadButton::Start) {
-            inputs.push(MetaInput::Exit);
-        }
-
-        inputs
-    }
-
-    /// Poll all input sources and return per-player actions.
-    /// Arrow keys are P1 normally, but become P2 if gamepad 1 is connected.
-    pub(crate) fn poll_player_actions(
-        &mut self,
-        gamepad: &GamepadContext,
-        dt: f32,
-    ) -> EnumMap<Player, Option<PlayerInput>> {
-        let controller_connected = gamepad
-            .gamepad(Gamepad::Gamepad1.index())
-            .is_some_and(|g| g.is_connected());
-        let arrow_player = if controller_connected {
-            Player::Player2
-        } else {
-            Player::Player1
-        };
-
-        let mut result: EnumMap<Player, Option<PlayerInput>> = EnumMap::default();
-
-        // Source 0: Arrow keys → arrow_player
-        if let Some((action, fresh)) = poll_keys_dir(arrow_key, &mut self.held_move[0], dt) {
-            let synced = is_key_down(ARROW_SYNC);
-            result[arrow_player] = Some(PlayerInput {
-                action,
-                synced,
-                fresh,
-            });
-        }
-
-        // Source 1: WASD → always P2
-        if let Some((action, fresh)) = poll_keys_dir(wasd_key, &mut self.held_move[1], dt) {
-            let synced = is_key_down(WASD_SYNC);
-            result[Player::Player2] = Some(PlayerInput {
-                action,
-                synced,
-                fresh,
-            });
-        }
-
-        // Spacebar stalls both players (not synced)
-        if let Some(fresh) = input_held(
-            is_key_down(KeyCode::Space),
-            is_key_pressed(KeyCode::Space),
-            &mut self.held_stall_space,
-            dt,
-        ) {
-            let stall = PlayerInput {
-                action: Action::Stall,
-                synced: false,
-                fresh,
-            };
-            result[Player::Player1] = result[Player::Player1].or(Some(stall));
-            result[Player::Player2] = result[Player::Player2].or(Some(stall));
-        }
-
-        // Source 2: Gamepad 1 → always P1
-        if let Some((action, fresh)) = poll_gamepad_action(
-            gamepad,
-            Gamepad::Gamepad1.index(),
-            &mut self.held_move[2],
-            &mut self.held_stall_gp[Gamepad::Gamepad1],
-            &mut self.stick_active[Gamepad::Gamepad1],
-            dt,
-        ) {
-            let synced = gp_btn_down(
-                gamepad,
-                Gamepad::Gamepad1.index(),
-                GamepadButton::RightShoulder,
-            );
-            result[Player::Player1] = Some(PlayerInput {
-                action,
-                synced,
-                fresh,
-            });
-        }
-
-        // Source 3: Gamepad 2 → always P2
-        if let Some((action, fresh)) = poll_gamepad_action(
-            gamepad,
-            Gamepad::Gamepad2.index(),
-            &mut self.held_move[3],
-            &mut self.held_stall_gp[Gamepad::Gamepad2],
-            &mut self.stick_active[Gamepad::Gamepad2],
-            dt,
-        ) {
-            let synced = gp_btn_down(
-                gamepad,
-                Gamepad::Gamepad2.index(),
-                GamepadButton::RightShoulder,
-            );
-            result[Player::Player2] = Some(PlayerInput {
-                action,
-                synced,
-                fresh,
-            });
-        }
-
-        result
-    }
-
-    /// Poll touch input for gestures. Call once per frame before poll_mouse_click.
-    pub(crate) fn poll_touch(&mut self) -> Option<TouchGesture> {
-        self.touch_handled_this_frame = false;
-
-        for touch in touches() {
-            match touch.phase {
-                TouchPhase::Started => {
-                    self.touch_start = Some((touch.id, touch.position));
+        // Undo repeat (key held after initial press)
+        if ctx.can_undo && !ctx.dialog_active && !ctx.overlay_active && undo_keys_held(input) {
+            if let Some(ref mut delay) = self.undo_repeat {
+                *delay -= input.dt;
+                if *delay <= 0.0 {
+                    *delay += REPEAT_INTERVAL;
+                    return self.emit_meta(MetaInput::Undo);
                 }
-                TouchPhase::Ended | TouchPhase::Cancelled => {
-                    if let Some((start_id, start_pos)) = self.touch_start.take() {
-                        if start_id != touch.id {
-                            continue;
-                        }
-                        self.touch_handled_this_frame = true;
-                        let delta = touch.position - start_pos;
+            }
+        } else {
+            self.undo_repeat = None;
+        }
 
-                        return Some(if delta.length() >= SWIPE_THRESHOLD {
-                            TouchGesture::Swipe(swipe_to_direction(delta))
-                        } else {
-                            TouchGesture::Tap(start_pos)
-                        });
-                    }
+        // Player actions only when playing
+        if ctx.play_state != PlayState::Playing {
+            return FrameOutput::None;
+        }
+
+        // Collect held state from all input sources
+        let mut held = Self::collect_held(input, ctx.player_count);
+
+        // Suppress stall until all stall keys are released (after a meta action consumed the press)
+        if matches!(held, HeldInput::Stall) {
+            if self.suppress_stall {
+                held = HeldInput::Independent(EnumMap::default());
+            }
+        } else {
+            self.suppress_stall = false;
+        }
+
+        // Inject swipe for P1 (overrides stall if both happen)
+        if let Some(dir) = swipe_dir {
+            match &mut held {
+                HeldInput::Independent(dirs) if dirs[Player::Player1].is_none() => {
+                    dirs[Player::Player1] = Some(PlayerInput { dir, synced: false });
+                }
+                HeldInput::Stall => {
+                    held = HeldInput::Independent(enum_map::enum_map! {
+                        Player::Player1 => Some(PlayerInput { dir, synced: false }),
+                        Player::Player2 => None,
+                    });
                 }
                 _ => {}
             }
         }
 
+        // Inject stall-click (only if no directions from any source)
+        if stall_from_click
+            && let HeldInput::Independent(ref dirs) = held
+            && dirs.values().all(|v| v.is_none())
+        {
+            held = HeldInput::Stall;
+        }
+
+        match self.player_actions(held, ctx.player_count, ctx.is_animating, input.dt) {
+            Some(actions) => {
+                FrameOutput::PlayerActions(actions.into_values().take(ctx.player_count).collect())
+            }
+            None => FrameOutput::None,
+        }
+    }
+
+    /// Resolve held inputs into actions, handling edge detection,
+    /// key repeat, animation buffering, and sync.
+    /// Returns `None` if no actions this frame.
+    fn player_actions(
+        &mut self,
+        held: HeldInput,
+        player_count: usize,
+        is_animating: bool,
+        dt: f32,
+    ) -> Option<EnumMap<Player, Action>> {
+        match held {
+            HeldInput::Stall => {
+                // Clear directional repeat trackers
+                self.repeat = EnumMap::default();
+
+                // Repeat: fire immediately, then after INITIAL_DELAY, then every REPEAT_INTERVAL
+                let stall_is_edge;
+                match &mut self.stall_repeat {
+                    None => {
+                        self.stall_repeat = Some(INITIAL_DELAY);
+                        stall_is_edge = true;
+                    }
+                    Some(delay) => {
+                        *delay -= dt;
+                        if *delay > 0.0 {
+                            return None;
+                        }
+                        *delay += REPEAT_INTERVAL;
+                        stall_is_edge = false;
+                    }
+                }
+
+                if is_animating {
+                    self.animation_buffer = Some(HeldInput::Stall);
+                    self.stall_buffer_from_edge = stall_is_edge;
+                    if let Some(ref mut timer) = self.auto_sync_timer {
+                        *timer -= dt;
+                    }
+                    return None;
+                }
+
+                // Stall overrides any pending sync
+                self.pending_sync = EnumMap::default();
+                self.auto_sync_timer = None;
+                Some(EnumMap::from_fn(|_| Action::Stall))
+            }
+            HeldInput::Independent(dirs) => {
+                self.stall_repeat = None;
+
+                // Edge detection + repeat per player
+                // In 2-player mode, shorten repeat delays to compensate for auto-sync delay
+                let initial_delay = if player_count > 1 {
+                    (INITIAL_DELAY - AUTO_SYNC_DELAY).max(0.0)
+                } else {
+                    INITIAL_DELAY
+                };
+                let repeat_interval = if player_count > 1 {
+                    (REPEAT_INTERVAL - AUTO_SYNC_DELAY).max(0.0)
+                } else {
+                    REPEAT_INTERVAL
+                };
+                let mut edge: EnumMap<Player, Option<PlayerInput>> = EnumMap::default();
+                let mut is_edge: EnumMap<Player, bool> = EnumMap::default();
+                for player in Player::iter_all() {
+                    let (result, edge_flag) = apply_repeat(
+                        &mut self.repeat[player],
+                        dirs[player],
+                        dt,
+                        initial_delay,
+                        repeat_interval,
+                    );
+                    edge[player] = result;
+                    is_edge[player] = edge_flag;
+                }
+
+                if is_animating {
+                    // Buffer per-player dirs during animation
+                    match &mut self.animation_buffer {
+                        None => {
+                            if edge.values().any(|v| v.is_some()) {
+                                self.animation_buffer = Some(HeldInput::Independent(edge));
+                                for player in Player::iter_all() {
+                                    if edge[player].is_some() {
+                                        self.buffer_from_edge[player] = is_edge[player];
+                                    }
+                                }
+                            }
+                        }
+                        Some(HeldInput::Independent(buf)) => {
+                            for (player, slot) in edge {
+                                if slot.is_some() {
+                                    buf[player] = slot;
+                                    self.buffer_from_edge[player] = is_edge[player];
+                                }
+                            }
+                        }
+                        Some(HeldInput::Stall) => {
+                            if edge.values().any(|v| v.is_some()) {
+                                self.animation_buffer = Some(HeldInput::Independent(edge));
+                                for player in Player::iter_all() {
+                                    if edge[player].is_some() {
+                                        self.buffer_from_edge[player] = is_edge[player];
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Clear repeat-sourced buffer entries when key released
+                    match &mut self.animation_buffer {
+                        Some(HeldInput::Independent(buf)) => {
+                            for player in Player::iter_all() {
+                                if dirs[player].is_none() && !self.buffer_from_edge[player] {
+                                    buf[player] = None;
+                                }
+                            }
+                            if buf.values().all(|v| v.is_none()) {
+                                self.animation_buffer = None;
+                            }
+                        }
+                        Some(HeldInput::Stall) => {
+                            if !self.stall_buffer_from_edge {
+                                self.animation_buffer = None;
+                            }
+                        }
+                        None => {}
+                    }
+
+                    // Start auto-sync timer during animation so it counts down
+                    // in parallel with the animation.
+                    if player_count > 1
+                        && self.auto_sync_timer.is_none()
+                        && edge.values().any(|v| v.is_some())
+                    {
+                        self.auto_sync_timer = Some(AUTO_SYNC_DELAY);
+                        self.auto_sync_from_edge = is_edge.values().any(|&v| v);
+                    }
+                    if let Some(ref mut timer) = self.auto_sync_timer {
+                        *timer -= dt;
+                    }
+                    return None;
+                }
+
+                // Flush animation buffer
+                match self.animation_buffer.take() {
+                    Some(HeldInput::Stall) => {
+                        self.pending_sync = EnumMap::default();
+                        return Some(EnumMap::from_fn(|_| Action::Stall));
+                    }
+                    Some(HeldInput::Independent(buf)) => {
+                        for (player, slot) in buf {
+                            if slot.is_some() && edge[player].is_none() {
+                                edge[player] = slot;
+                            }
+                        }
+                    }
+                    None => {}
+                }
+
+                // Resolve sync and emit
+                let any_edge = is_edge.values().any(|&v| v);
+                self.resolve(edge, player_count, dt, any_edge)
+            }
+        }
+    }
+
+    /// Report what each player is currently holding (no edge detection or repeat).
+    fn collect_held(input: &FrameInput, player_count: usize) -> HeldInput {
+        let gamepad0_connected = input.gamepads[GamepadSource::Gamepad0].is_connected();
+        let single = player_count == 1;
+
+        let mut dirs: EnumMap<Player, Option<PlayerInput>> = EnumMap::default();
+
+        // Keyboard sources (arrows + WASD)
+        let kb_sources = [
+            (
+                KeyboardSource::Arrows,
+                if single || !gamepad0_connected {
+                    Player::Player1
+                } else {
+                    Player::Player2
+                },
+            ),
+            (
+                KeyboardSource::Wasd,
+                if single {
+                    Player::Player1
+                } else {
+                    Player::Player2
+                },
+            ),
+        ];
+        for (src, player) in kb_sources {
+            if let Some(dir) = dir_from_keys(&input.keys_down, src.move_keys()) {
+                let synced = !single && input.keys_down.contains(&src.sync_key());
+                if dirs[player].is_none() {
+                    dirs[player] = Some(PlayerInput { dir, synced });
+                }
+            }
+        }
+
+        // Gamepads (D-pad + right stick)
+        for player in Player::iter_all() {
+            let src = GamepadSource::from_player(player);
+            let gp = &input.gamepads[src];
+            if !gp.is_connected() {
+                continue;
+            }
+
+            let dir = gamepad_dir_held(gp).or_else(|| stick_direction(gp));
+            if let Some(dir) = dir {
+                let synced = !single && gp.is_button_down(GamepadButton::RightShoulder);
+                if dirs[player].is_none() {
+                    dirs[player] = Some(PlayerInput { dir, synced });
+                }
+            }
+        }
+
+        // If any player has a direction, return Independent
+        if dirs.values().any(|v| v.is_some()) {
+            return HeldInput::Independent(dirs);
+        }
+
+        // Check stall sources: gamepad A button, spacebar
+        let gamepad_a_down = input
+            .gamepads
+            .values()
+            .any(|gp| gp.is_button_down(GamepadButton::South));
+        let space_down = input.keys_down.contains(&KeyCode::Space);
+
+        if gamepad_a_down || space_down {
+            return HeldInput::Stall;
+        }
+
+        HeldInput::Independent(dirs) // all None
+    }
+
+    fn update_touch(&mut self, input: &FrameInput) -> (Option<Dir4>, Option<Vec2>) {
+        let mut swipe_dir = None;
+        let mut tap_pos = None;
+
+        for touch in &input.touches {
+            match touch.phase {
+                TouchPhase::Started => {
+                    self.touch = Some(TouchState {
+                        id: touch.id,
+                        start: touch.position,
+                        swiped: false,
+                    });
+                }
+                TouchPhase::Moved | TouchPhase::Stationary => {
+                    if let Some(ref mut state) = self.touch
+                        && state.id == touch.id
+                        && !state.swiped
+                    {
+                        let delta = touch.position - state.start;
+                        if delta.x.abs() > SWIPE_THRESHOLD || delta.y.abs() > SWIPE_THRESHOLD {
+                            state.swiped = true;
+                            swipe_dir = Some(if delta.x.abs() > delta.y.abs() {
+                                if delta.x > 0.0 {
+                                    Dir4::East
+                                } else {
+                                    Dir4::West
+                                }
+                            } else {
+                                // Screen Y down = South
+                                if delta.y > 0.0 {
+                                    Dir4::South
+                                } else {
+                                    Dir4::North
+                                }
+                            });
+                        }
+                    }
+                }
+                TouchPhase::Ended => {
+                    if let Some(ref state) = self.touch
+                        && state.id == touch.id
+                    {
+                        if !state.swiped {
+                            tap_pos = Some(touch.position);
+                        }
+                        self.touch = None;
+                    }
+                }
+                TouchPhase::Cancelled => {
+                    if self.touch.as_ref().is_some_and(|s| s.id == touch.id) {
+                        self.touch = None;
+                    }
+                }
+            }
+        }
+
+        (swipe_dir, tap_pos)
+    }
+
+    fn resolve(
+        &mut self,
+        dirs: EnumMap<Player, Option<PlayerInput>>,
+        player_count: usize,
+        dt: f32,
+        any_edge: bool,
+    ) -> Option<EnumMap<Player, Action>> {
+        if player_count == 1 {
+            let PlayerInput { dir, .. } = dirs[Player::Player1]?;
+            return Some(EnumMap::from_fn(|_| Action::Move(dir)));
+        }
+
+        // Accumulate new inputs into pending_sync
+        let mut new_unsynced_input = false;
+        for (player, slot) in dirs {
+            if let Some(PlayerInput { dir, synced }) = slot {
+                self.pending_sync[player] = Some(dir);
+                if !synced {
+                    new_unsynced_input = true;
+                }
+            }
+        }
+
+        // If both players have pending actions, emit immediately if:
+        // - no timer running, OR
+        // - timer was started from an edge (no original delay to preserve), OR
+        // - timer already expired
+        if self.pending_sync.values().all(|v| v.is_some())
+            && (self.auto_sync_timer.is_none()
+                || self.auto_sync_from_edge
+                || self.auto_sync_timer.is_some_and(|t| t <= 0.0))
+        {
+            self.auto_sync_timer = None;
+            return Some(mem::take(&mut self.pending_sync).map(|_, slot| match slot {
+                Some(dir) => Action::Move(dir),
+                None => Action::Stall,
+            }));
+        }
+
+        // If any player has a pending action, start or tick timer
+        if self.pending_sync.values().any(|v| v.is_some()) {
+            if new_unsynced_input && self.auto_sync_timer.is_none() {
+                self.auto_sync_timer = Some(AUTO_SYNC_DELAY);
+                self.auto_sync_from_edge = any_edge;
+            }
+            if let Some(ref mut timer) = self.auto_sync_timer {
+                *timer -= dt;
+                if *timer <= 0.0 {
+                    self.auto_sync_timer = None;
+                    return Some(mem::take(&mut self.pending_sync).map(|_, slot| match slot {
+                        Some(dir) => Action::Move(dir),
+                        None => Action::Stall,
+                    }));
+                }
+            }
+        }
+
         None
     }
-
-    /// Poll mouse click. Returns click position if clicked and touch isn't active.
-    pub(crate) fn poll_mouse_click(&self) -> Option<Vec2> {
-        if self.touch_start.is_some() || self.touch_handled_this_frame {
-            return None;
-        }
-        if is_mouse_button_pressed(MouseButton::Left) {
-            let (x, y) = mouse_position();
-            Some(Vec2::new(x, y))
-        } else {
-            None
-        }
-    }
 }
 
-impl Default for InputState {
-    fn default() -> Self {
-        Self::new()
-    }
+// --- Stateless helpers ---
+
+fn dir_from_keys(keys: &HashSet<KeyCode>, mapping: EnumMap<Dir4, KeyCode>) -> Option<Dir4> {
+    mapping
+        .iter()
+        .find(|(_, key)| keys.contains(key))
+        .map(|(dir, _)| dir)
 }
 
-// --- Shared polling functions ---
+fn undo_keys_held(input: &FrameInput) -> bool {
+    input.keys_down.contains(&KeyCode::U)
+        || input.keys_down.contains(&KeyCode::Backspace)
+        || input
+            .gamepads
+            .values()
+            .any(|gp| gp.is_button_down(GamepadButton::West))
+}
 
-/// Poll keyboard keys for a directional action. Returns `(action, fresh)`.
-fn poll_keys_dir(
-    key_for: fn(Dir4) -> KeyCode,
-    held_move: &mut EnumMap<Dir4, f32>,
-    dt: f32,
-) -> Option<(Action, bool)> {
-    for (dir, held) in held_move.iter_mut() {
-        let down = is_key_down(key_for(dir));
-        let pressed = is_key_pressed(key_for(dir));
-        if let Some(fresh) = input_held(down, pressed, held, dt) {
-            return Some((Action::Move(dir), fresh));
+fn check_meta(input: &FrameInput, ctx: &GameContext) -> Option<MetaInput> {
+    let gamepad_a = input
+        .gamepads
+        .values()
+        .any(|gp| gp.is_button_pressed(GamepadButton::South));
+    let gamepad_x = input
+        .gamepads
+        .values()
+        .any(|gp| gp.is_button_pressed(GamepadButton::West));
+
+    if ctx.overlay_active {
+        if input.keys_pressed.contains(&KeyCode::Escape) || gamepad_x {
+            return Some(MetaInput::Exit);
+        }
+        return None;
+    }
+
+    if ctx.dialog_active {
+        if input.keys_pressed.contains(&KeyCode::Escape)
+            || input.keys_pressed.contains(&KeyCode::Backspace)
+            || gamepad_x
+        {
+            return Some(MetaInput::Exit);
+        }
+        if input.keys_pressed.contains(&KeyCode::Enter)
+            || input.keys_pressed.contains(&KeyCode::Space)
+            || gamepad_a
+        {
+            return Some(MetaInput::Confirm(None));
+        }
+        return None;
+    }
+
+    let gamepad_start = input
+        .gamepads
+        .values()
+        .any(|gp| gp.is_button_pressed(GamepadButton::Start));
+    if input.keys_pressed.contains(&KeyCode::Escape) || gamepad_start {
+        return Some(MetaInput::Exit);
+    }
+    if (input.keys_pressed.contains(&KeyCode::Backspace)
+        || input.keys_pressed.contains(&KeyCode::U)
+        || gamepad_x)
+        && ctx.can_undo
+    {
+        return Some(MetaInput::Undo);
+    }
+    let gamepad_lb = input
+        .gamepads
+        .values()
+        .any(|gp| gp.is_button_pressed(GamepadButton::LeftShoulder));
+    if input.keys_pressed.contains(&KeyCode::R) || gamepad_lb {
+        return Some(MetaInput::Restart);
+    }
+
+    // Won screen → confirm to continue
+    if ctx.play_state == PlayState::Won
+        && (input.keys_pressed.contains(&KeyCode::Space)
+            || input.keys_pressed.contains(&KeyCode::Enter)
+            || gamepad_a)
+    {
+        return Some(MetaInput::Confirm(None));
+    }
+
+    // A button / spacebar on a completed portal → confirm (instead of stall)
+    if ctx.play_state == PlayState::Playing {
+        let single = ctx.player_count == 1;
+        for default_player in Player::iter_all() {
+            let p = if single {
+                Player::Player1
+            } else {
+                default_player
+            };
+            if input.gamepads[GamepadSource::from_player(default_player)]
+                .is_button_pressed(GamepadButton::South)
+                && ctx.on_completed_portal[p]
+            {
+                return Some(MetaInput::Confirm(Some(p)));
+            }
+        }
+        if input.keys_pressed.contains(&KeyCode::Space)
+            && ctx.on_completed_portal.values().any(|&v| v)
+        {
+            return Some(MetaInput::Confirm(None));
         }
     }
 
     None
 }
 
-/// Poll a gamepad for a directional action or stall. Returns `(action, fresh)`.
-fn poll_gamepad_action(
-    gp: &GamepadContext,
-    index: usize,
-    held_move: &mut EnumMap<Dir4, f32>,
-    held_stall: &mut f32,
-    stick_active: &mut EnumMap<Dir4, bool>,
+fn hit_click_target(pos: Vec2, targets: &[(Rect, ClickAction)]) -> Option<ClickAction> {
+    targets
+        .iter()
+        .find(|(rect, _)| rect.contains(pos))
+        .map(|(_, action)| *action)
+}
+
+/// Returns `(input, is_edge)` — `is_edge` is true on the initial press,
+/// false on held-key repeats.
+fn apply_repeat(
+    tracker: &mut Option<RepeatTracker>,
+    held: Option<PlayerInput>,
     dt: f32,
-) -> Option<(Action, bool)> {
-    // D-pad with repeat
-    for (dir, held) in held_move.iter_mut() {
-        let btn = dpad_button(dir);
-        let down = gp_btn_down(gp, index, btn);
-        let pressed = gp_btn_pressed(gp, index, btn);
-        if let Some(fresh) = input_held(down, pressed, held, dt) {
-            return Some((Action::Move(dir), fresh));
+    initial_delay: f32,
+    repeat_interval: f32,
+) -> (Option<PlayerInput>, bool) {
+    let Some(PlayerInput { dir, synced }) = held else {
+        *tracker = None;
+        return (None, false);
+    };
+    match tracker {
+        Some(t) if t.dir == dir => {
+            // Same direction held — repeat
+            t.delay -= dt;
+            if t.delay <= 0.0 {
+                t.delay += repeat_interval;
+                (Some(PlayerInput { dir, synced }), false)
+            } else {
+                (None, false)
+            }
+        }
+        _ => {
+            // New direction — fire immediately
+            *tracker = Some(RepeatTracker {
+                dir,
+                delay: initial_delay,
+            });
+            (Some(PlayerInput { dir, synced }), true)
         }
     }
+}
 
-    // Left analog stick (edge-triggered, no repeat) — always fresh
-    let stick_y = gp_stick_value(gp, index, GamepadAxis::LeftY);
-    let stick_x = gp_stick_value(gp, index, GamepadAxis::LeftX);
-
-    let stick_dir = if stick_y.abs() > stick_x.abs() {
-        if stick_y > 0.0 {
-            Some(Dir4::North)
-        } else if stick_y < 0.0 {
-            Some(Dir4::South)
-        } else {
-            None
+fn gamepad_dir_held(gp: &GamepadState) -> Option<Dir4> {
+    for (btn, dir) in [
+        (GamepadButton::DPadUp, Dir4::North),
+        (GamepadButton::DPadDown, Dir4::South),
+        (GamepadButton::DPadRight, Dir4::East),
+        (GamepadButton::DPadLeft, Dir4::West),
+    ] {
+        if gp.is_button_down(btn) {
+            return Some(dir);
         }
-    } else if stick_x < 0.0 {
-        Some(Dir4::West)
-    } else if stick_x > 0.0 {
-        Some(Dir4::East)
+    }
+    None
+}
+
+fn stick_direction(gp: &GamepadState) -> Option<Dir4> {
+    let x = gp.axis(GamepadAxis::RightX);
+    let y = gp.axis(GamepadAxis::RightY);
+    if x.abs() < STICK_DEADZONE && y.abs() < STICK_DEADZONE {
+        return None;
+    }
+    Some(if x.abs() > y.abs() {
+        if x > 0.0 { Dir4::East } else { Dir4::West }
+    } else {
+        // gilrs/quad-gamepad convention: +Y = up = North
+        if y > 0.0 { Dir4::North } else { Dir4::South }
+    })
+}
+
+/// Read all raw input from macroquad globals and the gamepad context.
+/// This is the only function that touches macroquad's input APIs.
+pub(crate) fn read_frame_input(gamepad: &GamepadContext) -> FrameInput {
+    let mouse_click = if is_mouse_button_pressed(MouseButton::Left) {
+        let (x, y) = mouse_position();
+        Some(Vec2::new(x, y))
     } else {
         None
     };
 
-    let mut result = None;
-    if let Some(dir) = stick_dir
-        && !stick_active[dir]
-    {
-        result = Some((Action::Move(dir), true));
-    }
-    for (dir, active) in stick_active.iter_mut() {
-        *active = stick_dir == Some(dir);
-    }
-    if result.is_some() {
-        return result;
-    }
-
-    // Stall (South/East buttons)
-    let stall_down =
-        gp_btn_down(gp, index, GamepadButton::South) || gp_btn_down(gp, index, GamepadButton::East);
-    let stall_pressed = gp_btn_pressed(gp, index, GamepadButton::South)
-        || gp_btn_pressed(gp, index, GamepadButton::East);
-    if let Some(fresh) = input_held(stall_down, stall_pressed, held_stall, dt) {
-        return Some((Action::Stall, fresh));
-    }
-
-    None
-}
-
-// --- Gamepad helpers (parameterized by index) ---
-
-fn gp_btn_down(gp: &GamepadContext, index: usize, btn: GamepadButton) -> bool {
-    gp.gamepad(index).is_some_and(|g| g.is_button_down(btn))
-}
-
-fn gp_btn_pressed(gp: &GamepadContext, index: usize, btn: GamepadButton) -> bool {
-    gp.gamepad(index).is_some_and(|g| g.is_button_pressed(btn))
-}
-
-fn gp_stick_value(gp: &GamepadContext, index: usize, axis: GamepadAxis) -> f32 {
-    let v = gp.gamepad(index).map(|g| g.axis(axis)).unwrap_or(0.0);
-    if v.abs() > STICK_THRESHOLD { v } else { 0.0 }
-}
-
-/// Check if a button is down on any gamepad (0 or 1).
-fn any_gp_down(gp: &GamepadContext, btn: GamepadButton) -> bool {
-    (0..2).any(|i| gp_btn_down(gp, i, btn))
-}
-
-/// Check if a button was pressed on any gamepad (0 or 1).
-fn any_gp_pressed(gp: &GamepadContext, btn: GamepadButton) -> bool {
-    (0..2).any(|i| gp_btn_pressed(gp, i, btn))
-}
-
-fn gp_btn_down_multi(gp: &GamepadContext, index: usize, btns: &[GamepadButton]) -> bool {
-    btns.iter().any(|&btn| gp_btn_down(gp, index, btn))
-}
-
-fn gp_btn_pressed_multi(gp: &GamepadContext, index: usize, btns: &[GamepadButton]) -> bool {
-    btns.iter().any(|&btn| gp_btn_pressed(gp, index, btn))
-}
-
-/// Check if any of multiple buttons are down on any gamepad.
-fn any_gp_down_multi(gp: &GamepadContext, btns: &[GamepadButton]) -> bool {
-    btns.iter().any(|&btn| any_gp_down(gp, btn))
-}
-
-/// Check if any of multiple buttons were pressed on any gamepad.
-fn any_gp_pressed_multi(gp: &GamepadContext, btns: &[GamepadButton]) -> bool {
-    btns.iter().any(|&btn| any_gp_pressed(gp, btn))
-}
-
-// --- Utilities ---
-
-const UNDO_REPEAT_RATE: f32 = 0.05;
-
-/// Sentinel value: input is suppressed until the key/button is released.
-const SUPPRESSED: f32 = -1.0;
-
-/// Returns `Some(true)` for a fresh press, `Some(false)` for a held-repeat, `None` for no input.
-fn input_held(down: bool, pressed: bool, held: &mut f32, dt: f32) -> Option<bool> {
-    if *held == SUPPRESSED {
-        if !down {
-            *held = 0.0;
-        }
-        return None;
-    }
-    if down {
-        *held += dt;
-        if pressed {
-            Some(true)
-        } else if *held > REPEAT_DELAY {
-            Some(false)
-        } else {
-            None
-        }
-    } else {
-        *held = 0.0;
-        None
-    }
-}
-
-fn input_repeat(down: bool, pressed: bool, held: &mut f32, dt: f32) -> bool {
-    if *held == SUPPRESSED {
-        if !down {
-            *held = 0.0;
-        }
-        return false;
-    }
-    if down {
-        *held += dt;
-        pressed || (*held > REPEAT_DELAY && *held % UNDO_REPEAT_RATE < dt)
-    } else {
-        *held = 0.0;
-        false
-    }
-}
-
-fn swipe_to_direction(delta: Vec2) -> Dir4 {
-    if delta.x.abs() > delta.y.abs() {
-        if delta.x > 0.0 {
-            Dir4::East
-        } else {
-            Dir4::West
-        }
-    } else if delta.y > 0.0 {
-        Dir4::South
-    } else {
-        Dir4::North
+    FrameInput {
+        keys_pressed: get_keys_pressed(),
+        keys_down: get_keys_down(),
+        gamepads: EnumMap::from_fn(|source: GamepadSource| {
+            gamepad.gamepad(source.index()).cloned().unwrap_or_default()
+        }),
+        touches: touches(),
+        mouse_click,
+        dt: get_frame_time(),
     }
 }
