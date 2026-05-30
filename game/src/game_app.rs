@@ -36,6 +36,12 @@ struct PendingAction {
     fresh: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum MetaInputOutcome {
+    Handled,
+    ChangedLevel,
+}
+
 pub struct App {
     game: Game,
     stack: LevelStack,
@@ -150,7 +156,8 @@ impl App {
         crate::open_url::open(&url);
     }
 
-    fn handle_meta_input(&mut self, action: MetaInput) {
+    #[must_use]
+    fn handle_meta_input(&mut self, action: MetaInput) -> MetaInputOutcome {
         match action {
             MetaInput::Restart => {
                 if self.game.state.history.len() > 1 {
@@ -175,20 +182,38 @@ impl App {
                     && self.stack.can_exit()
                 {
                     self.exit_level();
+                    return MetaInputOutcome::ChangedLevel;
                 } else if play_state == PlayState::Playing
                     && let Some(level) = self.game.enter_portal(player).map(str::to_string)
                 {
                     self.do_portal_transition(&level);
+                    return MetaInputOutcome::ChangedLevel;
                 }
             }
         }
+        MetaInputOutcome::Handled
     }
 
     fn handle_button_action(&mut self, action: ButtonAction) {
         match action {
-            ButtonAction::Reset => self.handle_meta_input(MetaInput::Restart),
-            ButtonAction::Undo => self.handle_meta_input(MetaInput::Undo),
-            ButtonAction::Exit => self.handle_meta_input(MetaInput::Exit),
+            ButtonAction::Reset => {
+                assert_eq!(
+                    self.handle_meta_input(MetaInput::Restart),
+                    MetaInputOutcome::Handled
+                );
+            }
+            ButtonAction::Undo => {
+                assert_eq!(
+                    self.handle_meta_input(MetaInput::Undo),
+                    MetaInputOutcome::Handled
+                );
+            }
+            ButtonAction::Exit => {
+                assert_eq!(
+                    self.handle_meta_input(MetaInput::Exit),
+                    MetaInputOutcome::Handled
+                );
+            }
             ButtonAction::Stall => {
                 // UI stall button acts as P1 non-synced stall
                 if self.game.state.play_state() == PlayState::Playing {
@@ -401,7 +426,10 @@ impl App {
         } else {
             // Poll meta inputs
             for action in self.input.poll_meta_inputs(&self.gamepad, dt) {
-                self.handle_meta_input(action);
+                match self.handle_meta_input(action) {
+                    MetaInputOutcome::Handled => {}
+                    MetaInputOutcome::ChangedLevel => break,
+                }
             }
 
             // Poll per-player actions

@@ -1,0 +1,3 @@
+- Code is for the reader first and the compiler second. A return value should be obvious from the function's name, type, and call site; if a function primarily does something else, do not tack on an unexplained `bool` to report a secondary control-flow outcome.
+- Mark any function that has side effects and also returns a meaningful value with `#[must_use]`. Call sites should then handle that value by matching it, asserting it, or changing the API so there is no value to discard.
+- Use `assert!`/`assert_eq!` rather than `debug_assert!`/`debug_assert_eq!`.
