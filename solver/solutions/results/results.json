@@ -1,0 +1,128 @@
+{
+  "explosives2.csv": {
+    "status": "SOLVED",
+    "arrows": "↑←↓↓↓↓↓↓→→→→→←←←←←↑↑↑↑↑↑↑↑↓↓↓↓↓↓↓↓→←↑↓↑↑↑↑↑↑↑↑→→→→→→→",
+    "strategy": "gbfs/w5",
+    "moves": "moves=53"
+  },
+  "cyborg_rats/stalemate.csv": {
+    "status": "SOLVED",
+    "arrows": "↑→→↑→↑→→↓↓←↓↓→←↑↑→↑↑→→→..............→←←←←←←←←←",
+    "strategy": "gbfs/w5",
+    "moves": "moves=47"
+  },
+  "cooperation/coop_world_v3.csv": {
+    "status": "SOLVED",
+    "arrows": "↑↑ ↑→ ↑↑ ↑↑ ↑↑ ↑↑ ↑↑ ↑→ ↑↑ ↓→ ←→ ↑→ ↑→ ↑→ ↑→ ↑→ ↑→ →↓ ←. ↑↓ →← ↓← .→ .↑ ↑↑ ↑↑",
+    "strategy": "gbfs/w5",
+    "moves": "moves=26"
+  },
+  "cyborg_rats/unguided.csv": {
+    "status": "SOLVED",
+    "arrows": "↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↓↓→→→→↓↓↓↓↓→↑↑↑↑↑←←←←←←←←←←←←←←←↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓→→→→→↓←←→↑→→→↑↑→→→→→→",
+    "strategy": "gbfs/w5",
+    "moves": "moves=111"
+  },
+  "order_of_operations_new_v2.csv": {
+    "status": "SOLVED",
+    "arrows": "↓→→→→↑→↑↑↑→→↓→.....→→→↓←↓↓↓↓↓↓↓↓↓↓↓↓",
+    "strategy": "astar/w3",
+    "moves": "moves=36"
+  },
+  "synchronicity.csv": {
+    "status": "SOLVED",
+    "arrows": "→→↑↓→→↓↓↓←←↓↑↑↑↑←↓↑↓↑↓↑↑↑↓↓→↓↓↓→↓↓→→←←↑↑→→→→→→↑↑↑↑",
+    "strategy": "astar/w3",
+    "moves": "moves=50"
+  },
+  "triggering_explosives_v3.csv": {
+    "status": "SOLVED",
+    "arrows": "←↓↓↓↓←←↓↓↓↓←←↓↑→→↑↑↑↑→→↑↑↑↑→→↓↓↓↓→→↓↓↓↑↑↑←↑↑→←↑←↑←←↑↑↓↓←←↑←←↓↓↓→↑↑↑→→←→↓",
+    "strategy": "astar/w3",
+    "moves": "moves=72"
+  },
+  "cyborg_rats/fakeout.csv": {
+    "status": "SOLVED",
+    "arrows": "↑↑↓......→→←↓←↓................←←←→←←←←←→←→→←→↑→↑→↓←←↓↓↓↓↓↓↓↓↓↓→↑→↑↑→→→→→→→→→→",
+    "strategy": "astar/w3",
+    "moves": "moves=78"
+  },
+  "cooperation/cooperation.csv": {
+    "status": "SOLVED",
+    "arrows": "↑↑ ↑→ ↑↑ ↑↑ ↑← ←↑ ↑→ ↑→ ↑→ ←→ ←↓ ←→ ←→ ←→ ←→ ↑→ →→ →→ ←→ ←← .← ←↓ ↓↓ ↓↓ ↓← ↓← ↓↓ ↓↓",
+    "strategy": "astar/w3",
+    "moves": "moves=28"
+  },
+  "tinderrectangle.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "tinderbox.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "lock_in.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "no_retreat.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "cyborg_rats/ai_takeover.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "limited2.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "release.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "chase.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "reload_v3.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "cooperation/tug_of_war.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "cooperation/handoff.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "cooperation/blocked_v2.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  }
+}

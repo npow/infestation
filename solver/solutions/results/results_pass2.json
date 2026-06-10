@@ -1,0 +1,74 @@
+{
+  "limited2.csv": {
+    "status": "SOLVED",
+    "arrows": "→→→→→→→→→→→→→→←←←←←←←←←←←←←...←→.→→→→→→→→→→→→→←←←←←←←←←←←←←...←→....→→→→→→→→→→→→→←←←←←←←←←←←←←...←→→→→→→→←←←←←←←←←←←↑↑↑↑↑↑↑↑↑↑↑↑→→→→→→→→↑↑↑↑↑↑↑↑↑→→→→",
+    "strategy": "astar/w2",
+    "moves": "moves=149"
+  },
+  "tinderrectangle.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "no_retreat.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "tinderbox.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "cyborg_rats/ai_takeover.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "release.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "lock_in.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "reload_v3.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "cooperation/handoff.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "chase.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "cooperation/blocked_v2.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "cooperation/tug_of_war.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  }
+}
