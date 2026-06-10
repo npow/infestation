@@ -312,6 +312,21 @@ fn format_path(path: &[Vec<Action>]) -> String {
     }
 }
 
+fn format_path_ascii(path: &[Vec<Action>]) -> String {
+    if path.is_empty() {
+        return String::new();
+    }
+    let nplayers = path[0].len();
+    if nplayers == 1 {
+        path.iter().map(|a| action_to_ch(a[0])).collect()
+    } else {
+        path.iter()
+            .map(|a| a.iter().map(|x| action_to_ch(*x)).collect::<String>())
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
 fn parse_action_string(action_str: &str, nplayers: usize) -> Vec<Vec<Action>> {
     if nplayers == 1 {
         action_str
@@ -455,12 +470,25 @@ impl NoveltyTable {
     }
 }
 
+#[must_use]
 fn solve(
     grid: &Grid,
     max_depth: usize,
     time_limit_secs: f64,
     strategy: &str,
     weight: i64,
+) -> Option<Vec<Vec<Action>>> {
+    solve_with_context(grid, max_depth, time_limit_secs, strategy, weight, &[])
+}
+
+#[must_use]
+fn solve_with_context(
+    grid: &Grid,
+    max_depth: usize,
+    time_limit_secs: f64,
+    strategy: &str,
+    weight: i64,
+    context_prefix: &[Vec<Action>],
 ) -> Option<Vec<Vec<Action>>> {
     let nplayers = count_players(grid);
     let tuples = all_action_tuples(nplayers);
@@ -546,16 +574,13 @@ fn solve(
                 nodes.len()
             );
             eprintln!("  BEST_ARROWS {}", format_path(&best_path));
-            let best_ascii: String = if nplayers == 1 {
-                best_path.iter().map(|a| action_to_ch(a[0])).collect()
-            } else {
-                best_path
-                    .iter()
-                    .map(|a| a.iter().map(|x| action_to_ch(*x)).collect::<String>())
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            };
+            let best_ascii = format_path_ascii(&best_path);
             eprintln!("  BEST_ASCII {}", best_ascii);
+            if !context_prefix.is_empty() {
+                let mut full_path = context_prefix.to_vec();
+                full_path.extend(best_path);
+                eprintln!("  BEST_FULL_ASCII {}", format_path_ascii(&full_path));
+            }
             eprintln!("  BEST_STATE:\n{}", nodes[best_idx_seen].grid.to_csv());
             return None;
         }
@@ -1129,7 +1154,7 @@ fn solve_waypoints(
 
     // mop-up: rat-count A* from current state
     eprintln!("  waypoints done, mopping up remaining rats...");
-    if let Some(mv) = solve(&cur, depth, mop_secs, mop_strategy, mop_weight) {
+    if let Some(mv) = solve_with_context(&cur, depth, mop_secs, mop_strategy, mop_weight, &all) {
         all.extend(mv);
         return Some(all);
     }
@@ -1192,7 +1217,7 @@ fn solve_waypoint_pairs(
     }
 
     eprintln!("  waypoints done, mopping up remaining rats...");
-    if let Some(mv) = solve(&cur, depth, mop_secs, mop_strategy, mop_weight) {
+    if let Some(mv) = solve_with_context(&cur, depth, mop_secs, mop_strategy, mop_weight, &all) {
         all.extend(mv);
         return Some(all);
     }
@@ -1449,7 +1474,14 @@ fn solve_trigger_order(
     branches.sort_by_key(|branch| branch.score);
     for branch in branches {
         eprintln!("  trigger order done, mopping from score={}", branch.score);
-        if let Some(mop) = solve(&branch.grid, depth, mop_secs, mop_strategy, mop_weight) {
+        if let Some(mop) = solve_with_context(
+            &branch.grid,
+            depth,
+            mop_secs,
+            mop_strategy,
+            mop_weight,
+            &branch.path,
+        ) {
             let mut path = branch.path;
             path.extend(mop);
             return Some(path);
@@ -1480,12 +1512,13 @@ fn solve_any_trigger_order(
     for step_idx in 0..macro_steps {
         branches.sort_by_key(|branch| branch.score);
         for branch in branches.iter().take(beam.min(branches.len())) {
-            if let Some(mop) = solve(
+            if let Some(mop) = solve_with_context(
                 &branch.grid,
                 depth,
                 mop_secs,
                 mop_strategy,
                 mop_weight,
+                &branch.path,
             ) {
                 let mut path = branch.path.clone();
                 path.extend(mop);
@@ -1513,14 +1546,15 @@ fn solve_any_trigger_order(
                         path.extend(segment);
                         let score = trigger_branch_score(&end, path.len(), before, after);
                         eprintln!(
-                            "  step {} trigger {} at ({},{}): path={} features={:?} score={}",
+                            "  step {} trigger {} at ({},{}): path={} features={:?} score={} path_ascii={}",
                             step_idx + 1,
                             number,
                             target.0,
                             target.1,
                             path.len(),
                             after,
-                            score
+                            score,
+                            format_path_ascii(&path)
                         );
                         next_branches.push(Branch {
                             grid: end,
@@ -1560,7 +1594,14 @@ fn solve_any_trigger_order(
 
     branches.sort_by_key(|branch| branch.score);
     for branch in branches {
-        if let Some(mop) = solve(&branch.grid, depth, mop_secs, mop_strategy, mop_weight) {
+        if let Some(mop) = solve_with_context(
+            &branch.grid,
+            depth,
+            mop_secs,
+            mop_strategy,
+            mop_weight,
+            &branch.path,
+        ) {
             let mut path = branch.path;
             path.extend(mop);
             return Some(path);
@@ -1807,22 +1848,28 @@ fn solve_to_event(
     }
 
     let mut pq = BinaryHeap::new();
+    let h0 = event_heuristic(grid, target, initial_features);
     pq.push(PQItem {
-        f: event_heuristic(grid, target, initial_features),
+        f: h0,
         g: 0,
         idx: 0,
     });
     let mut expansions = 0u64;
-    let mut best_h_seen = i64::MAX;
+    let mut best_h_seen = h0;
+    let mut best_idx_seen = 0usize;
     while let Some(item) = pq.pop() {
         expansions += 1;
         if expansions % 20_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+            let best_path = reconstruct(&nodes, best_idx_seen);
             eprintln!(
                 "  [event timeout after {} expansions, best_h={}, nodes={}]",
                 expansions,
                 best_h_seen,
                 nodes.len()
             );
+            eprintln!("  BEST_ARROWS {}", format_path(&best_path));
+            eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
+            eprintln!("  BEST_STATE:\n{}", nodes[best_idx_seen].grid.to_csv());
             return None;
         }
         let idx = item.idx;
@@ -1856,7 +1903,10 @@ fn solve_to_event(
             }
 
             let h = event_heuristic(&next_grid, target, initial_features);
-            best_h_seen = best_h_seen.min(h);
+            if h < best_h_seen {
+                best_h_seen = h;
+                best_idx_seen = node_idx;
+            }
             let f = match strategy {
                 "gbfs" => h,
                 _ => cur_g + 1 + weight * h,
@@ -2708,7 +2758,7 @@ fn main() {
             weight
         );
         let t0 = Instant::now();
-        match solve(&start_grid, depth, secs, &strategy, weight) {
+        match solve_with_context(&start_grid, depth, secs, &strategy, weight, &prefix) {
             Some(suffix) => {
                 let mut path = prefix;
                 path.extend(suffix);
@@ -3227,8 +3277,14 @@ fn main() {
                 );
                 eprintln!("  state after event:\n{}", event_grid.to_csv());
                 if mop_secs > 0.0
-                    && let Some(mop) =
-                        solve(&event_grid, mop_depth, mop_secs, &mop_strategy, mop_weight)
+                    && let Some(mop) = solve_with_context(
+                        &event_grid,
+                        mop_depth,
+                        mop_secs,
+                        &mop_strategy,
+                        mop_weight,
+                        &path,
+                    )
                 {
                     path.extend(mop);
                     solved = true;
