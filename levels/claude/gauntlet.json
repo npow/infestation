@@ -1,0 +1,10 @@
+{
+  "name": "Claude's Gauntlet",
+  "portals": [
+    { "x": 1, "y": 1, "level": "claude/sacrifice" },
+    { "x": 3, "y": 1, "level": "claude/roach_motel" },
+    { "x": 5, "y": 1, "level": "claude/stampede" },
+    { "x": 1, "y": 5, "level": "claude/remote_detonator" },
+    { "x": 5, "y": 5, "level": "claude/web_lair" }
+  ]
+}
