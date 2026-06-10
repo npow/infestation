@@ -1,0 +1,20 @@
+[project]
+name = "infestation-gym"
+description = "OpenEnv-backed Infestation puzzle environment"
+tags = ["openenv", "gym", "puzzle"]
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "verifiers[openenv]>=0.1.14",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["infestation_gym/**/*", "pyproject.toml", "README.md", "proj/**/*", "proj/.build.json"]
+
+[tool.verifiers.eval]
+num_examples = 5
+rollouts_per_example = 3

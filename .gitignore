@@ -4,3 +4,8 @@
 /js/sapp_jsutils.js
 /target
 target/
+.venv/
+dist/
+__pycache__/
+*.py[cod]
+*.egg-info/
