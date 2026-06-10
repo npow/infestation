@@ -1326,9 +1326,13 @@ fn event_heuristic(grid: &Grid, target: TargetKind, initial: Features) -> i64 {
 
     match target {
         TargetKind::Explosion | TargetKind::IgnitionReady | TargetKind::RatNearExplosive => {
-            let rats = positions_matching(grid, |cell| {
-                matches!(cell, CellKind::Rat | CellKind::CyborgRat)
-            });
+            let rats = if std::env::var("LURE_H").is_ok() {
+                tinder_lure_rat_positions(grid)
+            } else {
+                positions_matching(grid, |cell| {
+                    matches!(cell, CellKind::Rat | CellKind::CyborgRat)
+                })
+            };
             let explosives = positions_matching(grid, |cell| cell == CellKind::Explosive);
             let distance = nearest_pair_distance(&rats, &explosives);
             if target == TargetKind::RatNearExplosive {
@@ -2059,10 +2063,6 @@ fn rat_positions(grid: &Grid) -> Vec<(i32, i32)> {
 }
 
 fn tinder_lure_rat_positions(grid: &Grid) -> Vec<(i32, i32)> {
-    if grid.width() >= 16 {
-        return rat_positions(grid);
-    }
-
     let lure_rats: Vec<_> = rat_positions(grid)
         .into_iter()
         .filter(|&(_, y)| y >= 3)
@@ -2088,6 +2088,62 @@ fn distance_from_player(grid: &Grid, target: (i32, i32)) -> i64 {
     if d == i32::MAX { 1_000 } else { d as i64 }
 }
 
+fn rectangle_trap_heuristic(grid: &Grid, initial_rats: usize, initial_explosives: usize) -> i64 {
+    let current_explosives = count_explosives(grid);
+    if current_explosives < initial_explosives {
+        return count_rats(grid) as i64;
+    }
+
+    let rats = tinder_lure_rat_positions(grid);
+    let all_rats = rat_positions(grid);
+    let traps = [(2, 6), (3, 6), (4, 6), (5, 6), (6, 6)];
+    let safe_positions = [(13, 8), (14, 7), (15, 7), (14, 8), (15, 8)];
+
+    let player = find_player(grid);
+    let nearest_rat_to_player = player
+        .and_then(|player_pos| all_rats.iter().map(|&rat| manhattan(rat, player_pos)).min())
+        .unwrap_or(1_000);
+    let contact_penalty = if nearest_rat_to_player <= 1 {
+        2_000
+    } else if nearest_rat_to_player == 2 {
+        400
+    } else {
+        0
+    };
+
+    let rats_lost = initial_rats.saturating_sub(count_rats(grid)) as i64;
+    let pre_ignition_kill_penalty = rats_lost * 5_000;
+
+    let mut uncleared_lower_webs = 0i64;
+    let mut nearest_uncleared = 1_000i64;
+    for y in 3..grid.height() {
+        for x in 0..grid.width() {
+            if grid.cell_kind_at(x, y) == CellKind::Spiderweb {
+                uncleared_lower_webs += 1;
+                nearest_uncleared =
+                    nearest_uncleared.min(distance_from_player(grid, (x as i32, y as i32)));
+            }
+        }
+    }
+    let clear_work = uncleared_lower_webs * 80 + nearest_uncleared.min(50) * 4;
+
+    let mut best_trap_score = 20_000i64;
+    for trap in traps {
+        let rat_to_trap = rats
+            .iter()
+            .map(|&rat| manhattan(rat, trap))
+            .min()
+            .unwrap_or(1_000);
+        for safe in safe_positions {
+            let player_to_safe = distance_from_player(grid, safe);
+            let score = rat_to_trap * 100 + player_to_safe * 20;
+            best_trap_score = best_trap_score.min(score);
+        }
+    }
+
+    pre_ignition_kill_penalty + contact_penalty + clear_work + best_trap_score
+}
+
 fn tinderbox_heuristic(
     grid: &Grid,
     initial_rats: usize,
@@ -2095,6 +2151,10 @@ fn tinderbox_heuristic(
     rat_target: (i32, i32),
     safe_target: (i32, i32),
 ) -> i64 {
+    if std::env::var("TRAP_H").is_ok() && grid.width() >= 16 {
+        return rectangle_trap_heuristic(grid, initial_rats, initial_explosives);
+    }
+
     let current_explosives = count_explosives(grid);
     if current_explosives < initial_explosives {
         return count_rats(grid) as i64;
@@ -2118,36 +2178,13 @@ fn tinderbox_heuristic(
     let mut uncleared_corridor = 0i64;
     let mut nearest_uncleared = 1_000i64;
     let corridor = if grid.width() >= 16 {
-        vec![
-            (10, 2),
-            (11, 2),
-            (12, 2),
-            (13, 2),
-            (14, 2),
-            (15, 2),
-            (12, 3),
-            (13, 3),
-            (14, 3),
-            (15, 3),
-            (10, 4),
-            (12, 4),
-            (14, 4),
-            (15, 4),
-            (10, 5),
-            (12, 5),
-            (14, 5),
-            (15, 5),
-            (10, 6),
-            (11, 6),
-            (12, 6),
-            (14, 6),
-            (15, 6),
-            (14, 7),
-            (15, 7),
-            (13, 8),
-            (14, 8),
-            (15, 8),
-        ]
+        let mut cells = Vec::new();
+        for y in 3..grid.height() {
+            for x in 0..grid.width() {
+                cells.push((x as i32, y as i32));
+            }
+        }
+        cells
     } else {
         vec![
             (2, 2),
@@ -2537,6 +2574,7 @@ fn main() {
         let mut weight = 1i64;
         let mut rat_target = (6, 5);
         let mut safe_target = (6, 8);
+        let mut prefix_str = String::new();
         let mut i = 3;
         while i < args.len() {
             match args[i].as_str() {
@@ -2572,19 +2610,39 @@ fn main() {
                     );
                     i += 2;
                 }
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
                 _ => {
                     i += 1;
                 }
             }
         }
         let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
         eprintln!(
-            "tinder solve: players={} strategy={} depth={} secs={} weight={} rat_target={:?} safe_target={:?}",
-            nplayers, strategy, depth, secs, weight, rat_target, safe_target
+            "tinder solve: players={} prefix={} strategy={} depth={} secs={} weight={} rat_target={:?} safe_target={:?}",
+            nplayers,
+            prefix.len(),
+            strategy,
+            depth,
+            secs,
+            weight,
+            rat_target,
+            safe_target
         );
         let t0 = Instant::now();
         match solve_tinderbox(
-            &grid,
+            &start_grid,
             depth,
             secs,
             &strategy,
@@ -2592,7 +2650,9 @@ fn main() {
             rat_target,
             safe_target,
         ) {
-            Some(path) => {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
                 println!(
                     "SOLVED moves={} time={:.1}s",
                     path.len(),
@@ -2624,6 +2684,7 @@ fn main() {
         let mut jitter = 1_000i64;
         let mut rat_target = (6, 5);
         let mut safe_target = (6, 8);
+        let mut prefix_str = String::new();
         let mut i = 3;
         while i < args.len() {
             match args[i].as_str() {
@@ -2663,19 +2724,40 @@ fn main() {
                     );
                     i += 2;
                 }
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
                 _ => {
                     i += 1;
                 }
             }
         }
         let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
         eprintln!(
-            "tinder beam: players={} width={} depth={} secs={} seed={} jitter={} rat_target={:?} safe_target={:?}",
-            nplayers, width, depth, secs, seed, jitter, rat_target, safe_target
+            "tinder beam: players={} prefix={} width={} depth={} secs={} seed={} jitter={} rat_target={:?} safe_target={:?}",
+            nplayers,
+            prefix.len(),
+            width,
+            depth,
+            secs,
+            seed,
+            jitter,
+            rat_target,
+            safe_target
         );
         let t0 = Instant::now();
         match solve_tinderbox_beam(
-            &grid,
+            &start_grid,
             width,
             depth,
             secs,
@@ -2684,7 +2766,9 @@ fn main() {
             rat_target,
             safe_target,
         ) {
-            Some(path) => {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
                 println!(
                     "SOLVED moves={} time={:.1}s",
                     path.len(),
@@ -3217,6 +3301,7 @@ fn main() {
         let mut mop_depth = 400usize;
         let mut mop_strategy = "gbfs".to_string();
         let mut mop_weight = 5i64;
+        let mut prefix_str = String::new();
         let mut i = 3;
         while i < args.len() {
             match args[i].as_str() {
@@ -3256,19 +3341,40 @@ fn main() {
                     mop_weight = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
                 _ => {
                     i += 1;
                 }
             }
         }
         let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
         eprintln!(
-            "event solve: kind={:?} players={} strategy={} depth={} secs={} weight={}",
-            target, nplayers, strategy, depth, secs, weight
+            "event solve: kind={:?} players={} prefix={} strategy={} depth={} secs={} weight={}",
+            target,
+            nplayers,
+            prefix.len(),
+            strategy,
+            depth,
+            secs,
+            weight
         );
         let t0 = Instant::now();
-        match solve_to_event(&grid, target, depth, secs, &strategy, weight) {
-            Some((mut path, event_grid)) => {
+        match solve_to_event(&start_grid, target, depth, secs, &strategy, weight) {
+            Some((suffix, event_grid)) => {
+                let mut path = prefix;
+                path.extend(suffix);
                 let mut solved = Features::from_grid(&event_grid).rats == 0;
                 eprintln!(
                     "  event reached in {} moves, features={:?}",
