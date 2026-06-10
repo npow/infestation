@@ -248,7 +248,7 @@ impl Editor {
             **game = Game::new(self.before_grid.clone(), HashSet::new());
             for actions in input_history {
                 if game.state.play_state() == PlayState::Playing {
-                    game.apply_actions(actions);
+                    assert!(game.apply_actions(actions));
                 }
             }
         }
@@ -290,7 +290,7 @@ impl Editor {
         } = self.mode
             && game.state.play_state() == PlayState::Playing
         {
-            game.apply_actions(&actions);
+            assert!(game.apply_actions(&actions));
             input_history.push(actions);
         }
     }

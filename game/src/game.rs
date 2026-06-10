@@ -395,11 +395,13 @@ impl Game {
     }
 
     /// Apply an input immediately without animation (for editor replay)
+    #[must_use]
     pub fn apply_action(&mut self, m: Action) -> bool {
         self.apply_actions(&[m])
     }
 
     /// Apply multiple player actions immediately without animation.
+    #[must_use]
     pub fn apply_actions(&mut self, actions: &[Action]) -> bool {
         let play_state = self.state.play_state();
 

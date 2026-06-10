@@ -4,7 +4,9 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
-use crate::grid::Grid;
+use crate::game::MoveHandler;
+use crate::grid::Cell;
+pub use crate::grid::{CellKind, Grid};
 
 pub use crate::direction::Dir4;
 pub use crate::game::{Action, Game, PlayState};
@@ -29,6 +31,11 @@ pub fn game_from_csv(csv: &str) -> Game {
     Game::new(Grid::from_csv(csv), HashSet::new())
 }
 
+/// Create a grid from CSV content.
+pub fn grid_from_csv(csv: &str) -> Grid {
+    Grid::from_csv(csv)
+}
+
 /// Get the grid as CSV.
 pub fn grid_to_csv(game: &Game) -> String {
     game.state.grid.to_csv()
@@ -40,6 +47,57 @@ pub fn play_state(game: &Game) -> PlayState {
 }
 
 /// Apply multiple player actions to a game.
+#[must_use]
 pub fn apply_actions(game: &mut Game, actions: &[Action]) -> bool {
     game.apply_actions(actions)
+}
+
+/// Apply actions directly to a grid without CSV serialization.
+#[must_use]
+pub fn step_grid(grid: &Grid, actions: &[Action]) -> (Grid, PlayState) {
+    let initial_player_count = count_players(grid);
+    let initial_had_rats = has_rats(grid);
+    let initial_play_state = play_state_from_grid(grid, initial_player_count, initial_had_rats);
+    if initial_play_state != PlayState::Playing {
+        return (grid.clone(), initial_play_state);
+    }
+
+    let mut next = grid.clone();
+    let mut resolver = MoveHandler::new(&mut next);
+    if resolver.find_players().is_empty() {
+        return (grid.clone(), initial_play_state);
+    }
+
+    resolver.do_player_moves(actions);
+    resolver.resolve_all();
+
+    let play_state = play_state_from_grid(&next, initial_player_count, initial_had_rats);
+    (next, play_state)
+}
+
+fn count_players(grid: &Grid) -> usize {
+    grid.entries()
+        .filter(|(_, cell)| matches!(cell, Cell::Player(..)))
+        .count()
+}
+
+fn has_rats(grid: &Grid) -> bool {
+    grid.entries()
+        .any(|(_, cell)| matches!(cell, Cell::Rat(_) | Cell::CyborgRat(_)))
+}
+
+fn play_state_from_grid(
+    grid: &Grid,
+    initial_player_count: usize,
+    initial_had_rats: bool,
+) -> PlayState {
+    if count_players(grid) < initial_player_count {
+        return PlayState::GameOver;
+    }
+
+    if !has_rats(grid) && initial_had_rats {
+        PlayState::Won
+    } else {
+        PlayState::Playing
+    }
 }

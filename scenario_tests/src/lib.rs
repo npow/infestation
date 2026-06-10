@@ -10,11 +10,11 @@ fn run_scenario_test(before: &str, after: &str, after_path: &str, json_path: &st
 
     let expected_state = match &input {
         ScenarioInput::TwoPlayer { p1, p2, state } => {
-            apply_actions(&mut game, &[*p1, *p2]);
+            assert!(apply_actions(&mut game, &[*p1, *p2]));
             *state
         }
         ScenarioInput::SinglePlayer { action, state } => {
-            game.apply_action(*action);
+            assert!(game.apply_action(*action));
             *state
         }
     };

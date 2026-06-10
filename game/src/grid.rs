@@ -34,6 +34,37 @@ pub(crate) enum Cell {
     Trigger(u8),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CellKind {
+    Empty,
+    Wall,
+    Player,
+    Rat,
+    CyborgRat,
+    Plank,
+    Spiderweb,
+    BlackHole,
+    Explosive,
+    Trigger(u8),
+}
+
+impl CellKind {
+    fn from_cell(cell: Cell) -> Self {
+        match cell {
+            Cell::Empty => Self::Empty,
+            Cell::Wall => Self::Wall,
+            Cell::Player(..) => Self::Player,
+            Cell::Rat(_) => Self::Rat,
+            Cell::CyborgRat(_) => Self::CyborgRat,
+            Cell::Plank => Self::Plank,
+            Cell::Spiderweb => Self::Spiderweb,
+            Cell::BlackHole => Self::BlackHole,
+            Cell::Explosive => Self::Explosive,
+            Cell::Trigger(n) => Self::Trigger(n),
+        }
+    }
+}
+
 impl Cell {
     pub(crate) fn blocks_player(&self) -> bool {
         matches!(self, Cell::Wall | Cell::Plank)
@@ -66,7 +97,7 @@ impl Cell {
 }
 
 #[derive(Clone)]
-pub(crate) struct Grid {
+pub struct Grid {
     cells: Vec<Vec<Cell>>,
     width: usize,
     height: usize,
@@ -136,12 +167,77 @@ impl Grid {
         lines.join("")
     }
 
-    pub(crate) fn width(&self) -> usize {
+    pub fn width(&self) -> usize {
         self.width
     }
 
-    pub(crate) fn height(&self) -> usize {
+    pub fn height(&self) -> usize {
         self.height
+    }
+
+    pub fn cell_kind_at(&self, x: usize, y: usize) -> CellKind {
+        if x >= self.width || y >= self.height {
+            return CellKind::Wall;
+        }
+        CellKind::from_cell(self.cells[y][x])
+    }
+
+    pub fn state_hash(&self) -> u64 {
+        fn mix_byte(hash: &mut u64, byte: u8) {
+            *hash ^= byte as u64;
+            *hash = hash.wrapping_mul(0x100000001b3);
+        }
+
+        fn mix_usize(hash: &mut u64, value: usize) {
+            for byte in value.to_le_bytes() {
+                mix_byte(hash, byte);
+            }
+        }
+
+        fn mix_cell(hash: &mut u64, cell: Cell) {
+            match cell {
+                Cell::Empty => mix_byte(hash, 0),
+                Cell::Wall => mix_byte(hash, 1),
+                Cell::Player(player, dir) => {
+                    mix_byte(hash, 2);
+                    mix_byte(hash, player as u8);
+                    mix_byte(hash, dir as u8);
+                }
+                Cell::Rat(dir) => {
+                    mix_byte(hash, 3);
+                    mix_byte(hash, dir as u8);
+                }
+                Cell::CyborgRat(dir) => {
+                    mix_byte(hash, 4);
+                    mix_byte(hash, dir as u8);
+                }
+                Cell::Plank => mix_byte(hash, 5),
+                Cell::Spiderweb => mix_byte(hash, 6),
+                Cell::BlackHole => mix_byte(hash, 7),
+                Cell::Explosive => mix_byte(hash, 8),
+                Cell::Trigger(n) => {
+                    mix_byte(hash, 9);
+                    mix_byte(hash, n);
+                }
+            }
+        }
+
+        let mut hash: u64 = 0xcbf29ce484222325;
+        mix_usize(&mut hash, self.width);
+        mix_usize(&mut hash, self.height);
+        for row in &self.cells {
+            for &cell in row {
+                mix_cell(&mut hash, cell);
+            }
+        }
+        hash
+    }
+
+    pub fn player_positions(&self) -> Vec<(usize, usize)> {
+        self.find_players()
+            .into_iter()
+            .map(|player| (player.pos.x as usize, player.pos.y as usize))
+            .collect()
     }
 
     pub(crate) fn at(&self, pos: Position) -> Cell {

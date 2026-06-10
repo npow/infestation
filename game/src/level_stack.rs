@@ -87,7 +87,7 @@ mod tests {
         let initial_pos = player_pos(&parent_game);
 
         // Player moves onto portal
-        parent_game.apply_action(Action::Move(Dir4::East));
+        assert!(parent_game.apply_action(Action::Move(Dir4::East)));
         assert_eq!(player_pos(&parent_game), Position::new(1, 1));
 
         // Create level stack and enter sublevel
@@ -111,7 +111,7 @@ mod tests {
         let mut parent_game = game_with_portal_at(Position::new(1, 1), "sublevel");
 
         // Player moves onto portal
-        parent_game.apply_action(Action::Move(Dir4::East));
+        assert!(parent_game.apply_action(Action::Move(Dir4::East)));
         let pos_on_portal = player_pos(&parent_game);
 
         // Create level stack and enter sublevel
@@ -120,7 +120,7 @@ mod tests {
 
         // Create sublevel game that's been won
         let mut sublevel_game = game_from_csv(".,.,.\n.,►,R\n.,.,.");
-        sublevel_game.apply_action(Action::Move(Dir4::East)); // Kill the rat
+        assert!(sublevel_game.apply_action(Action::Move(Dir4::East))); // Kill the rat
         assert_eq!(sublevel_game.state.play_state(), PlayState::Won);
 
         // Exit after completing
@@ -143,7 +143,7 @@ mod tests {
             .insert("sublevel".to_string());
 
         // Player moves onto portal
-        parent_game.apply_action(Action::Move(Dir4::East));
+        assert!(parent_game.apply_action(Action::Move(Dir4::East)));
         let pos_on_portal = player_pos(&parent_game);
 
         // Create level stack and enter sublevel

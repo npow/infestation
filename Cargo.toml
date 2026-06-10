@@ -1,3 +1,8 @@
 [workspace]
 members = ["game", "quad-gamepad", "quad-touch", "scenario_tests", "solver"]
 resolver = "2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
