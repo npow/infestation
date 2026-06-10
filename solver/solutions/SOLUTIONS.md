@@ -5,7 +5,7 @@ All move-strings below were **verified against the real game engine** (`solver v
 Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-separated `P1P2` pairs.
 
 
-## Original levels (24 solved)
+## Original levels (26 solved)
 
 | Level | Players | Moves | Solution |
 |---|---|---|---|
@@ -18,6 +18,8 @@ Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-s
 | `cyborg_rats/unguided.csv` | 1 | 111 | `^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^vv>>>>vvvvv>^^^^^<<<<<<<<<<<<<<<vvvvvvvvvvvvvvv>>>>>v<<>^>>>^^>>>>>>` |
 | `explosives.csv` | 1 | 54 | `vvv<<^^^^<<vvvvvv>>>>vv<<<<<>>>>>^^<<<<^^^^^^^^>>>>>>>` |
 | `explosives2.csv` | 1 | 53 | `^<vvvvvv>>>>><<<<<^^^^^^^^vvvvvvvv><^v^^^^^^^^>>>>>>>` |
+| `gimmicks/platform.csv` | 1 | 29 | `vvv>vvv..^^.^^^^^^^^^<>>>>vvv` |
+| `gimmicks/robotic_cheese.csv` | 2 | 7 | `>> ^> ^. ^. <. <^ ^^` |
 | `guidance.csv` | 1 | 126 | `<<<<<<<<<<<vvvvvvvvvvvvvvvv>>>>>>>>><^>>>>><<<<<<<<<<<<<<^^^^^^<v<v>^^^^^^^^^^^>>>>>^^^^^vv<<<<<vvvvvvvvvvvvvvv>>>>>>>^^>>>>>>` |
 | `limited2.csv` | 1 | 149 | `>>>>>>>>>>>>>><<<<<<<<<<<<<...<>.>>>>>>>>>>>>><<<<<<<<<<<<<...<>....>>>>>>>>>>>>><<<<<<<<<<<<<...<>>>>>>><<<<<<<<<<<^^^^^^^^^^^^>>>>>>>>^^^^^^^^^>>>>` |
 | `more_rats.csv` | 1 | 29 | `v<<><><><><>>^^^^^^<<><><><<<` |

@@ -44,6 +44,16 @@
     "players": 1,
     "moves": 53
   },
+  "gimmicks/platform.csv": {
+    "sol": "vvv>vvv..^^.^^^^^^^^^<>>>>vvv",
+    "players": 1,
+    "moves": 29
+  },
+  "gimmicks/robotic_cheese.csv": {
+    "sol": ">> ^> ^. ^. <. <^ ^^",
+    "players": 2,
+    "moves": 7
+  },
   "guidance.csv": {
     "sol": "←←←←←←←←←←←↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓→→→→→→→→→←↑→→→→→←←←←←←←←←←←←←←↑↑↑↑↑↑←↓←↓→↑↑↑↑↑↑↑↑↑↑↑→→→→→↑↑↑↑↑↓↓←←←←←↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓→→→→→→→↑↑→→→→→→",
     "players": 1,

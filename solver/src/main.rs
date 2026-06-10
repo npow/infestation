@@ -3053,6 +3053,7 @@ fn main() {
         // solver trig <csv> [--order "1,2,3"] [--persecs S] [--beam N]
         //                   [--mopsecs S] [--mopstrat astar] [--mopweight 2] [--depth N]
         let mut order: Option<Vec<u8>> = None;
+        let mut prefix_str = String::new();
         let mut per_secs = 10.0;
         let mut beam = 8usize;
         let mut mop_secs = 60.0;
@@ -3064,6 +3065,10 @@ fn main() {
             match args[i].as_str() {
                 "--order" => {
                     order = Some(parse_trigger_order(&args[i + 1]));
+                    i += 2;
+                }
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
                     i += 2;
                 }
                 "--persecs" => {
@@ -3097,13 +3102,26 @@ fn main() {
         }
         let order = order.unwrap_or_else(|| trigger_numbers(&grid));
         let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
         eprintln!(
-            "trigger solve: order={:?}, players={}, per_secs={}, beam={}",
-            order, nplayers, per_secs, beam
+            "trigger solve: order={:?}, players={}, prefix={}, per_secs={}, beam={}",
+            order,
+            nplayers,
+            prefix.len(),
+            per_secs,
+            beam
         );
         let t0 = Instant::now();
         match solve_trigger_order(
-            &grid,
+            &start_grid,
             &order,
             per_secs,
             beam,
@@ -3112,7 +3130,9 @@ fn main() {
             mop_weight,
             depth,
         ) {
-            Some(path) => {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
                 println!(
                     "SOLVED moves={} time={:.1}s",
                     path.len(),
@@ -3138,6 +3158,7 @@ fn main() {
         // solver trigany <csv> [--steps N] [--persecs S] [--beam N]
         //                      [--mopsecs S] [--mopstrat astar] [--mopweight 2] [--depth N]
         let mut steps = trigger_numbers(&grid).len().max(1);
+        let mut prefix_str = String::new();
         let mut per_secs = 5.0;
         let mut beam = 16usize;
         let mut mop_secs = 10.0;
@@ -3149,6 +3170,10 @@ fn main() {
             match args[i].as_str() {
                 "--steps" => {
                     steps = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
                     i += 2;
                 }
                 "--persecs" => {
@@ -3181,13 +3206,26 @@ fn main() {
             }
         }
         let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
         eprintln!(
-            "trigger-any solve: players={} steps={} per_secs={} beam={}",
-            nplayers, steps, per_secs, beam
+            "trigger-any solve: players={} prefix={} steps={} per_secs={} beam={}",
+            nplayers,
+            prefix.len(),
+            steps,
+            per_secs,
+            beam
         );
         let t0 = Instant::now();
         match solve_any_trigger_order(
-            &grid,
+            &start_grid,
             steps,
             per_secs,
             beam,
@@ -3196,7 +3234,9 @@ fn main() {
             mop_weight,
             depth,
         ) {
-            Some(path) => {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
                 println!(
                     "SOLVED moves={} time={:.1}s",
                     path.len(),
@@ -3220,6 +3260,7 @@ fn main() {
 
     if mode == "macro" {
         // solver macro <csv> [--segdepth N] [--segsecs S] [--beam N] [--events N] [--secs S]
+        let mut prefix_str = String::new();
         let mut segment_depth = 40usize;
         let mut segment_secs = 5.0;
         let mut event_beam = 16usize;
@@ -3228,6 +3269,10 @@ fn main() {
         let mut i = 3;
         while i < args.len() {
             match args[i].as_str() {
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
                 "--segdepth" => {
                     segment_depth = args[i + 1].parse().unwrap();
                     i += 2;
@@ -3254,20 +3299,37 @@ fn main() {
             }
         }
         let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
         eprintln!(
-            "macro solve: players={} segdepth={} segsecs={} beam={} events={} secs={}",
-            nplayers, segment_depth, segment_secs, event_beam, max_events, total_secs
+            "macro solve: players={} prefix={} segdepth={} segsecs={} beam={} events={} secs={}",
+            nplayers,
+            prefix.len(),
+            segment_depth,
+            segment_secs,
+            event_beam,
+            max_events,
+            total_secs
         );
         let t0 = Instant::now();
         match solve_macro_events(
-            &grid,
+            &start_grid,
             segment_depth,
             segment_secs,
             event_beam,
             max_events,
             total_secs,
         ) {
-            Some(path) => {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
                 println!(
                     "SOLVED moves={} time={:.1}s",
                     path.len(),
@@ -3420,12 +3482,17 @@ fn main() {
     if mode == "events" {
         // solver events <csv> [--depth N] [--secs S] [--max N]
         // List structural event successors with paths for manual midgame analysis.
+        let mut prefix_str = String::new();
         let mut depth = 80usize;
         let mut secs = 30.0;
         let mut max_events = 20usize;
         let mut i = 3;
         while i < args.len() {
             match args[i].as_str() {
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
                 "--depth" => {
                     depth = args[i + 1].parse().unwrap();
                     i += 2;
@@ -3444,14 +3511,29 @@ fn main() {
             }
         }
         let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
         let tuples = all_action_tuples(nplayers);
         eprintln!(
-            "events: players={} depth={} secs={} max={}",
-            nplayers, depth, secs, max_events
+            "events: players={} prefix={} depth={} secs={} max={}",
+            nplayers,
+            prefix.len(),
+            depth,
+            secs,
+            max_events
         );
-        match find_event_successors(&grid, &tuples, depth, secs, max_events) {
+        match find_event_successors(&start_grid, &tuples, depth, secs, max_events) {
             Some(events) => {
                 for (idx, event) in events.iter().enumerate() {
+                    let mut full_path = prefix.clone();
+                    full_path.extend(event.path.clone());
                     let ascii: String = if nplayers == 1 {
                         event.path.iter().map(|a| action_to_ch(a[0])).collect()
                     } else {
@@ -3462,6 +3544,7 @@ fn main() {
                             .collect::<Vec<_>>()
                             .join(" ")
                     };
+                    let full_ascii = format_path_ascii(&full_path);
                     println!(
                         "EVENT idx={} moves={} score={} features={:?}",
                         idx,
@@ -3470,6 +3553,7 @@ fn main() {
                         event.features
                     );
                     println!("ASCII {}", ascii);
+                    println!("FULL_ASCII {}", full_ascii);
                     println!("STATE\n{}", event.grid.to_csv());
                 }
             }
