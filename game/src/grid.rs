@@ -233,6 +233,51 @@ impl Grid {
         hash
     }
 
+    pub fn search_hash(&self) -> u64 {
+        fn mix_byte(hash: &mut u64, byte: u8) {
+            *hash ^= byte as u64;
+            *hash = hash.wrapping_mul(0x100000001b3);
+        }
+
+        fn mix_usize(hash: &mut u64, value: usize) {
+            for byte in value.to_le_bytes() {
+                mix_byte(hash, byte);
+            }
+        }
+
+        fn mix_cell(hash: &mut u64, cell: Cell) {
+            match cell {
+                Cell::Empty => mix_byte(hash, 0),
+                Cell::Wall => mix_byte(hash, 1),
+                Cell::Player(player, dir) => {
+                    mix_byte(hash, 2);
+                    mix_byte(hash, player as u8);
+                    mix_byte(hash, dir as u8);
+                }
+                Cell::Rat(_) => mix_byte(hash, 3),
+                Cell::CyborgRat(_) => mix_byte(hash, 4),
+                Cell::Plank => mix_byte(hash, 5),
+                Cell::Spiderweb => mix_byte(hash, 6),
+                Cell::BlackHole => mix_byte(hash, 7),
+                Cell::Explosive => mix_byte(hash, 8),
+                Cell::Trigger(n) => {
+                    mix_byte(hash, 9);
+                    mix_byte(hash, n);
+                }
+            }
+        }
+
+        let mut hash: u64 = 0xcbf29ce484222325;
+        mix_usize(&mut hash, self.width);
+        mix_usize(&mut hash, self.height);
+        for row in &self.cells {
+            for &cell in row {
+                mix_cell(&mut hash, cell);
+            }
+        }
+        hash
+    }
+
     pub fn player_positions(&self) -> Vec<(usize, usize)> {
         self.find_players()
             .into_iter()

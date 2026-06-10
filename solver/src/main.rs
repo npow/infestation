@@ -110,6 +110,288 @@ fn player_dist_map(grid: &Grid) -> Vec<Vec<i32>> {
     dist
 }
 
+fn rat_component_map(grid: &Grid) -> (Vec<Vec<i32>>, Vec<usize>) {
+    let h = grid.height();
+    let w = grid.width();
+    let mut comp = vec![vec![-1; w]; h];
+    let mut sizes = Vec::new();
+    let dirs = [
+        (-1i32, -1i32),
+        (0, -1),
+        (1, -1),
+        (-1, 0),
+        (1, 0),
+        (-1, 1),
+        (0, 1),
+        (1, 1),
+    ];
+
+    for y in 0..h {
+        for x in 0..w {
+            if comp[y][x] >= 0 || !rat_walkable_static(grid.cell_kind_at(x, y)) {
+                continue;
+            }
+            let id = sizes.len() as i32;
+            let mut q = VecDeque::new();
+            q.push_back((x, y));
+            comp[y][x] = id;
+            let mut size = 0usize;
+            while let Some((cx, cy)) = q.pop_front() {
+                size += 1;
+                for (dx, dy) in dirs {
+                    let nx = cx as i32 + dx;
+                    let ny = cy as i32 + dy;
+                    if nx < 0 || ny < 0 || nx as usize >= w || ny as usize >= h {
+                        continue;
+                    }
+                    let (nx, ny) = (nx as usize, ny as usize);
+                    if comp[ny][nx] >= 0 || !rat_walkable_static(grid.cell_kind_at(nx, ny)) {
+                        continue;
+                    }
+                    comp[ny][nx] = id;
+                    q.push_back((nx, ny));
+                }
+            }
+            sizes.push(size);
+        }
+    }
+
+    (comp, sizes)
+}
+
+fn rat_walkable_static(cell: CellKind) -> bool {
+    !matches!(cell, CellKind::Wall | CellKind::Spiderweb)
+}
+
+fn adjacent_count(grid: &Grid, x: usize, y: usize, kind: CellKind) -> usize {
+    let mut count = 0;
+    for dy in -1i32..=1 {
+        for dx in -1i32..=1 {
+            if dx == 0 && dy == 0 {
+                continue;
+            }
+            let nx = x as i32 + dx;
+            let ny = y as i32 + dy;
+            if nx < 0 || ny < 0 {
+                continue;
+            }
+            if grid.cell_kind_at(nx as usize, ny as usize) == kind {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+fn print_diagnostics(grid: &Grid) {
+    let features = Features::from_grid(grid);
+    let player_dist = player_dist_map(grid);
+    let (rat_components, component_sizes) = rat_component_map(grid);
+    let players = positions_for(grid, CellKind::Player);
+    let rats = positions_for_any(grid, &[CellKind::Rat, CellKind::CyborgRat]);
+    let triggers = positions_matching(grid, |cell| matches!(cell, CellKind::Trigger(_)));
+    let explosives = positions_for(grid, CellKind::Explosive);
+    let blackholes = positions_for(grid, CellKind::BlackHole);
+
+    let player_reachable_cells = player_dist
+        .iter()
+        .flat_map(|row| row.iter())
+        .filter(|&&dist| dist != i32::MAX)
+        .count();
+    let reachable_rats = rats
+        .iter()
+        .filter(|&&(x, y)| player_dist[y][x] != i32::MAX)
+        .count();
+    let reachable_triggers = triggers
+        .iter()
+        .filter(|&&(x, y)| player_dist[y as usize][x as usize] != i32::MAX)
+        .count();
+
+    println!(
+        "features rats={} explosives={} webs={} triggers={} planks={} walls={}",
+        features.rats,
+        features.explosives,
+        features.webs,
+        features.triggers,
+        features.planks,
+        features.walls
+    );
+    println!(
+        "players=[{}] rats=[{}]",
+        format_positions(&players),
+        format_positions(&rats)
+    );
+    println!(
+        "player_reachable cells={} rats={}/{} triggers={}/{}",
+        player_reachable_cells,
+        reachable_rats,
+        rats.len(),
+        reachable_triggers,
+        triggers.len()
+    );
+    println!("explosives=[{}]", format_positions(&explosives));
+    println!(
+        "blackholes=[{}]",
+        format_positions(&blackholes)
+    );
+
+    for &(x, y) in &rats {
+        let dist = player_dist[y][x];
+        let dist_text = if dist == i32::MAX {
+            "unreachable".to_string()
+        } else {
+            dist.to_string()
+        };
+        let component = rat_components[y][x];
+        let component_size = if component >= 0 {
+            component_sizes[component as usize]
+        } else {
+            0
+        };
+        println!(
+            "rat ({x},{y}) player_dist={} rat_component={} component_size={} adj_x={} adj_o={} adj_trigger={} adj_plank={} adj_web={}",
+            dist_text,
+            component,
+            component_size,
+            adjacent_count(grid, x, y, CellKind::Explosive),
+            adjacent_count(grid, x, y, CellKind::BlackHole),
+            adjacent_trigger_count(grid, x, y),
+            adjacent_count(grid, x, y, CellKind::Plank),
+            adjacent_count(grid, x, y, CellKind::Spiderweb)
+        );
+    }
+}
+
+fn csv_tokens(grid: &Grid) -> Vec<Vec<String>> {
+    grid.to_csv()
+        .lines()
+        .map(|line| line.split(',').map(str::to_string).collect())
+        .collect()
+}
+
+fn tokens_to_csv(tokens: &[Vec<String>]) -> String {
+    let mut csv = tokens
+        .iter()
+        .map(|row| row.join(","))
+        .collect::<Vec<_>>()
+        .join("\n");
+    csv.push('\n');
+    csv
+}
+
+fn is_player_token(token: &str) -> bool {
+    matches!(token, "▲" | "▼" | "►" | "◄" | "△" | "▽" | "▷" | "◁")
+}
+
+fn is_mutation_floor(token: &str) -> bool {
+    matches!(token, "." | "w")
+}
+
+fn print_ignition_geometries(grid: &Grid, limit: usize) {
+    let base_features = Features::from_grid(grid);
+    let base_tokens = csv_tokens(grid);
+    let rats = positions_for_any(grid, &[CellKind::Rat, CellKind::CyborgRat]);
+    let players = positions_for(grid, CellKind::Player);
+    let player_symbols = ["▲", "▼", "►", "◄"];
+    let tuples = all_action_tuples(1);
+    let mut printed = 0usize;
+    let mut seen = HashSet::new();
+
+    for &(source_rat_x, source_rat_y) in &rats {
+        if source_rat_y < 3 {
+            continue;
+        }
+        for rat_y in 0..grid.height() {
+            for rat_x in 0..grid.width() {
+                let rat_base = &base_tokens[rat_y][rat_x];
+                if !is_mutation_floor(rat_base) && (rat_x, rat_y) != (source_rat_x, source_rat_y) {
+                    continue;
+                }
+                for player_y in 0..grid.height() {
+                    for player_x in 0..grid.width() {
+                        if (player_x, player_y) == (rat_x, rat_y) {
+                            continue;
+                        }
+                        let player_base = &base_tokens[player_y][player_x];
+                        if !is_mutation_floor(player_base)
+                            && !is_player_token(player_base)
+                            && (player_x, player_y) != players.first().copied().unwrap_or((usize::MAX, usize::MAX))
+                        {
+                            continue;
+                        }
+                        for player_symbol in player_symbols {
+                            let mut tokens = base_tokens.clone();
+                            for row in &mut tokens {
+                                for token in row {
+                                    if is_player_token(token) {
+                                        *token = ".".to_string();
+                                    }
+                                }
+                            }
+                            tokens[source_rat_y][source_rat_x] = ".".to_string();
+                            tokens[rat_y][rat_x] = "R".to_string();
+                            tokens[player_y][player_x] = player_symbol.to_string();
+                            let candidate_csv = tokens_to_csv(&tokens);
+                            let candidate = grid_from_csv(&candidate_csv);
+                            for actions in &tuples {
+                                let (next, play_state) = step(&candidate, actions);
+                                let next_features = Features::from_grid(&next);
+                                if play_state != PlayState::GameOver
+                                    && (play_state == PlayState::Won
+                                        || next_features.explosives < base_features.explosives)
+                                {
+                                    let key = (
+                                        rat_x,
+                                        rat_y,
+                                        player_x,
+                                        player_y,
+                                        player_symbol.to_string(),
+                                        action_to_ch(actions[0]),
+                                    );
+                                    if !seen.insert(key) {
+                                        continue;
+                                    }
+                                    println!(
+                                        "rat=({rat_x},{rat_y}) player=({player_x},{player_y},{player_symbol}) action={} result={play_state:?} next_rats={} next_explosives={} next_webs={}",
+                                        action_to_ch(actions[0]),
+                                        next_features.rats,
+                                        next_features.explosives,
+                                        next_features.webs
+                                    );
+                                    printed += 1;
+                                    if printed >= limit {
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn adjacent_trigger_count(grid: &Grid, x: usize, y: usize) -> usize {
+    let mut count = 0;
+    for dy in -1i32..=1 {
+        for dx in -1i32..=1 {
+            if dx == 0 && dy == 0 {
+                continue;
+            }
+            let nx = x as i32 + dx;
+            let ny = y as i32 + dy;
+            if nx < 0 || ny < 0 {
+                continue;
+            }
+            if matches!(grid.cell_kind_at(nx as usize, ny as usize), CellKind::Trigger(_)) {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
 /// Heuristic: rats_remaining is dominant. Secondary: distance from player to the
 /// nearest "actionable" cell (a rat reachable to be killed, or an explosive).
 /// This provides a gradient even in levels where rats only die at the end.
@@ -172,7 +454,7 @@ fn heuristic(grid: &Grid) -> i64 {
         secondary as i64
     };
     let dead_end_penalty = if nearest_rat == i32::MAX && nearest_trigger == i32::MAX {
-        rats * 5_000_000
+        rats * 250_000_000
     } else {
         0
     };
@@ -249,6 +531,124 @@ fn reconstruct(nodes: &[Node], mut idx: usize) -> Vec<Vec<Action>> {
     }
     acts.reverse();
     acts
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LookupOrder {
+    Bfs,
+    Gbfs,
+    Astar,
+}
+
+impl LookupOrder {
+    fn parse(input: &str) -> Self {
+        match input {
+            "bfs" => Self::Bfs,
+            "gbfs" => Self::Gbfs,
+            "astar" => Self::Astar,
+            other => panic!("unknown lookup order {other}"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum LookupGoal {
+    Win,
+    TriggerNumber(u8),
+    CellChanged(i32, i32),
+    RatGone(i32, i32),
+    RatDrop,
+}
+
+impl LookupGoal {
+    fn parse(input: &str) -> Self {
+        let Some((kind, arg)) = input.split_once(':') else {
+            return match input {
+                "win" => Self::Win,
+                "ratdrop" => Self::RatDrop,
+                other => panic!("unknown lookup goal {other}"),
+            };
+        };
+        match kind {
+            "trigger" => Self::TriggerNumber(arg.parse().expect("trigger number")),
+            "cell" | "cellchanged" => {
+                let (x, y) = parse_required_point(arg);
+                Self::CellChanged(x, y)
+            }
+            "ratgone" => {
+                let (x, y) = parse_required_point(arg);
+                Self::RatGone(x, y)
+            }
+            other => panic!("unknown lookup goal {other}"),
+        }
+    }
+}
+
+fn parse_required_point(s: &str) -> (i32, i32) {
+    parse_optional_point(s).expect("x,y point")
+}
+
+fn trigger_count(grid: &Grid, number: u8) -> usize {
+    let mut count = 0;
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if grid.cell_kind_at(x, y) == CellKind::Trigger(number) {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+fn lookup_goal_reached(
+    goal: LookupGoal,
+    initial: &Grid,
+    current: &Grid,
+    play_state: PlayState,
+) -> bool {
+    match goal {
+        LookupGoal::Win => play_state == PlayState::Won,
+        LookupGoal::TriggerNumber(number) => {
+            trigger_count(current, number) < trigger_count(initial, number)
+        }
+        LookupGoal::CellChanged(x, y) => {
+            current.cell_kind_at(x as usize, y as usize)
+                != initial.cell_kind_at(x as usize, y as usize)
+        }
+        LookupGoal::RatGone(x, y) => !rat_at(current, (x, y)),
+        LookupGoal::RatDrop => count_rats(current) < count_rats(initial),
+    }
+}
+
+fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i64 {
+    if lookup_goal_reached(goal, initial, current, PlayState::Playing) {
+        return 0;
+    }
+
+    match goal {
+        LookupGoal::Win => heuristic(current),
+        LookupGoal::TriggerNumber(number) => {
+            let dist = player_dist_map(current);
+            let nearest = trigger_positions(current, number)
+                .iter()
+                .filter_map(|&(x, y)| {
+                    let d = dist[y as usize][x as usize];
+                    (d != i32::MAX).then_some(d as i64)
+                })
+                .min()
+                .unwrap_or(1_000);
+            nearest + heuristic(current) / 1_000
+        }
+        LookupGoal::CellChanged(x, y) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::RatGone(x, y) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::RatDrop => heuristic(current),
+    }
 }
 
 struct PQItem {
@@ -806,6 +1206,210 @@ fn solve_novelty(
                 novelty: novelty_score,
                 h,
                 depth: cur_depth + 1,
+                idx: node_idx,
+            });
+        }
+    }
+
+    None
+}
+
+#[must_use]
+fn solve_lookup(
+    grid: &Grid,
+    max_depth: usize,
+    time_limit_secs: f64,
+    max_nodes: usize,
+    order: LookupOrder,
+    weight: i64,
+    canonical: bool,
+    goal: LookupGoal,
+    progress_every: u64,
+) -> Option<(Vec<Vec<Action>>, PlayState)> {
+    let nplayers = count_players(grid);
+    let tuples = all_action_tuples(nplayers);
+    let start = Instant::now();
+    let state_key = |state: &Grid| {
+        if canonical {
+            state.search_hash()
+        } else {
+            state.state_hash()
+        }
+    };
+
+    if goal == LookupGoal::Win && count_rats(grid) == 0 {
+        return Some((Vec::new(), PlayState::Won));
+    }
+    if lookup_goal_reached(goal, grid, grid, PlayState::Playing) {
+        return Some((Vec::new(), PlayState::Playing));
+    }
+
+    let mut nodes = vec![Node {
+        grid: grid.clone(),
+        parent: usize::MAX,
+        action: Vec::new(),
+        depth: 0,
+    }];
+    let mut visited: HashMap<u64, u32> = HashMap::new();
+    visited.insert(state_key(grid), 0);
+    let mut expansions = 0u64;
+    let mut best_h = lookup_goal_heuristic(goal, grid, grid);
+    let mut best_idx = 0usize;
+
+    if order == LookupOrder::Bfs {
+        let mut q = VecDeque::new();
+        q.push_back(0usize);
+        while let Some(idx) = q.pop_front() {
+            expansions += 1;
+            if progress_every > 0 && expansions % progress_every == 0 {
+                eprintln!(
+                    "  [lookup expansions={} depth={} queue={} nodes={} visited={} best_h={} elapsed={:.1}s]",
+                    expansions,
+                    nodes[idx].depth,
+                    q.len(),
+                    nodes.len(),
+                    visited.len(),
+                    best_h,
+                    start.elapsed().as_secs_f64()
+                );
+            }
+            if start.elapsed().as_secs_f64() > time_limit_secs || nodes.len() >= max_nodes {
+                let best_path = reconstruct(&nodes, best_idx);
+                eprintln!(
+                    "  [lookup stop expansions={} queue={} nodes={} visited={} best_h={} elapsed={:.1}s]",
+                    expansions,
+                    q.len(),
+                    nodes.len(),
+                    visited.len(),
+                    best_h,
+                    start.elapsed().as_secs_f64()
+                );
+                eprintln!("  BEST_ARROWS {}", format_path(&best_path));
+                eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
+                eprintln!("  BEST_STATE:\n{}", nodes[best_idx].grid.to_csv());
+                return None;
+            }
+
+            let cur_depth = nodes[idx].depth;
+            if cur_depth as usize >= max_depth {
+                continue;
+            }
+            let cur_grid = nodes[idx].grid.clone();
+            for actions in &tuples {
+                let (next_grid, play_state) = step(&cur_grid, actions);
+                if play_state == PlayState::GameOver {
+                    continue;
+                }
+                let hash = state_key(&next_grid);
+                if !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                    && visited.contains_key(&hash)
+                {
+                    continue;
+                }
+                let node_idx = nodes.len();
+                nodes.push(Node {
+                    grid: next_grid.clone(),
+                    parent: idx,
+                    action: actions.clone(),
+                    depth: cur_depth + 1,
+                });
+                if lookup_goal_reached(goal, grid, &next_grid, play_state) {
+                    return Some((reconstruct(&nodes, node_idx), play_state));
+                }
+
+                visited.insert(hash, cur_depth + 1);
+                let h = lookup_goal_heuristic(goal, grid, &next_grid);
+                if h < best_h {
+                    best_h = h;
+                    best_idx = node_idx;
+                }
+                q.push_back(node_idx);
+            }
+        }
+        return None;
+    }
+
+    let mut pq = BinaryHeap::new();
+    pq.push(PQItem {
+        f: best_h,
+        g: 0,
+        idx: 0,
+    });
+    while let Some(item) = pq.pop() {
+        expansions += 1;
+        if progress_every > 0 && expansions % progress_every == 0 {
+            eprintln!(
+                "  [lookup expansions={} depth={} open={} nodes={} visited={} best_h={} elapsed={:.1}s]",
+                expansions,
+                nodes[item.idx].depth,
+                pq.len(),
+                nodes.len(),
+                visited.len(),
+                best_h,
+                start.elapsed().as_secs_f64()
+            );
+        }
+        if start.elapsed().as_secs_f64() > time_limit_secs || nodes.len() >= max_nodes {
+            let best_path = reconstruct(&nodes, best_idx);
+            eprintln!(
+                "  [lookup stop expansions={} open={} nodes={} visited={} best_h={} elapsed={:.1}s]",
+                expansions,
+                pq.len(),
+                nodes.len(),
+                visited.len(),
+                best_h,
+                start.elapsed().as_secs_f64()
+            );
+            eprintln!("  BEST_ARROWS {}", format_path(&best_path));
+            eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
+            eprintln!("  BEST_STATE:\n{}", nodes[best_idx].grid.to_csv());
+            return None;
+        }
+
+        let idx = item.idx;
+        let cur_depth = nodes[idx].depth;
+        if cur_depth as i64 > item.g || cur_depth as usize >= max_depth {
+            continue;
+        }
+        let cur_grid = nodes[idx].grid.clone();
+        for actions in &tuples {
+            let (next_grid, play_state) = step(&cur_grid, actions);
+            if play_state == PlayState::GameOver {
+                continue;
+            }
+            let next_depth = cur_depth + 1;
+            let hash = state_key(&next_grid);
+            if let Some(&previous_depth) = visited.get(&hash)
+                && previous_depth <= next_depth
+            {
+                continue;
+            }
+
+            let node_idx = nodes.len();
+            nodes.push(Node {
+                grid: next_grid.clone(),
+                parent: idx,
+                action: actions.clone(),
+                depth: next_depth,
+            });
+            if lookup_goal_reached(goal, grid, &next_grid, play_state) {
+                return Some((reconstruct(&nodes, node_idx), play_state));
+            }
+
+            visited.insert(hash, next_depth);
+            let h = lookup_goal_heuristic(goal, grid, &next_grid);
+            if h < best_h {
+                best_h = h;
+                best_idx = node_idx;
+            }
+            let f = match order {
+                LookupOrder::Gbfs => h,
+                LookupOrder::Astar => next_depth as i64 + weight * h,
+                LookupOrder::Bfs => unreachable!(),
+            };
+            pq.push(PQItem {
+                f,
+                g: next_depth as i64,
                 idx: node_idx,
             });
         }
@@ -1495,6 +2099,18 @@ fn lure_reached(grid: &Grid, rat_target: (i32, i32), safe_targets: &[(i32, i32)]
     rat_at(grid, rat_target) && player_at_any(grid, safe_targets)
 }
 
+fn rat_at_any(grid: &Grid, targets: &[(i32, i32)]) -> bool {
+    targets.iter().any(|&target| rat_at(grid, target))
+}
+
+fn nearest_target_distance(points: &[(i32, i32)], targets: &[(i32, i32)]) -> i64 {
+    points
+        .iter()
+        .flat_map(|&point| targets.iter().map(move |&target| manhattan(point, target)))
+        .min()
+        .unwrap_or(1_000)
+}
+
 fn lure_heuristic(
     grid: &Grid,
     rat_target: (i32, i32),
@@ -1540,6 +2156,105 @@ fn lure_heuristic(
     let lost_rats = initial_rats.saturating_sub(count_rats(grid)) as i64;
 
     lost_rats * 10_000_000 + rat_distance * 1_000 + safe_distance * 80 + target_clearance
+}
+
+fn rectangle_corridor_cells(grid: &Grid) -> Vec<(i32, i32)> {
+    if grid.width() < 16 {
+        return Vec::new();
+    }
+
+    let mut cells = Vec::new();
+    for y in 3..=6 {
+        for x in 1..=7 {
+            cells.push((x, y));
+        }
+    }
+    for y in 6..=8 {
+        for x in 13..=15 {
+            cells.push((x, y));
+        }
+    }
+    cells
+}
+
+fn geom_lure_heuristic(
+    grid: &Grid,
+    rat_targets: &[(i32, i32)],
+    safe_targets: &[(i32, i32)],
+    initial_rats: usize,
+    initial_explosives: usize,
+    preserve_rats: bool,
+) -> i64 {
+    let current_explosives = count_explosives(grid);
+    if current_explosives < initial_explosives {
+        return count_rats(grid) as i64;
+    }
+
+    let all_rats = rat_positions(grid);
+    let lure_rats = tinder_lure_rat_positions(grid);
+    let players = positions_matching(grid, |cell| cell == CellKind::Player);
+    let rat_on_target = rat_at_any(grid, rat_targets);
+    let player_safe = player_at_any(grid, safe_targets);
+    if rat_on_target && player_safe {
+        return 1;
+    }
+
+    let rat_distance = nearest_target_distance(&lure_rats, rat_targets);
+    let safe_distance = nearest_target_distance(&players, safe_targets);
+    let target_clearance = rat_targets
+        .iter()
+        .map(|&(x, y)| {
+            if x < 0 || y < 0 || x as usize >= grid.width() || y as usize >= grid.height() {
+                return 100_000;
+            }
+            match grid.cell_kind_at(x as usize, y as usize) {
+                CellKind::Spiderweb => distance_from_player(grid, (x, y)) * 80 + 20_000,
+                CellKind::Wall | CellKind::BlackHole => 100_000,
+                _ => 0,
+            }
+        })
+        .min()
+        .unwrap_or(100_000);
+
+    let mut corridor_webs = 0i64;
+    let mut nearest_corridor_web = 1_000i64;
+    for (x, y) in rectangle_corridor_cells(grid) {
+        if grid.cell_kind_at(x as usize, y as usize) == CellKind::Spiderweb {
+            corridor_webs += 1;
+            nearest_corridor_web = nearest_corridor_web.min(distance_from_player(grid, (x, y)));
+        }
+    }
+
+    let nearest_rat_to_player = players
+        .iter()
+        .flat_map(|&player| all_rats.iter().map(move |&rat| manhattan(player, rat)))
+        .min()
+        .unwrap_or(1_000);
+    let contact_penalty = if !player_safe && nearest_rat_to_player <= 1 {
+        50_000
+    } else if !player_safe && nearest_rat_to_player == 2 {
+        5_000
+    } else {
+        0
+    };
+    let lost_rats = initial_rats.saturating_sub(count_rats(grid)) as i64;
+    let lost_rat_penalty = if preserve_rats {
+        lost_rats * 10_000_000
+    } else {
+        lost_rats * 10_000
+    };
+
+    if rat_on_target {
+        lost_rat_penalty + contact_penalty + safe_distance * 250
+    } else {
+        lost_rat_penalty
+            + contact_penalty
+            + target_clearance
+            + corridor_webs * 1_200
+            + nearest_corridor_web.min(50) * 35
+            + rat_distance * 900
+            + safe_distance.min(50) * 30
+    }
 }
 
 #[must_use]
@@ -1643,6 +2358,134 @@ fn solve_lure(
                 rat_target,
                 safe_targets,
                 initial_rats,
+            );
+            if h < best_h_seen {
+                best_h_seen = h;
+                best_idx_seen = node_idx;
+            }
+            let f = match strategy {
+                "gbfs" => h,
+                _ => cur_g + 1 + weight * h,
+            };
+            pq.push(PQItem {
+                f,
+                g: cur_g + 1,
+                idx: node_idx,
+            });
+        }
+    }
+
+    None
+}
+
+#[must_use]
+fn solve_geom_lure(
+    grid: &Grid,
+    rat_targets: &[(i32, i32)],
+    safe_targets: &[(i32, i32)],
+    preserve_rats: bool,
+    max_depth: usize,
+    time_limit_secs: f64,
+    strategy: &str,
+    weight: i64,
+) -> Option<Vec<Vec<Action>>> {
+    let nplayers = count_players(grid);
+    let tuples = all_action_tuples(nplayers);
+    let initial_rats = count_rats(grid);
+    let initial_explosives = count_explosives(grid);
+    let start = Instant::now();
+    let mut nodes: Vec<Node> = vec![Node {
+        grid: grid.clone(),
+        parent: usize::MAX,
+        action: Vec::new(),
+        depth: 0,
+    }];
+    let mut visited: HashMap<u64, u32> = HashMap::new();
+    visited.insert(grid.state_hash(), 0);
+    let h0 = geom_lure_heuristic(
+        grid,
+        rat_targets,
+        safe_targets,
+        initial_rats,
+        initial_explosives,
+        preserve_rats,
+    );
+    let mut pq = BinaryHeap::new();
+    pq.push(PQItem {
+        f: h0,
+        g: 0,
+        idx: 0,
+    });
+    let mut expansions = 0u64;
+    let mut best_h_seen = h0;
+    let mut best_idx_seen = 0usize;
+
+    while let Some(item) = pq.pop() {
+        expansions += 1;
+        if expansions % 20_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+            let best_path = reconstruct(&nodes, best_idx_seen);
+            eprintln!(
+                "  [geomlure timeout after {} expansions, best_h={}, nodes={}]",
+                expansions,
+                best_h_seen,
+                nodes.len()
+            );
+            eprintln!("  BEST_ARROWS {}", format_path(&best_path));
+            eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
+            eprintln!("  BEST_STATE:\n{}", nodes[best_idx_seen].grid.to_csv());
+            return None;
+        }
+
+        let idx = item.idx;
+        let cur_grid = nodes[idx].grid.clone();
+        let cur_g = nodes[idx].depth as i64;
+        if cur_g > item.g || cur_g as usize >= max_depth {
+            continue;
+        }
+
+        if let Some(actions) = winning_action(&cur_grid, &tuples) {
+            let mut path = reconstruct(&nodes, idx);
+            path.push(actions);
+            return Some(path);
+        }
+
+        for actions in &tuples {
+            let (next_grid, play_state) = step(&cur_grid, actions);
+            if play_state == PlayState::GameOver {
+                continue;
+            }
+            let node_idx = nodes.len();
+            let next_depth = nodes[idx].depth + 1;
+            nodes.push(Node {
+                grid: next_grid.clone(),
+                parent: idx,
+                action: actions.clone(),
+                depth: next_depth,
+            });
+            if play_state == PlayState::Won {
+                return Some(reconstruct(&nodes, node_idx));
+            }
+            if preserve_rats && count_rats(&next_grid) < initial_rats {
+                continue;
+            }
+
+            let hash = next_grid.state_hash();
+            let better = match visited.get(&hash) {
+                None => true,
+                Some(&previous_depth) => next_depth < previous_depth,
+            };
+            if !better {
+                continue;
+            }
+            visited.insert(hash, next_depth);
+
+            let h = geom_lure_heuristic(
+                &next_grid,
+                rat_targets,
+                safe_targets,
+                initial_rats,
+                initial_explosives,
+                preserve_rats,
             );
             if h < best_h_seen {
                 best_h_seen = h;
@@ -1768,6 +2611,10 @@ fn parse_optional_point(s: &str) -> Option<(i32, i32)> {
         parts.next().unwrap().trim().parse().unwrap(),
         parts.next().unwrap().trim().parse().unwrap(),
     ))
+}
+
+fn parse_points(s: &str) -> Vec<(i32, i32)> {
+    s.split(';').filter_map(parse_optional_point).collect()
 }
 
 fn parse_waypoint_pairs(s: &str, nplayers: usize) -> Vec<Vec<Option<(i32, i32)>>> {
@@ -3050,6 +3897,46 @@ fn main() {
         return;
     }
 
+    if mode == "diag" {
+        // solver diag <csv> [prefix] — replay an optional prefix, then print reachability diagnostics.
+        let action_str = args.get(3).map(String::as_str).unwrap_or("");
+        let nplayers = count_players(&grid);
+        let path = parse_action_string(action_str, nplayers);
+        let (state, play_state, applied) = replay_path(&grid, &path);
+        println!("state={play_state:?} turns_applied={applied}");
+        println!("grid:\n{}", state.to_csv());
+        print_diagnostics(&state);
+        return;
+    }
+
+    if mode == "ignitions" {
+        // solver ignitions <csv> [prefix] [--limit N] — list one-step detonation geometries.
+        let mut prefix_str = String::new();
+        let mut limit = 80usize;
+        let mut i = 3;
+        if i < args.len() && !args[i].starts_with("--") {
+            prefix_str = args[i].clone();
+            i += 1;
+        }
+        while i < args.len() {
+            match args[i].as_str() {
+                "--limit" => {
+                    limit = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                _ => i += 1,
+            }
+        }
+        let nplayers = count_players(&grid);
+        let path = parse_action_string(&prefix_str, nplayers);
+        let (state, play_state, applied) = replay_path(&grid, &path);
+        println!("state={play_state:?} turns_applied={applied}");
+        if play_state == PlayState::Playing {
+            print_ignition_geometries(&state, limit);
+        }
+        return;
+    }
+
     if mode == "lure" {
         // solver lure <csv> --rat x,y [--safe x,y;x,y] [--preserve-rats]
         //                  [--prefix MOVES] [--depth N] [--secs S]
@@ -3134,6 +4021,109 @@ fn main() {
         match solve_lure(
             &start_grid,
             rat_target,
+            &safe_targets,
+            preserve_rats,
+            depth,
+            secs,
+            &strategy,
+            weight,
+        ) {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
+                println!(
+                    "SOLVED moves={} time={:.1}s",
+                    path.len(),
+                    t0.elapsed().as_secs_f64()
+                );
+                println!("ARROWS {}", format_path(&path));
+                println!("ASCII {}", format_path_ascii(&path));
+            }
+            None => println!("NO_SOLUTION time={:.1}s", t0.elapsed().as_secs_f64()),
+        }
+        return;
+    }
+
+    if mode == "geomlure" {
+        // solver geomlure <csv> --rats x,y;... --safe x,y;... [--preserve-rats]
+        //                      [--prefix MOVES] [--depth N] [--secs S]
+        //                      [--strategy gbfs|astar] [--weight W]
+        let mut rat_targets = Vec::new();
+        let mut safe_targets = Vec::new();
+        let mut preserve_rats = false;
+        let mut prefix_str = String::new();
+        let mut depth = 200usize;
+        let mut secs = 60.0;
+        let mut strategy = "astar".to_string();
+        let mut weight = 2i64;
+        let mut i = 3;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--rats" | "--rat-targets" => {
+                    rat_targets = parse_points(&args[i + 1]);
+                    i += 2;
+                }
+                "--safe" | "--safe-targets" => {
+                    safe_targets = parse_points(&args[i + 1]);
+                    i += 2;
+                }
+                "--preserve-rats" => {
+                    preserve_rats = true;
+                    i += 1;
+                }
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--depth" => {
+                    depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--secs" => {
+                    secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--strategy" => {
+                    strategy = args[i + 1].clone();
+                    i += 2;
+                }
+                "--weight" => {
+                    weight = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                _ => {
+                    i += 1;
+                }
+            }
+        }
+        assert!(!rat_targets.is_empty(), "--rats x,y;... is required");
+        assert!(!safe_targets.is_empty(), "--safe x,y;... is required");
+        let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
+        eprintln!(
+            "geomlure solve: players={} prefix={} rat_targets={:?} safe_targets={:?} preserve_rats={} strategy={} depth={} secs={} weight={}",
+            nplayers,
+            prefix.len(),
+            rat_targets,
+            safe_targets,
+            preserve_rats,
+            strategy,
+            depth,
+            secs,
+            weight
+        );
+        let t0 = Instant::now();
+        match solve_geom_lure(
+            &start_grid,
+            &rat_targets,
             &safe_targets,
             preserve_rats,
             depth,
@@ -4308,6 +5298,122 @@ fn main() {
                         .join(" ")
                 };
                 println!("ASCII {}", ascii);
+            }
+            None => println!("NO_SOLUTION time={:.1}s", t0.elapsed().as_secs_f64()),
+        }
+        return;
+    }
+
+    if mode == "lookup" {
+        // solver lookup <csv> [--prefix MOVES] [--order bfs|gbfs|astar]
+        //                     [--depth N] [--secs S] [--maxnodes N]
+        //                     [--weight W] [--progress N] [--no-canonical]
+        let mut prefix_str = String::new();
+        let mut order = LookupOrder::Bfs;
+        let mut depth = 400usize;
+        let mut secs = 120.0;
+        let mut max_nodes = 5_000_000usize;
+        let mut weight = 5i64;
+        let mut canonical = true;
+        let mut goal = LookupGoal::Win;
+        let mut progress_every = 100_000u64;
+        let mut i = 3;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--order" => {
+                    order = LookupOrder::parse(&args[i + 1]);
+                    i += 2;
+                }
+                "--depth" => {
+                    depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--secs" => {
+                    secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--maxnodes" => {
+                    max_nodes = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--weight" => {
+                    weight = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--goal" => {
+                    goal = LookupGoal::parse(&args[i + 1]);
+                    i += 2;
+                }
+                "--progress" => {
+                    progress_every = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--no-canonical" => {
+                    canonical = false;
+                    i += 1;
+                }
+                _ => {
+                    i += 1;
+                }
+            }
+        }
+        let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
+        eprintln!(
+            "lookup solve: players={} prefix={} order={} depth={} secs={} maxnodes={} canonical={} weight={} goal={:?}",
+            nplayers,
+            prefix.len(),
+            match order {
+                LookupOrder::Bfs => "bfs",
+                LookupOrder::Gbfs => "gbfs",
+                LookupOrder::Astar => "astar",
+            },
+            depth,
+            secs,
+            max_nodes,
+            canonical,
+            weight,
+            goal
+        );
+        let t0 = Instant::now();
+        match solve_lookup(
+            &start_grid,
+            depth,
+            secs,
+            max_nodes,
+            order,
+            weight,
+            canonical,
+            goal,
+            progress_every,
+        ) {
+            Some((suffix, play_state)) => {
+                let mut path = prefix;
+                path.extend(suffix);
+                let solved = play_state == PlayState::Won;
+                println!(
+                    "{} moves={} time={:.1}s",
+                    if solved { "SOLVED" } else { "GOAL" },
+                    path.len(),
+                    t0.elapsed().as_secs_f64()
+                );
+                if !solved {
+                    println!("GOAL_REACHED state={:?}", play_state);
+                }
+                println!("ARROWS {}", format_path(&path));
+                println!("ASCII {}", format_path_ascii(&path));
             }
             None => println!("NO_SOLUTION time={:.1}s", t0.elapsed().as_secs_f64()),
         }
