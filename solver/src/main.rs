@@ -67,8 +67,9 @@ fn count_rats(grid: &Grid) -> usize {
     rats
 }
 
-/// Player walk-distance BFS: players are blocked by Wall(#), Plank(=), BlackHole(O).
-/// Everything else is walkable (webs, empties, triggers, explosives, rats).
+/// Player walk-distance BFS: players are blocked by walls, planks,
+/// black holes, and explosives. Webs, empties, triggers, and rat cells
+/// are walkable for heuristic purposes.
 /// Returns distance map from all player positions.
 fn player_dist_map(grid: &Grid) -> Vec<Vec<i32>> {
     let h = grid.height();
@@ -94,7 +95,10 @@ fn player_dist_map(grid: &Grid) -> Vec<Vec<i32>> {
             }
             let (nx, ny) = (nx as usize, ny as usize);
             let cell = grid.cell_kind_at(nx, ny);
-            if matches!(cell, CellKind::Wall | CellKind::Plank | CellKind::BlackHole) {
+            if matches!(
+                cell,
+                CellKind::Wall | CellKind::Plank | CellKind::BlackHole | CellKind::Explosive
+            ) {
                 continue;
             }
             if dist[ny][nx] > d + 1 {
@@ -175,7 +179,7 @@ fn heuristic(grid: &Grid) -> i64 {
     // weights chosen so rats dominate, then structural progress, then positioning.
     let use_progress = std::env::var("PROGRESS_H").is_ok();
     let smart_penalty = if std::env::var("SMART_H").is_ok() {
-        unreachable_rats * 4_000_000 + unreachable_triggers * 500_000
+        unreachable_rats * 25_000_000 + unreachable_triggers * 500_000
     } else {
         0
     };
@@ -805,6 +809,13 @@ enum SegResult {
 }
 
 #[derive(Clone)]
+struct SegmentBranch {
+    grid: Grid,
+    path: Vec<Vec<Action>>,
+    won: bool,
+}
+
+#[derive(Clone)]
 struct Branch {
     grid: Grid,
     path: Vec<Vec<Action>>,
@@ -856,13 +867,38 @@ fn resource_exhaustion_penalty(features: Features) -> i64 {
     }
 }
 
+fn reachable_rat_count(grid: &Grid) -> usize {
+    let dist = player_dist_map(grid);
+    let mut reachable = 0;
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if matches!(grid.cell_kind_at(x, y), CellKind::Rat | CellKind::CyborgRat)
+                && dist[y][x] != i32::MAX
+            {
+                reachable += 1;
+            }
+        }
+    }
+    reachable
+}
+
 fn trigger_branch_score(grid: &Grid, path_len: usize, before: Features, after: Features) -> i64 {
     let structural_gain = before.rats.saturating_sub(after.rats) as i64 * 1_000_000
         + before.explosives.saturating_sub(after.explosives) as i64 * 2_000
         + before.webs.saturating_sub(after.webs) as i64 * 500
         + before.planks.saturating_sub(after.planks) as i64 * 500
         + before.triggers.saturating_sub(after.triggers) as i64 * 2_000;
-    heuristic(grid) + path_len as i64 + resource_exhaustion_penalty(after) - structural_gain
+    let stranded_rat_penalty = if std::env::var("SMART_H").is_ok()
+        && before.rats > after.rats
+        && after.rats > 0
+        && reachable_rat_count(grid) == 0
+    {
+        80_000_000
+    } else {
+        0
+    };
+    heuristic(grid) + path_len as i64 + resource_exhaustion_penalty(after) + stranded_rat_penalty
+        - structural_gain
 }
 
 #[derive(Clone)]
@@ -1000,6 +1036,107 @@ fn solve_segment(
         }
     }
     SegResult::Failed
+}
+
+fn solve_segment_branches(
+    start: &Grid,
+    target: (i32, i32),
+    tuples: &[Vec<Action>],
+    per_secs: f64,
+    max_results: usize,
+) -> Vec<SegmentBranch> {
+    let t0 = Instant::now();
+    let mut nodes: Vec<Node> = vec![Node {
+        grid: start.clone(),
+        parent: usize::MAX,
+        action: vec![],
+        depth: 0,
+    }];
+    let mut visited: HashMap<u64, u32> = HashMap::new();
+    visited.insert(start.state_hash(), 0);
+    let mut reached_hashes = HashSet::new();
+    let mut results = Vec::new();
+    let mut pq: BinaryHeap<PQItem> = BinaryHeap::new();
+    let p0 = find_player(start).unwrap();
+    pq.push(PQItem {
+        f: manhattan(p0, target),
+        g: 0,
+        idx: 0,
+    });
+    let mut exp: u64 = 0;
+    while let Some(item) = pq.pop() {
+        exp += 1;
+        if exp % 5_000 == 0 && t0.elapsed().as_secs_f64() > per_secs {
+            break;
+        }
+        if results.len() >= max_results {
+            break;
+        }
+
+        let idx = item.idx;
+        let cur_grid = nodes[idx].grid.clone();
+        let cur_g = nodes[idx].depth as i64;
+        if cur_g > item.g {
+            continue;
+        }
+        for t in tuples {
+            let (ns, st) = step(&cur_grid, t);
+            if st == PlayState::GameOver {
+                continue;
+            }
+
+            let node_idx = nodes.len();
+            nodes.push(Node {
+                grid: ns.clone(),
+                parent: idx,
+                action: t.clone(),
+                depth: (cur_g + 1) as u32,
+            });
+
+            if st == PlayState::Won {
+                results.push(SegmentBranch {
+                    grid: ns,
+                    path: reconstruct(&nodes, node_idx),
+                    won: true,
+                });
+                break;
+            }
+
+            let pp = match find_player(&ns) {
+                Some(p) => p,
+                None => continue,
+            };
+            let hash = ns.state_hash();
+            if pp == target {
+                if reached_hashes.insert(hash) {
+                    results.push(SegmentBranch {
+                        grid: ns,
+                        path: reconstruct(&nodes, node_idx),
+                        won: false,
+                    });
+                }
+                continue;
+            }
+
+            let ng = cur_g + 1;
+            let better = match visited.get(&hash) {
+                None => true,
+                Some(&pg) => (ng as u32) < pg,
+            };
+            if better {
+                visited.insert(hash, ng as u32);
+                let h = manhattan(pp, target);
+                pq.push(PQItem {
+                    f: ng + h,
+                    g: ng,
+                    idx: node_idx,
+                });
+            }
+        }
+    }
+
+    results.sort_by_key(|branch| heuristic(&branch.grid) + branch.path.len() as i64);
+    results
 }
 
 fn solve_segment_multi(
@@ -1417,6 +1554,10 @@ fn solve_trigger_order(
 ) -> Option<Vec<Vec<Action>>> {
     let nplayers = count_players(grid);
     let tuples = all_action_tuples(nplayers);
+    let segment_results = std::env::var("SEG_RESULTS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(8usize);
     let mut branches = vec![Branch {
         grid: grid.clone(),
         path: Vec::new(),
@@ -1427,25 +1568,25 @@ fn solve_trigger_order(
         let mut next_branches = Vec::new();
         for branch in &branches {
             for target in trigger_positions(&branch.grid, number) {
-                match solve_segment(&branch.grid, target, &tuples, per_secs) {
-                    SegResult::Won(segment) => {
+                for segment in
+                    solve_segment_branches(&branch.grid, target, &tuples, per_secs, segment_results)
+                {
+                    if segment.won {
                         let mut path = branch.path.clone();
-                        path.extend(segment);
+                        path.extend(segment.path);
                         return Some(path);
                     }
-                    SegResult::Reached(end, segment) => {
-                        let before = Features::from_grid(&branch.grid);
-                        let after = Features::from_grid(&end);
-                        let mut path = branch.path.clone();
-                        path.extend(segment);
-                        let score = trigger_branch_score(&end, path.len(), before, after);
-                        next_branches.push(Branch {
-                            grid: end,
-                            path,
-                            score,
-                        });
-                    }
-                    SegResult::Failed => {}
+
+                    let before = Features::from_grid(&branch.grid);
+                    let after = Features::from_grid(&segment.grid);
+                    let mut path = branch.path.clone();
+                    path.extend(segment.path);
+                    let score = trigger_branch_score(&segment.grid, path.len(), before, after);
+                    next_branches.push(Branch {
+                        grid: segment.grid,
+                        path,
+                        score,
+                    });
                 }
             }
         }
@@ -1507,6 +1648,10 @@ fn solve_any_trigger_order(
 ) -> Option<Vec<Vec<Action>>> {
     let nplayers = count_players(grid);
     let tuples = all_action_tuples(nplayers);
+    let segment_results = std::env::var("SEG_RESULTS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(8usize);
     let mut branches = vec![Branch {
         grid: grid.clone(),
         path: Vec::new(),
@@ -1534,39 +1679,39 @@ fn solve_any_trigger_order(
         for branch in &branches {
             let cells = trigger_cells(&branch.grid);
             for (target, number) in cells {
-                match solve_segment(&branch.grid, target, &tuples, per_secs) {
-                    SegResult::Won(segment) => {
+                for segment in
+                    solve_segment_branches(&branch.grid, target, &tuples, per_secs, segment_results)
+                {
+                    if segment.won {
                         let mut path = branch.path.clone();
-                        path.extend(segment);
+                        path.extend(segment.path);
                         return Some(path);
                     }
-                    SegResult::Reached(end, segment) => {
-                        let before = Features::from_grid(&branch.grid);
-                        let after = Features::from_grid(&end);
-                        if after == before && branch.grid.state_hash() == end.state_hash() {
-                            continue;
-                        }
-                        let mut path = branch.path.clone();
-                        path.extend(segment);
-                        let score = trigger_branch_score(&end, path.len(), before, after);
-                        eprintln!(
-                            "  step {} trigger {} at ({},{}): path={} features={:?} score={} path_ascii={}",
-                            step_idx + 1,
-                            number,
-                            target.0,
-                            target.1,
-                            path.len(),
-                            after,
-                            score,
-                            format_path_ascii(&path)
-                        );
-                        next_branches.push(Branch {
-                            grid: end,
-                            path,
-                            score,
-                        });
+
+                    let before = Features::from_grid(&branch.grid);
+                    let after = Features::from_grid(&segment.grid);
+                    if after == before && branch.grid.state_hash() == segment.grid.state_hash() {
+                        continue;
                     }
-                    SegResult::Failed => {}
+                    let mut path = branch.path.clone();
+                    path.extend(segment.path);
+                    let score = trigger_branch_score(&segment.grid, path.len(), before, after);
+                    eprintln!(
+                        "  step {} trigger {} at ({},{}): path={} features={:?} score={} path_ascii={}",
+                        step_idx + 1,
+                        number,
+                        target.0,
+                        target.1,
+                        path.len(),
+                        after,
+                        score,
+                        format_path_ascii(&path)
+                    );
+                    next_branches.push(Branch {
+                        grid: segment.grid,
+                        path,
+                        score,
+                    });
                 }
             }
         }
