@@ -515,7 +515,7 @@ fn solve_with_context(
         q.push_back(0);
         while let Some(idx) = q.pop_front() {
             expansions += 1;
-            if expansions % 200_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+            if expansions % 10_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
                 return None;
             }
             let cur_grid = nodes[idx].grid.clone();
@@ -567,7 +567,7 @@ fn solve_with_context(
     let mut best_idx_seen = 0usize;
     while let Some(item) = pq.pop() {
         expansions += 1;
-        if expansions % 100_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+        if expansions % 10_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
             let best_path = reconstruct(&nodes, best_idx_seen);
             eprintln!(
                 "  [timeout after {expansions} expansions, best_h={best_h_seen}, nodes={}]",
@@ -677,7 +677,7 @@ fn solve_novelty(
     let mut best_idx = 0usize;
     while let Some(item) = pq.pop() {
         expansions += 1;
-        if expansions % 100_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+        if expansions % 10_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
             let best_path = reconstruct(&nodes, best_idx);
             eprintln!(
                 "  [novelty timeout after {} expansions, best_h={}, nodes={}]",
@@ -1731,19 +1731,40 @@ fn solve_macro_events(
     let mut visited = HashSet::new();
     visited.insert(grid.state_hash());
     let mut expansions = 0u64;
+    let mut best_idx = 0usize;
+    let mut best_score = h0;
 
     while let Some(item) = pq.pop() {
         expansions += 1;
         if start_time.elapsed().as_secs_f64() > total_secs {
             eprintln!(
-                "  [macro timeout after {} event nodes, stored={}]",
+                "  [macro timeout after {} event nodes, stored={}, best_score={}]",
                 expansions,
-                nodes.len()
+                nodes.len(),
+                best_score
             );
+            eprintln!("  BEST_ARROWS {}", format_path(&nodes[best_idx].path));
+            eprintln!("  BEST_ASCII {}", format_path_ascii(&nodes[best_idx].path));
+            eprintln!(
+                "  BEST_FEATURES {:?}",
+                Features::from_grid(&nodes[best_idx].grid)
+            );
+            eprintln!("  BEST_STATE:\n{}", nodes[best_idx].grid.to_csv());
             return None;
         }
         if nodes.len() >= max_events {
-            eprintln!("  [macro event limit reached, stored={}]", nodes.len());
+            eprintln!(
+                "  [macro event limit reached, stored={}, best_score={}]",
+                nodes.len(),
+                best_score
+            );
+            eprintln!("  BEST_ARROWS {}", format_path(&nodes[best_idx].path));
+            eprintln!("  BEST_ASCII {}", format_path_ascii(&nodes[best_idx].path));
+            eprintln!(
+                "  BEST_FEATURES {:?}",
+                Features::from_grid(&nodes[best_idx].grid)
+            );
+            eprintln!("  BEST_STATE:\n{}", nodes[best_idx].grid.to_csv());
             return None;
         }
 
@@ -1775,6 +1796,10 @@ fn solve_macro_events(
                 grid: event.grid,
                 path,
             });
+            if f < best_score {
+                best_score = f;
+                best_idx = node_idx;
+            }
             pq.push(PQItem {
                 f,
                 g: depth as i64,
@@ -1985,6 +2010,28 @@ fn solve_beam(
         let mut next = Vec::new();
         let mut layer_seen = HashSet::new();
         for state in &frontier {
+            if start.elapsed().as_secs_f64() > time_limit_secs {
+                eprintln!(
+                    "  [beam timeout during depth={}, frontier={}, next={}, best_score={}]",
+                    depth,
+                    frontier.len(),
+                    next.len(),
+                    best.score
+                );
+                eprintln!("  BEST_ARROWS {}", format_path(&best.path));
+                let best_ascii: String = if nplayers == 1 {
+                    best.path.iter().map(|a| action_to_ch(a[0])).collect()
+                } else {
+                    best.path
+                        .iter()
+                        .map(|a| a.iter().map(|x| action_to_ch(*x)).collect::<String>())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                };
+                eprintln!("  BEST_ASCII {}", best_ascii);
+                eprintln!("  BEST_STATE:\n{}", best.grid.to_csv());
+                return None;
+            }
             for actions in &tuples {
                 let (next_grid, play_state) = step(&state.grid, actions);
                 if play_state == PlayState::GameOver {
@@ -3563,7 +3610,8 @@ fn main() {
     }
 
     if mode == "beam" {
-        // solver beam <csv> [--width N] [--depth N] [--secs S] [--seed N] [--jitter N]
+        // solver beam <csv> [--prefix MOVES] [--width N] [--depth N] [--secs S] [--seed N] [--jitter N]
+        let mut prefix_str = String::new();
         let mut width = 1000usize;
         let mut depth = 300usize;
         let mut secs = 120.0;
@@ -3572,6 +3620,10 @@ fn main() {
         let mut i = 3;
         while i < args.len() {
             match args[i].as_str() {
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
                 "--width" => {
                     width = args[i + 1].parse().unwrap();
                     i += 2;
@@ -3598,13 +3650,30 @@ fn main() {
             }
         }
         let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
         eprintln!(
-            "beam solve: players={} width={} depth={} secs={} seed={} jitter={}",
-            nplayers, width, depth, secs, seed, jitter
+            "beam solve: players={} prefix={} width={} depth={} secs={} seed={} jitter={}",
+            nplayers,
+            prefix.len(),
+            width,
+            depth,
+            secs,
+            seed,
+            jitter
         );
         let t0 = Instant::now();
-        match solve_beam(&grid, width, depth, secs, seed, jitter) {
-            Some(path) => {
+        match solve_beam(&start_grid, width, depth, secs, seed, jitter) {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
                 println!(
                     "SOLVED moves={} time={:.1}s",
                     path.len(),
@@ -3627,13 +3696,18 @@ fn main() {
     }
 
     if mode == "novelty" {
-        // solver novelty <csv> [--k 2] [--depth N] [--secs S]
+        // solver novelty <csv> [--prefix MOVES] [--k 2] [--depth N] [--secs S]
+        let mut prefix_str = String::new();
         let mut k = 2u8;
         let mut depth = 400usize;
         let mut secs = 120.0;
         let mut i = 3;
         while i < args.len() {
             match args[i].as_str() {
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
                 "--k" => {
                     k = args[i + 1].parse().unwrap();
                     i += 2;
@@ -3652,13 +3726,28 @@ fn main() {
             }
         }
         let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
         eprintln!(
-            "novelty solve: players={} k={} depth={} secs={}",
-            nplayers, k, depth, secs
+            "novelty solve: players={} prefix={} k={} depth={} secs={}",
+            nplayers,
+            prefix.len(),
+            k,
+            depth,
+            secs
         );
         let t0 = Instant::now();
-        match solve_novelty(&grid, depth, secs, k) {
-            Some(path) => {
+        match solve_novelty(&start_grid, depth, secs, k) {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
                 println!(
                     "SOLVED moves={} time={:.1}s",
                     path.len(),
