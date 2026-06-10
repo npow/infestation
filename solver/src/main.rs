@@ -369,6 +369,57 @@ fn replay_path(grid: &Grid, path: &[Vec<Action>]) -> (Grid, PlayState, usize) {
     (state, result, applied)
 }
 
+fn positions_for(grid: &Grid, kind: CellKind) -> Vec<(usize, usize)> {
+    let mut positions = Vec::new();
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if grid.cell_kind_at(x, y) == kind {
+                positions.push((x, y));
+            }
+        }
+    }
+    positions
+}
+
+fn positions_for_any(grid: &Grid, kinds: &[CellKind]) -> Vec<(usize, usize)> {
+    let mut positions = Vec::new();
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if kinds.contains(&grid.cell_kind_at(x, y)) {
+                positions.push((x, y));
+            }
+        }
+    }
+    positions
+}
+
+fn format_positions(positions: &[(usize, usize)]) -> String {
+    positions
+        .iter()
+        .map(|(x, y)| format!("({x},{y})"))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn print_state_summary(turn: usize, actions: Option<&[Action]>, state: PlayState, grid: &Grid) {
+    let features = Features::from_grid(grid);
+    let action_text = actions
+        .map(|turn_actions| turn_actions.iter().map(|a| action_to_ch(*a)).collect())
+        .unwrap_or_else(|| "-".to_string());
+    let rats = positions_for_any(grid, &[CellKind::Rat, CellKind::CyborgRat]);
+    let players = positions_for(grid, CellKind::Player);
+    println!(
+        "turn={turn} actions={action_text} state={state:?} rats={} explosives={} webs={} triggers={} planks={} players=[{}] rats_at=[{}]",
+        features.rats,
+        features.explosives,
+        features.webs,
+        features.triggers,
+        features.planks,
+        format_positions(&players),
+        format_positions(&rats)
+    );
+}
+
 fn cell_kind_code(kind: CellKind) -> u32 {
     match kind {
         CellKind::Empty => 0,
@@ -1424,6 +1475,194 @@ fn rat_near_explosive(grid: &Grid) -> bool {
         .any(|&rat| explosives.iter().any(|&x| manhattan(rat, x) <= 2))
 }
 
+fn rat_at(grid: &Grid, target: (i32, i32)) -> bool {
+    target.0 >= 0
+        && target.1 >= 0
+        && matches!(
+            grid.cell_kind_at(target.0 as usize, target.1 as usize),
+            CellKind::Rat | CellKind::CyborgRat
+        )
+}
+
+fn player_at_any(grid: &Grid, targets: &[(i32, i32)]) -> bool {
+    targets.is_empty()
+        || positions_matching(grid, |cell| cell == CellKind::Player)
+            .iter()
+            .any(|player| targets.contains(player))
+}
+
+fn lure_reached(grid: &Grid, rat_target: (i32, i32), safe_targets: &[(i32, i32)]) -> bool {
+    rat_at(grid, rat_target) && player_at_any(grid, safe_targets)
+}
+
+fn lure_heuristic(
+    grid: &Grid,
+    rat_target: (i32, i32),
+    safe_targets: &[(i32, i32)],
+    initial_rats: usize,
+) -> i64 {
+    if lure_reached(grid, rat_target, safe_targets) {
+        return 0;
+    }
+
+    let rats = rat_positions(grid);
+    let rat_distance = rats
+        .iter()
+        .map(|&rat| manhattan(rat, rat_target))
+        .min()
+        .unwrap_or(1_000);
+    let players = positions_matching(grid, |cell| cell == CellKind::Player);
+    let safe_distance = if safe_targets.is_empty() {
+        0
+    } else {
+        nearest_pair_distance(&players, safe_targets)
+    };
+    let target_clearance = if rat_target.0 < 0
+        || rat_target.1 < 0
+        || rat_target.0 as usize >= grid.width()
+        || rat_target.1 as usize >= grid.height()
+    {
+        100_000
+    } else {
+        match grid.cell_kind_at(rat_target.0 as usize, rat_target.1 as usize) {
+            CellKind::Spiderweb => {
+                let player_to_target = players
+                    .iter()
+                    .map(|&player| manhattan(player, rat_target))
+                    .min()
+                    .unwrap_or(1_000);
+                20_000 + player_to_target * 200
+            }
+            CellKind::Wall | CellKind::BlackHole => 100_000,
+            _ => 0,
+        }
+    };
+    let lost_rats = initial_rats.saturating_sub(count_rats(grid)) as i64;
+
+    lost_rats * 10_000_000 + rat_distance * 1_000 + safe_distance * 80 + target_clearance
+}
+
+#[must_use]
+fn solve_lure(
+    grid: &Grid,
+    rat_target: (i32, i32),
+    safe_targets: &[(i32, i32)],
+    preserve_rats: bool,
+    max_depth: usize,
+    time_limit_secs: f64,
+    strategy: &str,
+    weight: i64,
+) -> Option<Vec<Vec<Action>>> {
+    let nplayers = count_players(grid);
+    let tuples = all_action_tuples(nplayers);
+    let initial_rats = count_rats(grid);
+    let start = Instant::now();
+    let mut nodes: Vec<Node> = vec![Node {
+        grid: grid.clone(),
+        parent: usize::MAX,
+        action: Vec::new(),
+        depth: 0,
+    }];
+    let mut visited: HashMap<u64, u32> = HashMap::new();
+    visited.insert(grid.state_hash(), 0);
+    let h0 = lure_heuristic(grid, rat_target, safe_targets, initial_rats);
+    let mut pq = BinaryHeap::new();
+    pq.push(PQItem {
+        f: h0,
+        g: 0,
+        idx: 0,
+    });
+    let mut expansions = 0u64;
+    let mut best_h_seen = h0;
+    let mut best_idx_seen = 0usize;
+
+    while let Some(item) = pq.pop() {
+        expansions += 1;
+        if expansions % 20_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+            let best_path = reconstruct(&nodes, best_idx_seen);
+            eprintln!(
+                "  [lure timeout after {} expansions, best_h={}, nodes={}]",
+                expansions,
+                best_h_seen,
+                nodes.len()
+            );
+            eprintln!("  BEST_ARROWS {}", format_path(&best_path));
+            eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
+            eprintln!("  BEST_STATE:\n{}", nodes[best_idx_seen].grid.to_csv());
+            return None;
+        }
+
+        let idx = item.idx;
+        let cur_grid = nodes[idx].grid.clone();
+        let cur_g = nodes[idx].depth as i64;
+        if cur_g > item.g || cur_g as usize >= max_depth {
+            continue;
+        }
+
+        for actions in &tuples {
+            let (next_grid, play_state) = step(&cur_grid, actions);
+            if play_state == PlayState::GameOver {
+                continue;
+            }
+            if play_state == PlayState::Won {
+                let leaf = nodes.len();
+                nodes.push(Node {
+                    grid: next_grid,
+                    parent: idx,
+                    action: actions.clone(),
+                    depth: (cur_g + 1) as u32,
+                });
+                return Some(reconstruct(&nodes, leaf));
+            }
+            if preserve_rats && count_rats(&next_grid) < initial_rats {
+                continue;
+            }
+
+            let hash = next_grid.state_hash();
+            let next_depth = (cur_g + 1) as u32;
+            if let Some(&previous_depth) = visited.get(&hash)
+                && previous_depth <= next_depth
+            {
+                continue;
+            }
+
+            let node_idx = nodes.len();
+            nodes.push(Node {
+                grid: next_grid,
+                parent: idx,
+                action: actions.clone(),
+                depth: next_depth,
+            });
+            if lure_reached(&nodes[node_idx].grid, rat_target, safe_targets) {
+                return Some(reconstruct(&nodes, node_idx));
+            }
+
+            visited.insert(hash, next_depth);
+            let h = lure_heuristic(
+                &nodes[node_idx].grid,
+                rat_target,
+                safe_targets,
+                initial_rats,
+            );
+            if h < best_h_seen {
+                best_h_seen = h;
+                best_idx_seen = node_idx;
+            }
+            let f = match strategy {
+                "gbfs" => h,
+                _ => cur_g + 1 + weight * h,
+            };
+            pq.push(PQItem {
+                f,
+                g: cur_g + 1,
+                idx: node_idx,
+            });
+        }
+    }
+
+    None
+}
+
 fn ignition_ready(grid: &Grid) -> bool {
     let nplayers = count_players(grid);
     let Ok(tuples) = std::panic::catch_unwind(|| all_action_tuples(nplayers)) else {
@@ -1463,6 +1702,12 @@ fn event_heuristic(grid: &Grid, target: TargetKind, initial: Features) -> i64 {
 
     match target {
         TargetKind::Explosion | TargetKind::IgnitionReady | TargetKind::RatNearExplosive => {
+            if std::env::var("TRAP_H").is_ok()
+                && target != TargetKind::RatNearExplosive
+                && grid.width() >= 16
+            {
+                return rectangle_trap_heuristic(grid, initial.rats, initial.explosives);
+            }
             let rats = if std::env::var("LURE_H").is_ok() {
                 tinder_lure_rat_positions(grid)
             } else {
@@ -2306,34 +2551,64 @@ fn rectangle_trap_heuristic(grid: &Grid, initial_rats: usize, initial_explosives
     let rats_lost = initial_rats.saturating_sub(count_rats(grid)) as i64;
     let pre_ignition_kill_penalty = rats_lost * 5_000;
 
-    let mut uncleared_lower_webs = 0i64;
-    let mut nearest_uncleared = 1_000i64;
-    for y in 3..grid.height() {
-        for x in 0..grid.width() {
-            if grid.cell_kind_at(x, y) == CellKind::Spiderweb {
-                uncleared_lower_webs += 1;
-                nearest_uncleared =
-                    nearest_uncleared.min(distance_from_player(grid, (x as i32, y as i32)));
+    let mut best_plan_score = 50_000i64;
+    for &rat in &rats {
+        for trap in traps {
+            let rat_to_trap = manhattan(rat, trap);
+            let dx = (trap.0 - rat.0).signum();
+            let dy = (trap.1 - rat.1).signum();
+            let mut cursor = rat;
+            let mut corridor_webs = 0i64;
+            let mut nearest_corridor_web = 1_000i64;
+            while cursor != trap {
+                if cursor.0 != trap.0 {
+                    cursor.0 += dx;
+                }
+                if cursor.1 != trap.1 {
+                    cursor.1 += dy;
+                }
+                if cursor.0 < 0
+                    || cursor.1 < 0
+                    || cursor.0 as usize >= grid.width()
+                    || cursor.1 as usize >= grid.height()
+                {
+                    corridor_webs += 20;
+                    continue;
+                }
+                let kind = grid.cell_kind_at(cursor.0 as usize, cursor.1 as usize);
+                if kind == CellKind::Spiderweb {
+                    corridor_webs += 1;
+                    nearest_corridor_web =
+                        nearest_corridor_web.min(distance_from_player(grid, cursor));
+                } else if matches!(kind, CellKind::Wall | CellKind::BlackHole) {
+                    corridor_webs += 20;
+                }
+            }
+
+            for safe in safe_positions {
+                let player_to_safe = distance_from_player(grid, safe);
+                let safe_side_bonus = if safe.0 > trap.0 && safe.1 > trap.1 {
+                    0
+                } else {
+                    2_000
+                };
+                let trap_ready_bonus = if rat == trap && player_to_safe == 0 {
+                    -5_000
+                } else {
+                    0
+                };
+                let score = rat_to_trap * 350
+                    + corridor_webs * 900
+                    + nearest_corridor_web.min(50) * 25
+                    + player_to_safe * 70
+                    + safe_side_bonus
+                    + trap_ready_bonus;
+                best_plan_score = best_plan_score.min(score);
             }
         }
     }
-    let clear_work = uncleared_lower_webs * 80 + nearest_uncleared.min(50) * 4;
 
-    let mut best_trap_score = 20_000i64;
-    for trap in traps {
-        let rat_to_trap = rats
-            .iter()
-            .map(|&rat| manhattan(rat, trap))
-            .min()
-            .unwrap_or(1_000);
-        for safe in safe_positions {
-            let player_to_safe = distance_from_player(grid, safe);
-            let score = rat_to_trap * 100 + player_to_safe * 20;
-            best_trap_score = best_trap_score.min(score);
-        }
-    }
-
-    pre_ignition_kill_penalty + contact_penalty + clear_work + best_trap_score
+    pre_ignition_kill_penalty + contact_penalty + best_plan_score
 }
 
 fn tinderbox_heuristic(
@@ -2753,6 +3028,131 @@ fn main() {
                     break;
                 }
             }
+        }
+        return;
+    }
+
+    if mode == "stats" {
+        // solver stats <csv> "<actions>" — print feature/position summary after each turn.
+        let action_str = &args[3];
+        let nplayers = count_players(&grid);
+        let path = parse_action_string(action_str, nplayers);
+        let mut state = grid.clone();
+        print_state_summary(0, None, PlayState::Playing, &state);
+        for (turn, actions) in path.iter().enumerate() {
+            let (next, play_state) = step(&state, actions);
+            state = next;
+            print_state_summary(turn + 1, Some(actions), play_state, &state);
+            if play_state != PlayState::Playing {
+                break;
+            }
+        }
+        return;
+    }
+
+    if mode == "lure" {
+        // solver lure <csv> --rat x,y [--safe x,y;x,y] [--preserve-rats]
+        //                  [--prefix MOVES] [--depth N] [--secs S]
+        //                  [--strategy gbfs|astar] [--weight W]
+        let mut rat_target = None;
+        let mut safe_targets = Vec::new();
+        let mut preserve_rats = false;
+        let mut prefix_str = String::new();
+        let mut depth = 200usize;
+        let mut secs = 60.0;
+        let mut strategy = "astar".to_string();
+        let mut weight = 2i64;
+        let mut i = 3;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--rat" | "--rat-target" => {
+                    rat_target = parse_optional_point(&args[i + 1]);
+                    i += 2;
+                }
+                "--safe" | "--safe-targets" => {
+                    safe_targets.clear();
+                    for part in args[i + 1].split(';') {
+                        if let Some(point) = parse_optional_point(part) {
+                            safe_targets.push(point);
+                        }
+                    }
+                    i += 2;
+                }
+                "--preserve-rats" => {
+                    preserve_rats = true;
+                    i += 1;
+                }
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--depth" => {
+                    depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--secs" => {
+                    secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--strategy" => {
+                    strategy = args[i + 1].clone();
+                    i += 2;
+                }
+                "--weight" => {
+                    weight = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                _ => {
+                    i += 1;
+                }
+            }
+        }
+        let rat_target = rat_target.expect("--rat x,y is required");
+        let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
+        eprintln!(
+            "lure solve: players={} prefix={} rat_target={:?} safe_targets={:?} preserve_rats={} strategy={} depth={} secs={} weight={}",
+            nplayers,
+            prefix.len(),
+            rat_target,
+            safe_targets,
+            preserve_rats,
+            strategy,
+            depth,
+            secs,
+            weight
+        );
+        let t0 = Instant::now();
+        match solve_lure(
+            &start_grid,
+            rat_target,
+            &safe_targets,
+            preserve_rats,
+            depth,
+            secs,
+            &strategy,
+            weight,
+        ) {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
+                println!(
+                    "SOLVED moves={} time={:.1}s",
+                    path.len(),
+                    t0.elapsed().as_secs_f64()
+                );
+                println!("ARROWS {}", format_path(&path));
+                println!("ASCII {}", format_path_ascii(&path));
+            }
+            None => println!("NO_SOLUTION time={:.1}s", t0.elapsed().as_secs_f64()),
         }
         return;
     }
