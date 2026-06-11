@@ -182,6 +182,11 @@ No new verified wins yet. Useful observations to preserve:
 - `reload_v3`: trigger-order search that greedily picks trigger 7 first reaches a
   low-rat-count state with 0 reachable rats. Immediate rat reduction is the wrong
   objective; preserve lower reload access before reducing the count.
+- `reload_v3`: explicit trigger-order lookup for `1,2,3,4,5,6,7` and
+  `1,2,3,4,5,7,6` produced no reachable trigger-1 branch from the initial state
+  within segment depth 160 / 10s. The older "start around trigger 1" assumption
+  is probably wrong or missing a setup event. `7,1,2,3,4,5,6` reaches trigger 7,
+  but then again strands access before trigger 1 can be used productively.
 - `chase`: trigger-order search found another 6-rat branch,
   `>>>^vv^<<<>>v`, but continuations still strand separated rats. Treat it as a
   diagnostic sibling of the older `>>>.^v<<<>>>vv<^` branch, not a solved route.
