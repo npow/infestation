@@ -153,6 +153,30 @@ No new verified wins yet. Useful observations to preserve:
   six rats with more structure opened, but smart direct search still ends with
   multiple isolated components. Continue from branch states, not from the initial
   generic heuristic.
+- `tinderrectangle`: strict lower-trap and corner-ignition probes did not produce
+  a win. `RECT_STRICT=1 TRAP_H=1` repeatedly converges to the lower rat at
+  `(2,3)` with the player either pinned at `(3,3)` or nearby at `(4,4)`. The
+  synthetic ignition table says rat `(0,0)` plus player cells around row 3 would
+  win, but direct `ratat:0,0` / `ratat:1,2` branches from those bottlenecks timed
+  out or returned no branch. Do not add a heuristic that merely rewards the
+  corner target; it still drifts into the same pin.
+- `cooperation/tug_of_war`: trigger 1 is the best first irreversible event found:
+  `^< ^^ ^^ ^^ ^^ ^^ ^^ ^^ <^ ^v >v` leaves 4 rats, 2 reachable. A short
+  continuation `^^ <^ <^ <^ v^ v^` leaves 3 rats, 1 reachable, but no ratdrop
+  branch was found from there within depth 80. Trigger 2 and trigger 3 first are
+  worse: they strand rats or leave 6+ rats.
+- `cooperation/handoff`: pre-trigger `ratgone:8,5`, `trigger:1`, and `trigger:2`
+  all re-enter the same two-rat unreachable family. The fastest reachable-rat
+  kill is not progress unless it preserves access to a remote rat.
+- `release`: `triganylookup` reconfirmed `v<vv^^>>v` as the best first event
+  branch. Later trigger-6 variants again strand the `(18,4)` rat with the player
+  sealed at bottom-right; this is the same bad basin as the earlier hand route.
+- `reload_v3`: trigger-order search that greedily picks trigger 7 first reaches a
+  low-rat-count state with 0 reachable rats. Immediate rat reduction is the wrong
+  objective; preserve lower reload access before reducing the count.
+- `chase`: trigger-order search found another 6-rat branch,
+  `>>>^vv^<<<>>v`, but continuations still strand separated rats. Treat it as a
+  diagnostic sibling of the older `>>>.^v<<<>>>vv<^` branch, not a solved route.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth

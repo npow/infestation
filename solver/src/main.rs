@@ -4234,8 +4234,21 @@ fn rectangle_trap_heuristic(grid: &Grid, initial_rats: usize, initial_explosives
 
     let rats = tinder_lure_rat_positions(grid);
     let all_rats = rat_positions(grid);
-    let traps = [(2, 6), (3, 6), (4, 6), (5, 6), (6, 6)];
-    let safe_positions = [(13, 8), (14, 7), (15, 7), (14, 8), (15, 8)];
+    let strict_rectangle = std::env::var("RECT_STRICT").is_ok();
+    let loose_traps = [(2, 6), (3, 6), (4, 6), (5, 6), (6, 6)];
+    let strict_traps = [(4, 6), (5, 6)];
+    let traps: &[(i32, i32)] = if strict_rectangle {
+        &strict_traps
+    } else {
+        &loose_traps
+    };
+    let loose_safe_positions = [(13, 8), (14, 7), (15, 7), (14, 8), (15, 8)];
+    let strict_safe_positions = [(14, 7), (15, 7), (14, 8), (15, 8)];
+    let safe_positions: &[(i32, i32)] = if strict_rectangle {
+        &strict_safe_positions
+    } else {
+        &loose_safe_positions
+    };
 
     let player = find_player(grid);
     let nearest_rat_to_player = player
@@ -4254,7 +4267,7 @@ fn rectangle_trap_heuristic(grid: &Grid, initial_rats: usize, initial_explosives
 
     let mut best_plan_score = 50_000i64;
     for &rat in &rats {
-        for trap in traps {
+        for &trap in traps {
             let rat_to_trap = manhattan(rat, trap);
             let dx = (trap.0 - rat.0).signum();
             let dy = (trap.1 - rat.1).signum();
@@ -4286,7 +4299,7 @@ fn rectangle_trap_heuristic(grid: &Grid, initial_rats: usize, initial_explosives
                 }
             }
 
-            for safe in safe_positions {
+            for &safe in safe_positions {
                 let player_to_safe = distance_from_player(grid, safe);
                 let safe_side_bonus = if safe.0 > trap.0 && safe.1 > trap.1 {
                     0
