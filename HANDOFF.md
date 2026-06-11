@@ -179,6 +179,12 @@ No new verified wins yet. Useful observations to preserve:
 - `release`: `triganylookup` reconfirmed `v<vv^^>>v` as the best first event
   branch. Later trigger-6 variants again strand the `(18,4)` rat with the player
   sealed at bottom-right; this is the same bad basin as the earlier hand route.
+- `release`: direct `branchdump trigger:2` from the initial state returned no
+  branch within depth 120 / 45s, and explicit trigger order `2,3,4,5,6` reported
+  trigger 2 has no reachable branches. Ordering `3,4,2,5,6` only rediscovers a
+  variant of the known trigger-3/4 opener before falling back into the late
+  trigger-6 dead basin. Trigger 2 probably has to be rat-triggered or made
+  reachable by a different structural event, not reached directly by the player.
 - `reload_v3`: trigger-order search that greedily picks trigger 7 first reaches a
   low-rat-count state with 0 reachable rats. Immediate rat reduction is the wrong
   objective; preserve lower reload access before reducing the count.
