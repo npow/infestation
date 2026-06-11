@@ -168,6 +168,14 @@ No new verified wins yet. Useful observations to preserve:
 - `cooperation/handoff`: pre-trigger `ratgone:8,5`, `trigger:1`, and `trigger:2`
   all re-enter the same two-rat unreachable family. The fastest reachable-rat
   kill is not progress unless it preserves access to a remote rat.
+- `cooperation/handoff`: broader BFS (canonical and raw-hash variants) found a
+  better-looking one-rat basin:
+  `vv >^ >^ >^ >^ >^ ^^ v^ ^^ ^^ v^ v^ vv <v ^^ <^ <^ <^ <^ ^> ^< ^< ^< ^> ^<`.
+  It leaves only rat `(10,6)`, but no explosives/triggers remain and the rat is
+  in a size-1 component behind web `(10,5)`. This is also dead. The obvious
+  rescue hypothesis, making that rat step onto the adjacent remote trigger
+  `(11,7)`, was checked with `ratat:11,7` from the initial state and found no
+  branch within depth 80 / 60s; A* plateaued with the rat still at `(10,6)`.
 - `release`: `triganylookup` reconfirmed `v<vv^^>>v` as the best first event
   branch. Later trigger-6 variants again strand the `(18,4)` rat with the player
   sealed at bottom-right; this is the same bad basin as the earlier hand route.
