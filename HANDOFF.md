@@ -103,7 +103,7 @@ run. Treat the oracle as a microscope for human hypotheses:
 3. Use short-goal tools to validate only that event:
    - `solver ignitions` for one-step explosive geometry.
    - `solver trace` for exact rat movement after a proposed human line.
-   - `solver branchdump` / `solver lookup --goal ratat:x,y|ratgone:x,y|trigger:n`
+   - `solver branchdump` / `solver lookup --goal playerat:x,y|ratat:x,y|ratgone:x,y|trigger:n`
      for tactical subgoals.
    - `solver wp` / `solver wp2` after deciding the plan; waypoints should encode
      the human route, not discover the route from scratch.
@@ -196,6 +196,47 @@ No new verified wins yet. Useful observations to preserve:
 - `chase`: trigger-order search found another 6-rat branch,
   `>>>^vv^<<<>>v`, but continuations still strand separated rats. Treat it as a
   diagnostic sibling of the older `>>>.^v<<<>>>vv<^` branch, not a solved route.
+- `solver`: `lookup` / `branchdump` now support `--goal playerat:x,y`. This is a
+  diagnostic target for mechanism checks such as "can a player reach this lure
+  cell before the trigger/explosive resources are consumed?" It does not change
+  game rules or scoring outside lookup-goal handling.
+- `cooperation/handoff`: the 8-move state
+  `v^ >^ >^ >^ >^ >^ ^^ v^` was probed more tightly. From that state,
+  `ratat:11,7`, `ratgone:10,6`, `cell:10,5`, `playerat:10,4`, and
+  `playerat:11,7` all returned no branch in the tested budgets. `playerat:12,8`
+  is reachable, but every returned branch has `explosives=0`, `triggers=0`, and
+  `reachable_rats=0`; it reaches the far side only after left trigger 2 turns
+  `(11,7)` into a wall, leaving `(10,6)` permanently sealed. Backing up to the
+  6-move state found the same post-trigger dead access and no direct movement or
+  removal of `(10,6)`. Do not continue the "go far side after trigger 2" family.
+- `chase`: continuing from `>>>.^v<<<>>>vv<^`, ratdrop chaining produced better
+  prefixes:
+  `>>>.^v<<<>>>vv<^^>^^^^^^vvv>>>vv` leaves 5 rats, 3 reachable, and
+  `>>>.^v<<<>>>vv<^^>^^^^^^vvv>>>vv^^^^<^^>^^^^^^>>>^^` leaves 4 rats, 3
+  reachable. A further ratdrop reaches 3 rats, but the initial `(11,17)` rat
+  remains in a one-cell component behind web `(11,16)`. Source confirms zaps do
+  not affect webs/planks; explosions do, and rats can only break planks by
+  moving through them. `cell:11,15`, `cell:12,15`, and `cell:11,16` returned no
+  branch from the 16-, 32-, or 51-move prefixes in the tested budgets. This is a
+  stronger winnability warning: either an earlier route must use a helper rat to
+  alter those planks/web before the known ratdrop chain, or the level may be
+  structurally unsolvable as authored.
+- `release`: from the strong opener `v<vv^^>>v`, direct `trigger:2`,
+  `cell:18,5`, and `ratgone:18,4` all returned no branch in the tested budgets.
+  A* from the same prefix again ended in the known one-rat basin: only `(18,4)`
+  remains, `(18,5)` is still web, and the player is sealed on the bottom-right
+  side. The physical mechanism still appears to be "detonate the `(18,6..8)`
+  column to clear `(18,5)` before the player is sealed", but direct player access
+  to trigger 2 after `v<vv^^>>v` is not the route.
+- `tinderrectangle`: from the old partial
+  `<<<^<^<>^>>>vv^^>>v>v.>>><>v`, `ratat:0,0` returned no branch. `lure`
+  targeting `rat 0,0` with player safe at `(1..4,3)` timed out with the best
+  state at rat `(5,3)` / player `(4,3)`, still not ignitable. `geomlure` for
+  either corner `(0,0)` or `(16,0)` cleared significant web but did not place a
+  rat in a corner. `RECT_STRICT=1 TRAP_H=1 tinder` again converged to the lower
+  rat near `(8,6)` with the player on the lower-right safe side. Treat this
+  partial as a dead basin unless the earlier route changes how the lower rat is
+  held while the player crosses.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
