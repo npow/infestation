@@ -115,6 +115,45 @@ run. Treat the oracle as a microscope for human hypotheses:
 5. Commit verified prefixes and observations even if they are not complete
    wins; the next iteration should continue from the best known state.
 
+### Current run notes - 2026-06-11
+
+No new verified wins yet. Useful observations to preserve:
+
+- `release`: the 14-rat branch
+  `v<vv^^>>vv<>>>^^vvv<<<<<<^^^<<<<v^^^^^^^^^v>>>^^>>>`
+  is a strategic dead end for the right-side rat. From that state, `(18,5)`,
+  `(17,5)`, `(19,7)`, and `(0,16)` are all unreachable by waypoint search, and
+  `lookup --goal ratgone:18,4` / `cell:18,5` time out with no candidate. The
+  trigger-6 suffix
+  `><><><><><><>>>>>>><<<<<<<<<vvvvvv<<<<<^^^^^^>>>>>>>>>>v>>>>v>v>vvvvvvvvv>>>vvvv`
+  reduces to one rat but seals the player bottom-right with `(18,4)` still
+  unreachable. Trigger 2 is not player-reachable from checked prefixes at
+  lengths 15, 23, 38, 42, or 51; if trigger 2 is part of the solution it likely
+  has to be rat-triggered or reached before the current prefix family.
+- `tinderrectangle`: `TRAP_H=1` exposes the intended lower trap row. Best useful
+  partial so far is
+  `<<<^<^<>^>>>vv^^>>v>v.>>><>v`, with the lower rat at `(6,6)` and player at
+  `(10,6)`. Waypointing to `(13,8)`, `(14,8)`, or `(15,8)` is possible, but the
+  rat tracks to `(8,6)` and gets pinned instead of stepping onto the explosive
+  row. The missing trick is timing/facing that holds the rat near `(6,6)` while
+  the player reaches the safe side.
+- `reload_v3`: direct smart/regular search finds a strong-looking but dead
+  1-rat partial:
+  `^^^^^<<<<<<^^^^^^^^^>>>>>>>>>vv>>>vv>vvvvvvv<v<^^>>^^^^^^<<<<vv<<<<>>>>^^>>>>vvvvvvv<<^^<<<<<<<<<<<^^^^^^^vvvvvvv>>>>>>>>>>>vv`.
+  It leaves only rat `(0,21)`, but trigger 6 / waypoint `(2,22)` are unreachable
+  from that state. The final cage must be opened before this prefix closes the
+  lower route.
+- `cooperation/handoff`: trigger-first branches reduce to two unreachable rats.
+  Example trigger-2 branch:
+  `v^ >^ >^ >^ >^ >^ ^^ v^ ^^ ^^ v^ v^ vv <v`.
+  `triganylookup`, `branchdump trigger:1`, `branchdump trigger:2`, and `macro`
+  all converge to the same stuck shape. The handoff likely needs positional rat
+  handling before either trigger is consumed.
+- `chase`: first useful ratdrop branches include `>>>.^v<<<>>>vv<^`, reducing to
+  six rats with more structure opened, but smart direct search still ends with
+  multiple isolated components. Continue from branch states, not from the initial
+  generic heuristic.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 8.
