@@ -230,10 +230,7 @@ fn print_diagnostics(grid: &Grid) {
         triggers.len()
     );
     println!("explosives=[{}]", format_positions(&explosives));
-    println!(
-        "blackholes=[{}]",
-        format_positions(&blackholes)
-    );
+    println!("blackholes=[{}]", format_positions(&blackholes));
 
     for &(x, y) in &rats {
         let dist = player_dist[y][x];
@@ -315,7 +312,8 @@ fn print_ignition_geometries(grid: &Grid, limit: usize) {
                         let player_base = &base_tokens[player_y][player_x];
                         if !is_mutation_floor(player_base)
                             && !is_player_token(player_base)
-                            && (player_x, player_y) != players.first().copied().unwrap_or((usize::MAX, usize::MAX))
+                            && (player_x, player_y)
+                                != players.first().copied().unwrap_or((usize::MAX, usize::MAX))
                         {
                             continue;
                         }
@@ -384,7 +382,10 @@ fn adjacent_trigger_count(grid: &Grid, x: usize, y: usize) -> usize {
             if nx < 0 || ny < 0 {
                 continue;
             }
-            if matches!(grid.cell_kind_at(nx as usize, ny as usize), CellKind::Trigger(_)) {
+            if matches!(
+                grid.cell_kind_at(nx as usize, ny as usize),
+                CellKind::Trigger(_)
+            ) {
                 count += 1;
             }
         }
@@ -461,7 +462,10 @@ fn heuristic(grid: &Grid) -> i64 {
     // weights chosen so rats dominate, then structural progress, then positioning.
     let use_progress = std::env::var("PROGRESS_H").is_ok();
     let smart_penalty = if std::env::var("SMART_H").is_ok() {
-        unreachable_rats * 25_000_000 + unreachable_triggers * 500_000
+        let trapped_unreachable_rats = trapped_unreachable_rat_count(grid) as i64;
+        unreachable_rats * 25_000_000
+            + trapped_unreachable_rats * 100_000_000
+            + unreachable_triggers * 500_000
     } else {
         0
     };
@@ -556,6 +560,7 @@ enum LookupGoal {
     Win,
     TriggerNumber(u8),
     CellChanged(i32, i32),
+    RatAt(i32, i32),
     RatGone(i32, i32),
     RatDrop,
 }
@@ -574,6 +579,10 @@ impl LookupGoal {
             "cell" | "cellchanged" => {
                 let (x, y) = parse_required_point(arg);
                 Self::CellChanged(x, y)
+            }
+            "ratat" => {
+                let (x, y) = parse_required_point(arg);
+                Self::RatAt(x, y)
             }
             "ratgone" => {
                 let (x, y) = parse_required_point(arg);
@@ -615,6 +624,7 @@ fn lookup_goal_reached(
             current.cell_kind_at(x as usize, y as usize)
                 != initial.cell_kind_at(x as usize, y as usize)
         }
+        LookupGoal::RatAt(x, y) => rat_at(current, (x, y)),
         LookupGoal::RatGone(x, y) => !rat_at(current, (x, y)),
         LookupGoal::RatDrop => count_rats(current) < count_rats(initial),
     }
@@ -643,12 +653,48 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
         }
+        LookupGoal::RatAt(x, y) => {
+            let rats = rat_positions(current);
+            nearest_target_distance(&rats, &[(x, y)]) + heuristic(current) / 1_000
+        }
         LookupGoal::RatGone(x, y) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
         }
         LookupGoal::RatDrop => heuristic(current),
     }
+}
+
+fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -> i64 {
+    if lookup_goal_reached(goal, initial, current, PlayState::Playing) {
+        return 0;
+    }
+
+    match goal {
+        LookupGoal::Win => {
+            count_rats(current) as i64 * 1_000_000
+                + Features::from_grid(current).triggers as i64 * 1_000
+                + Features::from_grid(current).explosives as i64 * 100
+        }
+        LookupGoal::TriggerNumber(number) => {
+            trigger_count(current, number) as i64 * 1_000_000 + count_rats(current) as i64 * 1_000
+        }
+        LookupGoal::CellChanged(x, y) => {
+            (current.cell_kind_at(x as usize, y as usize)
+                == initial.cell_kind_at(x as usize, y as usize)) as i64
+        }
+        LookupGoal::RatAt(x, y) => !rat_at(current, (x, y)) as i64,
+        LookupGoal::RatGone(x, y) => rat_at(current, (x, y)) as i64,
+        LookupGoal::RatDrop => count_rats(current) as i64,
+    }
+}
+
+fn lookup_dead_state(grid: &Grid) -> bool {
+    let features = Features::from_grid(grid);
+    features.rats > 0
+        && features.explosives == 0
+        && reachable_rat_count(grid) == 0
+        && reachable_trigger_count(grid) == 0
 }
 
 struct PQItem {
@@ -1229,6 +1275,7 @@ fn solve_lookup(
     let nplayers = count_players(grid);
     let tuples = all_action_tuples(nplayers);
     let start = Instant::now();
+    let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
     let state_key = |state: &Grid| {
         if canonical {
             state.search_hash()
@@ -1253,7 +1300,11 @@ fn solve_lookup(
     let mut visited: HashMap<u64, u32> = HashMap::new();
     visited.insert(state_key(grid), 0);
     let mut expansions = 0u64;
-    let mut best_h = lookup_goal_heuristic(goal, grid, grid);
+    let mut best_h = if order == LookupOrder::Bfs {
+        lookup_bfs_progress_score(goal, grid, grid)
+    } else {
+        lookup_goal_heuristic(goal, grid, grid)
+    };
     let mut best_idx = 0usize;
 
     if order == LookupOrder::Bfs {
@@ -1300,6 +1351,13 @@ fn solve_lookup(
                 if play_state == PlayState::GameOver {
                     continue;
                 }
+                if prune_dead
+                    && play_state == PlayState::Playing
+                    && !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                    && lookup_dead_state(&next_grid)
+                {
+                    continue;
+                }
                 let hash = state_key(&next_grid);
                 if !lookup_goal_reached(goal, grid, &next_grid, play_state)
                     && visited.contains_key(&hash)
@@ -1318,7 +1376,7 @@ fn solve_lookup(
                 }
 
                 visited.insert(hash, cur_depth + 1);
-                let h = lookup_goal_heuristic(goal, grid, &next_grid);
+                let h = lookup_bfs_progress_score(goal, grid, &next_grid);
                 if h < best_h {
                     best_h = h;
                     best_idx = node_idx;
@@ -1377,6 +1435,13 @@ fn solve_lookup(
             if play_state == PlayState::GameOver {
                 continue;
             }
+            if prune_dead
+                && play_state == PlayState::Playing
+                && !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                && lookup_dead_state(&next_grid)
+            {
+                continue;
+            }
             let next_depth = cur_depth + 1;
             let hash = state_key(&next_grid);
             if let Some(&previous_depth) = visited.get(&hash)
@@ -1412,6 +1477,411 @@ fn solve_lookup(
                 g: next_depth as i64,
                 idx: node_idx,
             });
+        }
+    }
+
+    None
+}
+
+fn lookup_branch_score(grid: &Grid, path_len: usize) -> i64 {
+    let features = Features::from_grid(grid);
+    let reachable_rats = reachable_rat_count(grid);
+    let unreachable_rats = features.rats.saturating_sub(reachable_rats);
+    let reachable_triggers = reachable_trigger_count(grid);
+    let trapped_unreachable_rats = trapped_unreachable_rat_count(grid);
+    let stranded_remote_penalty = if unreachable_rats > 0 && reachable_triggers == 0 {
+        unreachable_rats as i64 * 100_000_000_000
+    } else {
+        0
+    };
+    features.rats as i64 * 1_000_000_000
+        + unreachable_rats as i64 * 20_000_000_000
+        + trapped_unreachable_rats as i64 * 80_000_000_000
+        + stranded_remote_penalty
+        + resource_exhaustion_penalty(features)
+        + features.webs as i64 * 10_000
+        + features.planks as i64 * 5_000
+        + features.walls as i64 * 500
+        + path_len as i64
+        - features.explosives as i64 * 50_000
+        - features.triggers as i64 * 20_000
+}
+
+fn rat_can_step_on(cell: CellKind) -> bool {
+    !matches!(
+        cell,
+        CellKind::Wall | CellKind::Rat | CellKind::CyborgRat | CellKind::Spiderweb
+    )
+}
+
+fn component_has_local_rat_death(grid: &Grid, start: (usize, usize)) -> bool {
+    let mut q = VecDeque::new();
+    let mut seen = HashSet::new();
+    q.push_back(start);
+    seen.insert(start);
+
+    while let Some((x, y)) = q.pop_front() {
+        let cell = grid.cell_kind_at(x, y);
+        if matches!(cell, CellKind::Explosive | CellKind::BlackHole) {
+            return true;
+        }
+
+        let dirs = [(0i32, -1i32), (0, 1), (1, 0), (-1, 0)];
+        for (dx, dy) in dirs {
+            let nx = x as i32 + dx;
+            let ny = y as i32 + dy;
+            if nx < 0
+                || ny < 0
+                || nx as usize >= grid.width()
+                || ny as usize >= grid.height()
+            {
+                continue;
+            }
+            let next = (nx as usize, ny as usize);
+            let next_cell = grid.cell_kind_at(next.0, next.1);
+            if next_cell == CellKind::Explosive {
+                return true;
+            }
+            if rat_can_step_on(next_cell) && seen.insert(next) {
+                q.push_back(next);
+            }
+        }
+    }
+
+    false
+}
+
+fn trapped_unreachable_rat_count(grid: &Grid) -> usize {
+    let dist = player_dist_map(grid);
+    let mut count = 0;
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if matches!(grid.cell_kind_at(x, y), CellKind::Rat | CellKind::CyborgRat)
+                && dist[y][x] == i32::MAX
+                && !component_has_local_rat_death(grid, (x, y))
+            {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+fn positions_key(grid: &Grid, predicate: fn(CellKind) -> bool) -> String {
+    let mut positions = Vec::new();
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if predicate(grid.cell_kind_at(x, y)) {
+                positions.push(format!("{x},{y}"));
+            }
+        }
+    }
+    positions.join(";")
+}
+
+fn rat_or_cyborg(cell: CellKind) -> bool {
+    matches!(cell, CellKind::Rat | CellKind::CyborgRat)
+}
+
+fn player_cell(cell: CellKind) -> bool {
+    cell == CellKind::Player
+}
+
+fn explosive_cell(cell: CellKind) -> bool {
+    cell == CellKind::Explosive
+}
+
+fn trigger_cell(cell: CellKind) -> bool {
+    matches!(cell, CellKind::Trigger(_))
+}
+
+fn web_cell(cell: CellKind) -> bool {
+    cell == CellKind::Spiderweb
+}
+
+fn plank_cell(cell: CellKind) -> bool {
+    cell == CellKind::Plank
+}
+
+fn dropchain_diversity_key(grid: &Grid) -> String {
+    let features = Features::from_grid(grid);
+    format!(
+        "r{}:x{}:w{}:t{}:p{}:{}:{}:{}:{}:{}:{}",
+        features.rats,
+        features.explosives,
+        features.webs,
+        features.triggers,
+        features.planks,
+        positions_key(grid, rat_or_cyborg),
+        positions_key(grid, player_cell),
+        positions_key(grid, explosive_cell),
+        positions_key(grid, trigger_cell),
+        positions_key(grid, web_cell),
+        positions_key(grid, plank_cell)
+    )
+}
+
+fn solve_lookup_goal_branches(
+    grid: &Grid,
+    max_depth: usize,
+    time_limit_secs: f64,
+    max_nodes: usize,
+    goal: LookupGoal,
+    max_results: usize,
+) -> Vec<Branch> {
+    let nplayers = count_players(grid);
+    let tuples = all_action_tuples(nplayers);
+    let start = Instant::now();
+    let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
+    let mut nodes = vec![Node {
+        grid: grid.clone(),
+        parent: usize::MAX,
+        action: Vec::new(),
+        depth: 0,
+    }];
+    let mut visited = HashSet::new();
+    visited.insert(grid.search_hash());
+    let mut reached = HashSet::new();
+    let mut q = VecDeque::new();
+    q.push_back(0usize);
+    let mut results = Vec::new();
+    let mut expansions = 0u64;
+    let raw_result_limit = max_results.saturating_mul(8).max(max_results);
+
+    while let Some(idx) = q.pop_front() {
+        expansions += 1;
+        if expansions % 5_000 == 0
+            && (start.elapsed().as_secs_f64() > time_limit_secs || nodes.len() >= max_nodes)
+        {
+            break;
+        }
+        if results.len() >= raw_result_limit {
+            break;
+        }
+
+        let cur_depth = nodes[idx].depth;
+        if cur_depth as usize >= max_depth {
+            continue;
+        }
+        let cur_grid = nodes[idx].grid.clone();
+        for actions in &tuples {
+            let (next_grid, play_state) = step(&cur_grid, actions);
+            if play_state == PlayState::GameOver {
+                continue;
+            }
+            if prune_dead
+                && play_state == PlayState::Playing
+                && !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                && lookup_dead_state(&next_grid)
+            {
+                continue;
+            }
+            let node_idx = nodes.len();
+            nodes.push(Node {
+                grid: next_grid.clone(),
+                parent: idx,
+                action: actions.clone(),
+                depth: cur_depth + 1,
+            });
+
+            if play_state == PlayState::Won
+                || lookup_goal_reached(goal, grid, &next_grid, play_state)
+            {
+                let hash = next_grid.search_hash();
+                if reached.insert(hash) {
+                    let path = reconstruct(&nodes, node_idx);
+                    results.push(Branch {
+                        grid: next_grid,
+                        score: lookup_branch_score(&nodes[node_idx].grid, path.len()),
+                        path,
+                    });
+                    results.sort_by_key(|branch| branch.score);
+                    results.truncate(raw_result_limit);
+                }
+                continue;
+            }
+
+            let hash = next_grid.search_hash();
+            if visited.insert(hash) {
+                q.push_back(node_idx);
+            }
+        }
+    }
+
+    results.sort_by_key(|branch| branch.score);
+    let mut diversity_seen = HashSet::new();
+    let mut diverse = Vec::new();
+    let mut deferred = Vec::new();
+    for branch in results {
+        let diversity_key = dropchain_diversity_key(&branch.grid);
+        if diversity_seen.insert(diversity_key) {
+            diverse.push(branch);
+        } else {
+            deferred.push(branch);
+        }
+        if diverse.len() >= max_results {
+            break;
+        }
+    }
+    if diverse.len() < max_results {
+        for branch in deferred {
+            diverse.push(branch);
+            if diverse.len() >= max_results {
+                break;
+            }
+        }
+    }
+    diverse
+}
+
+#[must_use]
+fn solve_ratdrop_chain(
+    grid: &Grid,
+    steps: usize,
+    segment_depth: usize,
+    segment_secs: f64,
+    segment_nodes: usize,
+    segment_results: usize,
+    beam: usize,
+    mop_depth: usize,
+    mop_secs: f64,
+    mop_strategy: &str,
+    mop_weight: i64,
+) -> Option<Vec<Vec<Action>>> {
+    let verbose_candidates = std::env::var("DROPCHAIN_VERBOSE").is_ok();
+    let mut frontier = vec![Branch {
+        grid: grid.clone(),
+        path: Vec::new(),
+        score: lookup_branch_score(grid, 0),
+    }];
+
+    for step_idx in 0..steps {
+        frontier.sort_by_key(|branch| branch.score);
+        if mop_secs > 0.0 {
+            for branch in frontier.iter().take(beam.min(frontier.len())) {
+                if let Some(mop) = solve_with_context(
+                    &branch.grid,
+                    mop_depth,
+                    mop_secs,
+                    mop_strategy,
+                    mop_weight,
+                    &branch.path,
+                ) {
+                    let mut path = branch.path.clone();
+                    path.extend(mop);
+                    return Some(path);
+                }
+            }
+        }
+
+        let mut next_frontier = Vec::new();
+        for branch in frontier.iter().take(beam.min(frontier.len())) {
+            let before = Features::from_grid(&branch.grid);
+            let results = solve_lookup_goal_branches(
+                &branch.grid,
+                segment_depth,
+                segment_secs,
+                segment_nodes,
+                LookupGoal::RatDrop,
+                segment_results,
+            );
+            eprintln!(
+                "  drop step {} branch path={} features={:?} produced {} result(s)",
+                step_idx + 1,
+                branch.path.len(),
+                before,
+                results.len()
+            );
+            for result in results {
+                let mut path = branch.path.clone();
+                path.extend(result.path);
+                let after = Features::from_grid(&result.grid);
+                if after.rats == 0 {
+                    return Some(path);
+                }
+                let score = lookup_branch_score(&result.grid, path.len());
+                if verbose_candidates {
+                    eprintln!(
+                        "    candidate path={} features={:?} reachable_rats={} score={} ascii={}",
+                        path.len(),
+                        after,
+                        reachable_rat_count(&result.grid),
+                        score,
+                        format_path_ascii(&path)
+                    );
+                }
+                next_frontier.push(Branch {
+                    grid: result.grid,
+                    path,
+                    score,
+                });
+            }
+        }
+
+        if next_frontier.is_empty() {
+            eprintln!("  drop step {}: no rat-drop branches", step_idx + 1);
+            return None;
+        }
+
+        next_frontier.sort_by_key(|branch| branch.score);
+        let mut seen = HashSet::new();
+        let mut diversity_seen = HashSet::new();
+        let mut deduped = Vec::new();
+        let mut deferred = Vec::new();
+        for branch in next_frontier {
+            if !seen.insert(branch.grid.search_hash()) {
+                continue;
+            }
+            let diversity_key = dropchain_diversity_key(&branch.grid);
+            if diversity_seen.insert(diversity_key) {
+                deduped.push(branch);
+            } else {
+                deferred.push(branch);
+            }
+            if deduped.len() >= beam {
+                break;
+            }
+        }
+        if deduped.len() < beam {
+            for branch in deferred {
+                deduped.push(branch);
+                if deduped.len() >= beam {
+                    break;
+                }
+            }
+        }
+        eprintln!(
+            "  drop step {}: kept {} branch(es), best_score={}",
+            step_idx + 1,
+            deduped.len(),
+            deduped[0].score
+        );
+        eprintln!(
+            "  drop step {} best: path={} features={:?} reachable_rats={} ascii={}",
+            step_idx + 1,
+            deduped[0].path.len(),
+            Features::from_grid(&deduped[0].grid),
+            reachable_rat_count(&deduped[0].grid),
+            format_path_ascii(&deduped[0].path)
+        );
+        frontier = deduped;
+    }
+
+    frontier.sort_by_key(|branch| branch.score);
+    if mop_secs > 0.0 {
+        for branch in frontier {
+            if let Some(mop) = solve_with_context(
+                &branch.grid,
+                mop_depth,
+                mop_secs,
+                mop_strategy,
+                mop_weight,
+                &branch.path,
+            ) {
+                let mut path = branch.path;
+                path.extend(mop);
+                return Some(path);
+            }
         }
     }
 
@@ -1537,23 +2007,71 @@ fn reachable_rat_count(grid: &Grid) -> usize {
     reachable
 }
 
+fn reachable_trigger_count(grid: &Grid) -> usize {
+    let dist = player_dist_map(grid);
+    let mut reachable = 0;
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if matches!(grid.cell_kind_at(x, y), CellKind::Trigger(_)) && dist[y][x] != i32::MAX {
+                reachable += 1;
+            }
+        }
+    }
+    reachable
+}
+
+fn nearest_reachable_trigger_distance(grid: &Grid, number: u8) -> Option<i64> {
+    let dist = player_dist_map(grid);
+    trigger_positions(grid, number)
+        .into_iter()
+        .filter_map(|(x, y)| {
+            let distance = dist[y as usize][x as usize];
+            (distance != i32::MAX).then_some(distance as i64)
+        })
+        .min()
+}
+
+fn nearest_reachable_any_trigger_distance(grid: &Grid) -> Option<i64> {
+    let dist = player_dist_map(grid);
+    let mut best: Option<i64> = None;
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if matches!(grid.cell_kind_at(x, y), CellKind::Trigger(_)) {
+                let distance = dist[y][x];
+                if distance != i32::MAX {
+                    best = Some(best.map_or(distance as i64, |current| current.min(distance as i64)));
+                }
+            }
+        }
+    }
+    best
+}
+
+fn trigger_continuation_penalty(grid: &Grid, next_trigger: Option<u8>) -> i64 {
+    match next_trigger {
+        Some(number) => match nearest_reachable_trigger_distance(grid, number) {
+            Some(distance) => distance * 500_000,
+            None => 100_000_000_000,
+        },
+        None => {
+            if Features::from_grid(grid).triggers == 0 {
+                0
+            } else {
+                match nearest_reachable_any_trigger_distance(grid) {
+                    Some(distance) => distance * 100_000,
+                    None => 50_000_000_000,
+                }
+            }
+        }
+    }
+}
+
 fn trigger_branch_score(grid: &Grid, path_len: usize, before: Features, after: Features) -> i64 {
-    let structural_gain = before.rats.saturating_sub(after.rats) as i64 * 1_000_000
-        + before.explosives.saturating_sub(after.explosives) as i64 * 2_000
-        + before.webs.saturating_sub(after.webs) as i64 * 500
-        + before.planks.saturating_sub(after.planks) as i64 * 500
-        + before.triggers.saturating_sub(after.triggers) as i64 * 2_000;
-    let stranded_rat_penalty = if std::env::var("SMART_H").is_ok()
-        && before.rats > after.rats
-        && after.rats > 0
-        && reachable_rat_count(grid) == 0
-    {
-        80_000_000
-    } else {
-        0
-    };
-    heuristic(grid) + path_len as i64 + resource_exhaustion_penalty(after) + stranded_rat_penalty
-        - structural_gain
+    let useful_gain = before.rats.saturating_sub(after.rats) as i64 * 50_000_000
+        + before.webs.saturating_sub(after.webs) as i64 * 200_000
+        + before.planks.saturating_sub(after.planks) as i64 * 200_000
+        + before.triggers.saturating_sub(after.triggers) as i64 * 50_000;
+    lookup_branch_score(grid, path_len) - useful_gain
 }
 
 #[derive(Clone)]
@@ -1617,7 +2135,7 @@ fn solve_segment(
         depth: 0,
     }];
     let mut visited: HashMap<u64, u32> = HashMap::new();
-    visited.insert(start.state_hash(), 0);
+    visited.insert(start.search_hash(), 0);
     let mut pq: BinaryHeap<PQItem> = BinaryHeap::new();
     let p0 = find_player(start).unwrap();
     pq.push(PQItem {
@@ -1667,7 +2185,7 @@ fn solve_segment(
                 return SegResult::Reached(ns, reconstruct(&nodes, leaf));
             }
             let ng = cur_g + 1;
-            let hh = ns.state_hash();
+            let hh = ns.search_hash();
             let better = match visited.get(&hh) {
                 None => true,
                 Some(&pg) => (ng as u32) < pg,
@@ -1708,7 +2226,7 @@ fn solve_segment_branches(
         depth: 0,
     }];
     let mut visited: HashMap<u64, u32> = HashMap::new();
-    visited.insert(start.state_hash(), 0);
+    visited.insert(start.search_hash(), 0);
     let mut reached_hashes = HashSet::new();
     let mut results = Vec::new();
     let mut pq: BinaryHeap<PQItem> = BinaryHeap::new();
@@ -1761,7 +2279,7 @@ fn solve_segment_branches(
                 Some(p) => p,
                 None => continue,
             };
-            let hash = ns.state_hash();
+            let hash = ns.search_hash();
             if pp == target {
                 if reached_hashes.insert(hash) {
                     results.push(SegmentBranch {
@@ -1808,7 +2326,7 @@ fn solve_segment_multi(
         depth: 0,
     }];
     let mut visited: HashMap<u64, u32> = HashMap::new();
-    visited.insert(start.state_hash(), 0);
+    visited.insert(start.search_hash(), 0);
     let mut pq: BinaryHeap<PQItem> = BinaryHeap::new();
     let players = find_player_positions(start);
     pq.push(PQItem {
@@ -1855,7 +2373,7 @@ fn solve_segment_multi(
                 return SegResult::Reached(ns, reconstruct(&nodes, leaf));
             }
             let ng = cur_g + 1;
-            let hh = ns.state_hash();
+            let hh = ns.search_hash();
             let better = match visited.get(&hh) {
                 None => true,
                 Some(&pg) => (ng as u32) < pg,
@@ -2690,9 +3208,25 @@ fn solve_trigger_order(
 
         next_branches.sort_by_key(|branch| branch.score);
         let mut seen = HashSet::new();
+        let mut diversity_seen = HashSet::new();
         let mut deduped = Vec::new();
+        let mut deferred = Vec::new();
         for branch in next_branches {
-            if seen.insert(branch.grid.state_hash()) {
+            if !seen.insert(branch.grid.search_hash()) {
+                continue;
+            }
+            let diversity_key = dropchain_diversity_key(&branch.grid);
+            if diversity_seen.insert(diversity_key) {
+                deduped.push(branch);
+            } else {
+                deferred.push(branch);
+            }
+            if deduped.len() >= beam {
+                break;
+            }
+        }
+        if deduped.len() < beam {
+            for branch in deferred {
                 deduped.push(branch);
                 if deduped.len() >= beam {
                     break;
@@ -2728,6 +3262,302 @@ fn solve_trigger_order(
     None
 }
 
+#[must_use]
+fn solve_trigger_order_lookup(
+    grid: &Grid,
+    order: &[u8],
+    segment_depth: usize,
+    segment_secs: f64,
+    segment_nodes: usize,
+    segment_results: usize,
+    beam: usize,
+    mop_secs: f64,
+    mop_strategy: &str,
+    mop_weight: i64,
+    depth: usize,
+) -> Option<Vec<Vec<Action>>> {
+    let mut branches = vec![Branch {
+        grid: grid.clone(),
+        path: Vec::new(),
+        score: heuristic(grid),
+    }];
+
+    for (order_idx, &number) in order.iter().enumerate() {
+        branches.sort_by_key(|branch| branch.score);
+        if mop_secs > 0.0 {
+            for branch in branches.iter().take(beam.min(branches.len())) {
+                if let Some(mop) = solve_with_context(
+                    &branch.grid,
+                    depth,
+                    mop_secs,
+                    mop_strategy,
+                    mop_weight,
+                    &branch.path,
+                ) {
+                    let mut path = branch.path.clone();
+                    path.extend(mop);
+                    return Some(path);
+                }
+            }
+        }
+
+        let mut next_branches = Vec::new();
+        for branch in branches.iter().take(beam.min(branches.len())) {
+            let before = Features::from_grid(&branch.grid);
+            let results = solve_lookup_goal_branches(
+                &branch.grid,
+                segment_depth,
+                segment_secs,
+                segment_nodes,
+                LookupGoal::TriggerNumber(number),
+                segment_results,
+            );
+            eprintln!(
+                "  trigger {} lookup branch path={} features={:?} produced {} result(s)",
+                number,
+                branch.path.len(),
+                before,
+                results.len()
+            );
+            for result in results {
+                let mut path = branch.path.clone();
+                path.extend(result.path);
+                let after = Features::from_grid(&result.grid);
+                if after.rats == 0 {
+                    return Some(path);
+                }
+                let remaining_next = order[order_idx + 1..]
+                    .iter()
+                    .copied()
+                    .find(|&candidate| trigger_count(&result.grid, candidate) > 0);
+                let score = trigger_branch_score(&result.grid, path.len(), before, after)
+                    + trigger_continuation_penalty(&result.grid, remaining_next);
+                next_branches.push(Branch {
+                    grid: result.grid,
+                    path,
+                    score,
+                });
+            }
+        }
+
+        if next_branches.is_empty() {
+            eprintln!("  trigger {} lookup: no reachable branches", number);
+            return None;
+        }
+
+        next_branches.sort_by_key(|branch| branch.score);
+        let mut seen = HashSet::new();
+        let mut diversity_seen = HashSet::new();
+        let mut deduped = Vec::new();
+        let mut deferred = Vec::new();
+        for branch in next_branches {
+            if !seen.insert(branch.grid.search_hash()) {
+                continue;
+            }
+            let diversity_key = dropchain_diversity_key(&branch.grid);
+            if diversity_seen.insert(diversity_key) {
+                deduped.push(branch);
+            } else {
+                deferred.push(branch);
+            }
+            if deduped.len() >= beam {
+                break;
+            }
+        }
+        if deduped.len() < beam {
+            for branch in deferred {
+                deduped.push(branch);
+                if deduped.len() >= beam {
+                    break;
+                }
+            }
+        }
+        eprintln!(
+            "  trigger {} lookup: kept {} branch(es), best_score={}",
+            number,
+            deduped.len(),
+            deduped[0].score
+        );
+        eprintln!(
+            "  trigger {} lookup best: path={} features={:?} reachable_rats={} ascii={}",
+            number,
+            deduped[0].path.len(),
+            Features::from_grid(&deduped[0].grid),
+            reachable_rat_count(&deduped[0].grid),
+            format_path_ascii(&deduped[0].path)
+        );
+        branches = deduped;
+    }
+
+    branches.sort_by_key(|branch| branch.score);
+    for branch in branches {
+        eprintln!("  trigger lookup order done, mopping from score={}", branch.score);
+        if let Some(mop) = solve_with_context(
+            &branch.grid,
+            depth,
+            mop_secs,
+            mop_strategy,
+            mop_weight,
+            &branch.path,
+        ) {
+            let mut path = branch.path;
+            path.extend(mop);
+            return Some(path);
+        }
+    }
+
+    None
+}
+
+#[must_use]
+fn solve_any_trigger_order_lookup(
+    grid: &Grid,
+    macro_steps: usize,
+    segment_depth: usize,
+    segment_secs: f64,
+    segment_nodes: usize,
+    segment_results: usize,
+    beam: usize,
+    mop_secs: f64,
+    mop_strategy: &str,
+    mop_weight: i64,
+    depth: usize,
+) -> Option<Vec<Vec<Action>>> {
+    let mut branches = vec![Branch {
+        grid: grid.clone(),
+        path: Vec::new(),
+        score: heuristic(grid),
+    }];
+
+    for step_idx in 0..macro_steps {
+        branches.sort_by_key(|branch| branch.score);
+        if mop_secs > 0.0 {
+            for branch in branches.iter().take(beam.min(branches.len())) {
+                if let Some(mop) = solve_with_context(
+                    &branch.grid,
+                    depth,
+                    mop_secs,
+                    mop_strategy,
+                    mop_weight,
+                    &branch.path,
+                ) {
+                    let mut path = branch.path.clone();
+                    path.extend(mop);
+                    return Some(path);
+                }
+            }
+        }
+
+        let mut next_branches = Vec::new();
+        for branch in branches.iter().take(beam.min(branches.len())) {
+            let before = Features::from_grid(&branch.grid);
+            let numbers = trigger_numbers(&branch.grid);
+            for number in numbers {
+                let results = solve_lookup_goal_branches(
+                    &branch.grid,
+                    segment_depth,
+                    segment_secs,
+                    segment_nodes,
+                    LookupGoal::TriggerNumber(number),
+                    segment_results,
+                );
+                if results.is_empty() {
+                    continue;
+                }
+                eprintln!(
+                    "  trigger-any lookup step {} branch path={} trigger={} features={:?} produced {} result(s)",
+                    step_idx + 1,
+                    branch.path.len(),
+                    number,
+                    before,
+                    results.len()
+                );
+                for result in results {
+                    let mut path = branch.path.clone();
+                    path.extend(result.path);
+                    let after = Features::from_grid(&result.grid);
+                    if after.rats == 0 {
+                        return Some(path);
+                    }
+                    let score = trigger_branch_score(&result.grid, path.len(), before, after)
+                        + trigger_continuation_penalty(&result.grid, None);
+                    next_branches.push(Branch {
+                        grid: result.grid,
+                        path,
+                        score,
+                    });
+                }
+            }
+        }
+
+        if next_branches.is_empty() {
+            eprintln!("  trigger-any lookup step {}: no reachable branches", step_idx + 1);
+            return None;
+        }
+
+        next_branches.sort_by_key(|branch| branch.score);
+        let mut seen = HashSet::new();
+        let mut diversity_seen = HashSet::new();
+        let mut deduped = Vec::new();
+        let mut deferred = Vec::new();
+        for branch in next_branches {
+            if !seen.insert(branch.grid.search_hash()) {
+                continue;
+            }
+            let diversity_key = dropchain_diversity_key(&branch.grid);
+            if diversity_seen.insert(diversity_key) {
+                deduped.push(branch);
+            } else {
+                deferred.push(branch);
+            }
+            if deduped.len() >= beam {
+                break;
+            }
+        }
+        if deduped.len() < beam {
+            for branch in deferred {
+                deduped.push(branch);
+                if deduped.len() >= beam {
+                    break;
+                }
+            }
+        }
+        eprintln!(
+            "  trigger-any lookup step {}: kept {} branch(es), best_score={}",
+            step_idx + 1,
+            deduped.len(),
+            deduped[0].score
+        );
+        eprintln!(
+            "  trigger-any lookup step {} best: path={} features={:?} reachable_rats={} ascii={}",
+            step_idx + 1,
+            deduped[0].path.len(),
+            Features::from_grid(&deduped[0].grid),
+            reachable_rat_count(&deduped[0].grid),
+            format_path_ascii(&deduped[0].path)
+        );
+        branches = deduped;
+    }
+
+    branches.sort_by_key(|branch| branch.score);
+    for branch in branches {
+        if let Some(mop) = solve_with_context(
+            &branch.grid,
+            depth,
+            mop_secs,
+            mop_strategy,
+            mop_weight,
+            &branch.path,
+        ) {
+            let mut path = branch.path;
+            path.extend(mop);
+            return Some(path);
+        }
+    }
+
+    None
+}
+
 fn solve_any_trigger_order(
     grid: &Grid,
     macro_steps: usize,
@@ -2740,6 +3570,7 @@ fn solve_any_trigger_order(
 ) -> Option<Vec<Vec<Action>>> {
     let nplayers = count_players(grid);
     let tuples = all_action_tuples(nplayers);
+    let verbose_candidates = std::env::var("TRIG_VERBOSE").is_ok();
     let segment_results = std::env::var("SEG_RESULTS")
         .ok()
         .and_then(|value| value.parse().ok())
@@ -2752,18 +3583,20 @@ fn solve_any_trigger_order(
 
     for step_idx in 0..macro_steps {
         branches.sort_by_key(|branch| branch.score);
-        for branch in branches.iter().take(beam.min(branches.len())) {
-            if let Some(mop) = solve_with_context(
-                &branch.grid,
-                depth,
-                mop_secs,
-                mop_strategy,
-                mop_weight,
-                &branch.path,
-            ) {
-                let mut path = branch.path.clone();
-                path.extend(mop);
-                return Some(path);
+        if mop_secs > 0.0 {
+            for branch in branches.iter().take(beam.min(branches.len())) {
+                if let Some(mop) = solve_with_context(
+                    &branch.grid,
+                    depth,
+                    mop_secs,
+                    mop_strategy,
+                    mop_weight,
+                    &branch.path,
+                ) {
+                    let mut path = branch.path.clone();
+                    path.extend(mop);
+                    return Some(path);
+                }
             }
         }
 
@@ -2782,23 +3615,25 @@ fn solve_any_trigger_order(
 
                     let before = Features::from_grid(&branch.grid);
                     let after = Features::from_grid(&segment.grid);
-                    if after == before && branch.grid.state_hash() == segment.grid.state_hash() {
+                    if after == before && branch.grid.search_hash() == segment.grid.search_hash() {
                         continue;
                     }
                     let mut path = branch.path.clone();
                     path.extend(segment.path);
                     let score = trigger_branch_score(&segment.grid, path.len(), before, after);
-                    eprintln!(
-                        "  step {} trigger {} at ({},{}): path={} features={:?} score={} path_ascii={}",
-                        step_idx + 1,
-                        number,
-                        target.0,
-                        target.1,
-                        path.len(),
-                        after,
-                        score,
-                        format_path_ascii(&path)
-                    );
+                    if verbose_candidates {
+                        eprintln!(
+                            "  step {} trigger {} at ({},{}): path={} features={:?} score={} path_ascii={}",
+                            step_idx + 1,
+                            number,
+                            target.0,
+                            target.1,
+                            path.len(),
+                            after,
+                            score,
+                            format_path_ascii(&path)
+                        );
+                    }
                     next_branches.push(Branch {
                         grid: segment.grid,
                         path,
@@ -2815,9 +3650,25 @@ fn solve_any_trigger_order(
 
         next_branches.sort_by_key(|branch| branch.score);
         let mut seen = HashSet::new();
+        let mut diversity_seen = HashSet::new();
         let mut deduped = Vec::new();
+        let mut deferred = Vec::new();
         for branch in next_branches {
-            if seen.insert(branch.grid.state_hash()) {
+            if !seen.insert(branch.grid.search_hash()) {
+                continue;
+            }
+            let diversity_key = dropchain_diversity_key(&branch.grid);
+            if diversity_seen.insert(diversity_key) {
+                deduped.push(branch);
+            } else {
+                deferred.push(branch);
+            }
+            if deduped.len() >= beam {
+                break;
+            }
+        }
+        if deduped.len() < beam {
+            for branch in deferred {
                 deduped.push(branch);
                 if deduped.len() >= beam {
                     break;
@@ -2868,7 +3719,7 @@ fn find_event_successors(
         depth: 0,
     }];
     let mut visited = HashSet::new();
-    visited.insert(start_grid.state_hash());
+    visited.insert(start_grid.search_hash());
     let mut q = VecDeque::new();
     q.push_back(0usize);
     let mut events = Vec::new();
@@ -2892,7 +3743,7 @@ fn find_event_successors(
                 continue;
             }
 
-            let hash = next_grid.state_hash();
+            let hash = next_grid.search_hash();
             if !visited.insert(hash) {
                 continue;
             }
@@ -2918,9 +3769,12 @@ fn find_event_successors(
             if features != start_features {
                 if event_hashes.insert(hash) {
                     let path = reconstruct(&nodes, node_idx);
-                    let score = heuristic(&nodes[node_idx].grid)
-                        + path.len() as i64
-                        + resource_exhaustion_penalty(features);
+                    let score = trigger_branch_score(
+                        &nodes[node_idx].grid,
+                        path.len(),
+                        start_features,
+                        features,
+                    );
                     events.push(EventSuccessor {
                         grid: next_grid,
                         score,
@@ -2959,14 +3813,14 @@ fn solve_macro_events(
         path: Vec::new(),
     }];
     let mut pq = BinaryHeap::new();
-    let h0 = heuristic(grid);
+    let h0 = lookup_branch_score(grid, 0);
     pq.push(PQItem {
         f: h0,
         g: 0,
         idx: 0,
     });
     let mut visited = HashSet::new();
-    visited.insert(grid.state_hash());
+    visited.insert(grid.search_hash());
     let mut expansions = 0u64;
     let mut best_idx = 0usize;
     let mut best_score = h0;
@@ -3021,7 +3875,7 @@ fn solve_macro_events(
                 return Some(path);
             }
 
-            let hash = event.grid.state_hash();
+            let hash = event.grid.search_hash();
             if !visited.insert(hash) {
                 continue;
             }
@@ -3067,7 +3921,7 @@ fn solve_to_event(
         depth: 0,
     }];
     let mut visited = HashSet::new();
-    visited.insert(grid.state_hash());
+    visited.insert(grid.search_hash());
 
     if strategy == "bfs" {
         let mut q = VecDeque::new();
@@ -3090,7 +3944,7 @@ fn solve_to_event(
                 if play_state == PlayState::GameOver {
                     continue;
                 }
-                let hash = next_grid.state_hash();
+                let hash = next_grid.search_hash();
                 if !visited.insert(hash) {
                     continue;
                 }
@@ -3149,7 +4003,7 @@ fn solve_to_event(
             if play_state == PlayState::GameOver {
                 continue;
             }
-            let hash = next_grid.state_hash();
+            let hash = next_grid.search_hash();
             if !visited.insert(hash) {
                 continue;
             }
@@ -4840,6 +5694,239 @@ fn main() {
         return;
     }
 
+    if mode == "triglookup" {
+        // solver triglookup <csv> [--order "1,2,3"] [--segdepth N]
+        //                         [--segsecs S] [--segnodes N] [--results N]
+        //                         [--beam N] [--mopsecs S]
+        let mut prefix_str = String::new();
+        let mut order: Option<Vec<u8>> = None;
+        let mut segment_depth = 120usize;
+        let mut segment_secs = 10.0;
+        let mut segment_nodes = 1_000_000usize;
+        let mut segment_results = 32usize;
+        let mut beam = 32usize;
+        let mut mop_secs = 30.0;
+        let mut mop_strategy = "gbfs".to_string();
+        let mut mop_weight = 5i64;
+        let mut depth = 400usize;
+        let mut i = 3;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--order" => {
+                    order = Some(parse_trigger_order(&args[i + 1]));
+                    i += 2;
+                }
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--segdepth" => {
+                    segment_depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--segsecs" => {
+                    segment_secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--segnodes" => {
+                    segment_nodes = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--results" => {
+                    segment_results = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--beam" => {
+                    beam = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--mopsecs" => {
+                    mop_secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--mopstrat" => {
+                    mop_strategy = args[i + 1].clone();
+                    i += 2;
+                }
+                "--mopweight" => {
+                    mop_weight = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--depth" => {
+                    depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                _ => i += 1,
+            }
+        }
+        let order = order.unwrap_or_else(|| trigger_numbers(&grid));
+        let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
+        eprintln!(
+            "trigger-lookup solve: order={:?}, players={}, prefix={}, segdepth={}, segsecs={}, segnodes={}, results={}, beam={}",
+            order,
+            nplayers,
+            prefix.len(),
+            segment_depth,
+            segment_secs,
+            segment_nodes,
+            segment_results,
+            beam
+        );
+        let t0 = Instant::now();
+        match solve_trigger_order_lookup(
+            &start_grid,
+            &order,
+            segment_depth,
+            segment_secs,
+            segment_nodes,
+            segment_results,
+            beam,
+            mop_secs,
+            &mop_strategy,
+            mop_weight,
+            depth,
+        ) {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
+                println!(
+                    "SOLVED moves={} time={:.1}s",
+                    path.len(),
+                    t0.elapsed().as_secs_f64()
+                );
+                println!("ARROWS {}", format_path(&path));
+                println!("ASCII {}", format_path_ascii(&path));
+            }
+            None => println!("NO_SOLUTION time={:.1}s", t0.elapsed().as_secs_f64()),
+        }
+        return;
+    }
+
+    if mode == "triganylookup" {
+        // solver triganylookup <csv> [--steps N] [--segdepth N]
+        //                            [--segsecs S] [--segnodes N] [--results N]
+        //                            [--beam N] [--mopsecs S]
+        let mut prefix_str = String::new();
+        let mut steps = trigger_numbers(&grid).len().max(1);
+        let mut segment_depth = 120usize;
+        let mut segment_secs = 10.0;
+        let mut segment_nodes = 1_000_000usize;
+        let mut segment_results = 16usize;
+        let mut beam = 32usize;
+        let mut mop_secs = 30.0;
+        let mut mop_strategy = "gbfs".to_string();
+        let mut mop_weight = 5i64;
+        let mut depth = 400usize;
+        let mut i = 3;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--steps" => {
+                    steps = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--segdepth" => {
+                    segment_depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--segsecs" => {
+                    segment_secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--segnodes" => {
+                    segment_nodes = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--results" => {
+                    segment_results = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--beam" => {
+                    beam = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--mopsecs" => {
+                    mop_secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--mopstrat" => {
+                    mop_strategy = args[i + 1].clone();
+                    i += 2;
+                }
+                "--mopweight" => {
+                    mop_weight = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--depth" => {
+                    depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                _ => i += 1,
+            }
+        }
+        let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
+        eprintln!(
+            "trigger-any-lookup solve: players={} prefix={} steps={} segdepth={} segsecs={} segnodes={} results={} beam={}",
+            nplayers,
+            prefix.len(),
+            steps,
+            segment_depth,
+            segment_secs,
+            segment_nodes,
+            segment_results,
+            beam
+        );
+        let t0 = Instant::now();
+        match solve_any_trigger_order_lookup(
+            &start_grid,
+            steps,
+            segment_depth,
+            segment_secs,
+            segment_nodes,
+            segment_results,
+            beam,
+            mop_secs,
+            &mop_strategy,
+            mop_weight,
+            depth,
+        ) {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
+                println!(
+                    "SOLVED moves={} time={:.1}s",
+                    path.len(),
+                    t0.elapsed().as_secs_f64()
+                );
+                println!("ARROWS {}", format_path(&path));
+                println!("ASCII {}", format_path_ascii(&path));
+            }
+            None => println!("NO_SOLUTION time={:.1}s", t0.elapsed().as_secs_f64()),
+        }
+        return;
+    }
+
     if mode == "macro" {
         // solver macro <csv> [--segdepth N] [--segsecs S] [--beam N] [--events N] [--secs S]
         let mut prefix_str = String::new();
@@ -5412,6 +6499,230 @@ fn main() {
                 if !solved {
                     println!("GOAL_REACHED state={:?}", play_state);
                 }
+                println!("ARROWS {}", format_path(&path));
+                println!("ASCII {}", format_path_ascii(&path));
+            }
+            None => println!("NO_SOLUTION time={:.1}s", t0.elapsed().as_secs_f64()),
+        }
+        return;
+    }
+
+    if mode == "branchdump" {
+        // solver branchdump <csv> [--prefix MOVES] [--goal win|trigger:n|ratat:x,y|ratgone:x,y]
+        //                         [--depth N] [--secs S] [--maxnodes N] [--results N]
+        //                         [--eval x,y] [--states]
+        let mut prefix_str = String::new();
+        let mut goal = LookupGoal::Win;
+        let mut depth = 60usize;
+        let mut secs = 30.0f64;
+        let mut max_nodes = 500_000usize;
+        let mut results = 20usize;
+        let mut eval_point: Option<(i32, i32)> = None;
+        let mut print_states = false;
+        let mut i = 3;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--goal" => {
+                    goal = LookupGoal::parse(&args[i + 1]);
+                    i += 2;
+                }
+                "--depth" => {
+                    depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--secs" => {
+                    secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--maxnodes" => {
+                    max_nodes = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--results" => {
+                    results = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--eval" => {
+                    eval_point = parse_optional_point(&args[i + 1]);
+                    i += 2;
+                }
+                "--states" => {
+                    print_states = true;
+                    i += 1;
+                }
+                _ => {
+                    i += 1;
+                }
+            }
+        }
+
+        let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
+        eprintln!(
+            "branchdump: players={} prefix={} goal={:?} depth={} secs={} maxnodes={} results={}",
+            nplayers,
+            prefix.len(),
+            goal,
+            depth,
+            secs,
+            max_nodes,
+            results
+        );
+        let branches =
+            solve_lookup_goal_branches(&start_grid, depth, secs, max_nodes, goal, results);
+        for (idx, branch) in branches.iter().enumerate() {
+            let mut full_path = prefix.clone();
+            full_path.extend(branch.path.clone());
+            let features = Features::from_grid(&branch.grid);
+            let eval_text = eval_point
+                .map(|point| {
+                    let dist = distance_from_player(&branch.grid, point);
+                    let kind = branch.grid.cell_kind_at(point.0 as usize, point.1 as usize);
+                    format!(" eval=({},{}) dist={} kind={:?}", point.0, point.1, dist, kind)
+                })
+                .unwrap_or_default();
+            println!(
+                "BRANCH idx={} suffix={} total={} score={} features={:?} reachable_rats={}{}",
+                idx,
+                branch.path.len(),
+                full_path.len(),
+                branch.score,
+                features,
+                reachable_rat_count(&branch.grid),
+                eval_text
+            );
+            println!("ASCII {}", format_path_ascii(&full_path));
+            if print_states {
+                println!("STATE\n{}", branch.grid.to_csv());
+            }
+        }
+        return;
+    }
+
+    if mode == "dropchain" {
+        // solver dropchain <csv> [--prefix MOVES] [--steps N] [--segdepth N]
+        //                        [--segsecs S] [--segnodes N] [--results N]
+        //                        [--beam N] [--mopdepth N] [--mopsecs S]
+        let mut prefix_str = String::new();
+        let mut steps = count_rats(&grid);
+        let mut segment_depth = 120usize;
+        let mut segment_secs = 20.0;
+        let mut segment_nodes = 1_000_000usize;
+        let mut segment_results = 32usize;
+        let mut beam = 32usize;
+        let mut mop_depth = 400usize;
+        let mut mop_secs = 20.0;
+        let mut mop_strategy = "gbfs".to_string();
+        let mut mop_weight = 5i64;
+        let mut i = 3;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--steps" => {
+                    steps = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--segdepth" => {
+                    segment_depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--segsecs" => {
+                    segment_secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--segnodes" => {
+                    segment_nodes = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--results" => {
+                    segment_results = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--beam" => {
+                    beam = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--mopdepth" => {
+                    mop_depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--mopsecs" => {
+                    mop_secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--mopstrat" => {
+                    mop_strategy = args[i + 1].clone();
+                    i += 2;
+                }
+                "--mopweight" => {
+                    mop_weight = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                _ => i += 1,
+            }
+        }
+        let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
+        eprintln!(
+            "dropchain solve: players={} prefix={} steps={} segdepth={} segsecs={} segnodes={} results={} beam={} mopdepth={} mopsecs={} mopstrat={} mopweight={}",
+            nplayers,
+            prefix.len(),
+            steps,
+            segment_depth,
+            segment_secs,
+            segment_nodes,
+            segment_results,
+            beam,
+            mop_depth,
+            mop_secs,
+            mop_strategy,
+            mop_weight
+        );
+        let t0 = Instant::now();
+        match solve_ratdrop_chain(
+            &start_grid,
+            steps,
+            segment_depth,
+            segment_secs,
+            segment_nodes,
+            segment_results,
+            beam,
+            mop_depth,
+            mop_secs,
+            &mop_strategy,
+            mop_weight,
+        ) {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
+                println!(
+                    "SOLVED moves={} time={:.1}s",
+                    path.len(),
+                    t0.elapsed().as_secs_f64()
+                );
                 println!("ARROWS {}", format_path(&path));
                 println!("ASCII {}", format_path_ascii(&path));
             }

@@ -1,7 +1,8 @@
 # Infestation solving campaign — HANDOFF
 
-Resume doc for continuing the effort on another machine. **Goal: solve the 11
-remaining hard levels.** 22/33 originals + 5 new puzzles are already solved & shipped.
+Resume doc for continuing the effort on another machine. **Goal: solve the 8
+remaining hard levels.** 27/35 non-Claude playable CSV levels + 5 new puzzles
+are already solved & shipped.
 
 ---
 
@@ -69,34 +70,62 @@ so every result is exactly what the shipped game does. Binary: `target/release/s
 
 ## 3. Status
 
-### Solved — 22/33 originals + 5 new (all oracle-verified `result=Won`)
+### Solved - 27/35 non-Claude levels + 5 new (all oracle-verified `result=Won`)
 Move strings: **`solver/solutions/SOLUTIONS.md`** (machine-readable: `final_solutions.json`).
 Browser auto-player: `solver/solutions/autoplay.js`. New puzzles: `levels/claude/`.
 
-### UNSOLVED — the 11 (this is the job)
+`HANDOFF.md` used to say 11 remained, but `solver/solutions/SOLUTIONS.md`
+now includes verified wins for `tinderbox`, `no_retreat`, `lock_in`, and
+`limited2`.
+
+### UNSOLVED - the 8 (this is the job)
 
 | # | Level | Players | Name-hint / trick | Best lead / recommended attack |
 |---|---|---|---|---|
-| 1 | `tinderbox` | 1 | "tinderbox" = it **is** ignitable | **Strongest lead:** `(6,6)=X` with `(6,5)=.` open beside it. If a rat reaches `(6,5)` with the player south, it steps onto the X → chain kills all 11. Need to route rat `(1,5)`→`(6,5)`; webs block rats, and clearing webs needs explosions. Hand-trace the ignition. |
-| 2 | `tinderrectangle` | 1 | same family as tinderbox | Same ignition idea; map its explosive frame. |
-| 3 | `no_retreat` | 1 | forward-only; lure rats onto X | `PROGRESS_H=1 gbfs` once reached **2 rats remaining** then stuck in a local min. Try `astar PROGRESS_H` longer, or find the per-unit lure pattern (`R,w\|X` repeats) and tile via `wp`. |
-| 4 | `cyborg_rats/ai_takeover` | 1 | cyborgs + triggers 1-8 | Exploit Dijkstra: trap on the cyborg's shortest path (it commits where a dumb rat wouldn't). |
-| 5 | `release` | 1 | **RELEASE** the caged rats (they MOVE) | Not a static-rat puzzle → PDDL failed. `wp` over trigger cells + lure the released rats. |
-| 6 | `lock_in` | 1 | **seal** rats in via trigger-walls | Most tractable trigger puzzle. `wp` with trigger-order; or auto-enumerate trigger orderings. |
-| 7 | `reload_v3` | 1 | fire→reload cycles; triggers 1-7 | Repeated detonation cycles; `wp` trigger-order. |
-| 8 | `chase` | 1 | **kite** rats into holes/X | Lead the chasers through traps; `wp` your kite path. |
-| 9 | `cooperation/tug_of_war` | 2 | mirror-symmetric → **mirrored moves** | Try symmetric P1/P2 pairs; may need sync. (2p `wp` not implemented — see §4.) |
-| 10 | `cooperation/handoff` | 2 | **baton-pass**: one enables the other | Sequence P1-enables→P2-advances. |
-| 11 | `cooperation/blocked_v2` | 2 | one player **blocked** | ⚠ coop agent's analysis suggested rat at `(6,10)` may be **permanently unreachable** (only entrance is an indestructible plank) → **possibly UNWINNABLE.** Verify rigorously (deep/exhaustive search) before sinking time. |
+| 1 | `tinderrectangle` | 1 | pure ignition geometry | `ignitions` says a top-pack rat at `(0,0)` or `(16,0)` can detonate the rectangle and win. Directly cutting the left web from `(1,3)`/`(2,3)` kills the player. Treat this as a lure/facing puzzle: shape a top rat into the explosive corner, then make the one safe nudge. |
+| 2 | `release` | 1 | release the caged rats, then mop | Strong human prefix: `v<vv^^>>v` consumes trigger 3 then 4, drops rats from 24 to 23, explosives from 35 to 5, webs from 47 to 27, and makes 21 rats reachable. Follow-up trigger 5 is reachable with suffix `v<>>>^`; next work is choosing between trigger 2 and 6, then mop-up. |
+| 3 | `reload_v3` | 1 | fire/reload cycles; triggers 1-7 | Work bottom trigger row as reload stations, not as a global search. Likely order starts around trigger 1, then 2/3/4/5/6/7 as each detonation opens the next chamber. Use `triglookup` with explicit orders and inspect each irreversible change. |
+| 4 | `chase` | 1 | kite rats into holes/X | All triggers are player-reachable, but only 4/8 rats are initially reachable. Solve as a route plan: trigger/kite the chasers through holes and the explosive lane, then mop. Do not let A* chase all rats directly. |
+| 5 | `cyborg_rats/ai_takeover` | 1 | `release` skeleton plus cyborgs/triggers 7-8 | Solve `release` first, then transfer the trigger skeleton. Extra triggers 7/8 and cyborg Dijkstra behavior are probably the intended differences. |
+| 6 | `cooperation/tug_of_war` | 2 | mirror-symmetric tug | Needs paired role choreography with `wp2`: mirrored trigger pairs 1/2/3, side rats, then central rat. Avoid generic 2p search until the waypoint pairs encode the intended symmetry. |
+| 7 | `cooperation/handoff` | 2 | baton pass | Small enough to hand-reason. P1 cannot simply reach trigger 1 first. P1 can reach trigger 2 first, but then trigger 1 is no longer useful/reachable; likely P1 opens the handoff and P2 finishes on the remote side. |
+| 8 | `cooperation/blocked_v2` | 2 | one player blocked | Keep the previous warning: one rat may be permanently unreachable behind effectively indestructible structure. Before spending human-solving time, prove or disprove winnability with targeted reachability/exhaustive checks. |
 
-### Methods already tried & exhausted on all 11 (so don't repeat blindly)
-- Heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth 400-500, 240-450s each): **0/11**.
-- PDDL (pyperplan): agent **crashed at 53 min**, 0.
-- LLM-play agents (Opus×2 / Sonnet, oracle+trace in the loop, ~55 min): **0 verified** — but produced the leads above. They did **not** use the `wp` solver, which is likely why they stalled hand-tracing.
+### Approach update - 2026-06-11
+
+The remaining puzzles should not be attacked with another blind `solver solve`
+run. Treat the oracle as a microscope for human hypotheses:
+
+1. Run `solver diag <level>` first. Record reachable rats/triggers, explosive
+   count, black holes, and which rats are in inaccessible components.
+2. Identify the intended irreversible event: a trigger consumed, a rat dropped,
+   an explosive chain, a web corridor opened, or a two-player handoff.
+3. Use short-goal tools to validate only that event:
+   - `solver ignitions` for one-step explosive geometry.
+   - `solver trace` for exact rat movement after a proposed human line.
+   - `solver branchdump` / `solver lookup --goal ratat:x,y|ratgone:x,y|trigger:n`
+     for tactical subgoals.
+   - `solver wp` / `solver wp2` after deciding the plan; waypoints should encode
+     the human route, not discover the route from scratch.
+   - `solver triglookup` with explicit trigger orders after the trigger plan is
+     known. Use `triganylookup` only to find candidate trigger orders, then
+     inspect the best branch and continue from its prefix.
+4. Keep any partial that causes irreversible progress. A timeout with a lower
+   rat/explosive/web count is a lead, not a failure.
+5. Commit verified prefixes and observations even if they are not complete
+   wins; the next iteration should continue from the best known state.
+
+### Methods already tried (do not repeat blindly)
+- Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
+  400-500, long budgets) solved several levels but stalled on the current 8.
+- PDDL and LLM-play agents produced no verified final wins on the current hard
+  set. Their useful output was mechanism hints, not move strings.
+- The current productive path is mechanism-first decomposition plus short
+  oracle checks.
 
 ---
 
-## 4. Planned next steps (NOT yet done — start here)
+## 4. Planned next steps (start here)
 
 1. **Speed up the oracle (highest ROI, ~half-planned).** It's ~3,800 states/sec because
    every move round-trips through CSV `parse`+`serialize`. Add to `game/src/testing.rs`:
@@ -104,15 +133,18 @@ Browser auto-player: `solver/solutions/autoplay.js`. New puzzles: `levels/claude
    and a way to hash a `Grid`'s cells directly (derive/expose). Switch `solver/src/main.rs`
    `step()` and the visited-set hashing off strings. Est. **10-50×** → deep search becomes
    feasible. (I was reading `game/src/grid.rs` to do this when paused.)
-2. **Auto-waypoint trigger-ordering mode.** New solver mode: enumerate trigger cells, try
-   orderings (greedy + permutations), run `wp` segments between them + mop-up. Should crack
-   `lock_in` / `release` / `reload_v3`.
-3. **Workflow fan-out** (ultracode): one *focused* LLM agent per remaining level, each told
-   to **use `wp`** (supply a plan, let search fill moves) + its specific lead, iterate
-   `trace`/`verify`, and **return the verified move string**. Focus-per-level + `wp` is the
-   fix for what stalled the earlier agents.
-4. **Hand-solve stragglers** — `tinderbox` lead is the most promising concrete start.
-5. **`blocked_v2`:** rigorously test winnability before assuming solvable.
+2. **Continue `release` from the known prefix.** Start with
+   `v<vv^^>>v` (triggers 3 then 4). Test trigger 5 via suffix `v<>>>^`, then
+   branch explicitly on trigger 2 vs 6 and inspect the resulting state.
+3. **Solve `tinderrectangle` as an ignition lure.** The winning geometry is a
+   top rat entering `(0,0)` or `(16,0)`. Find the safe facing/timing that opens
+   the web without letting the rat kill the player.
+4. **Use `release` as the template for `ai_takeover`.** Once `release` is
+   solved, port its trigger order to `ai_takeover` and account for trigger 7/8
+   and cyborg pathing.
+5. **For two-player levels, work in `wp2` waypoint pairs.** Start with
+   `handoff` because it is small; then use mirrored plans for `tug_of_war`.
+6. **`blocked_v2`:** rigorously test winnability before assuming solvable.
 
 ---
 
