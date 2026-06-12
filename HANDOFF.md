@@ -747,6 +747,46 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   - `cooperation/blocked_v2`: preserved-rat checks still did not remove
     `(0,15)` or consume trigger 2; paired waypoint access to trigger 2 failed.
 
+- Mechanism pass on 2026-06-12 found **no new verified wins**, but tightened two
+  active frontiers:
+  - `tinderrectangle`: the lower-row ignition mechanism is now proven on
+    virtual boards: any lower rat on `(2..6,6)` with the player safely at
+    `(14,6)`, `(14,7)`, or `(14,8)` can win by stalling, because the rat steps
+    onto the row-7 explosive chain while the player survives. Cells `(15,7)` and
+    `(15,8)` are not safe for this purpose. The hard part is not ignition; it is
+    separation.
+  - `tinderrectangle`: the stronger safe-side staging branch
+    `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^`
+    verifies as `Playing` for 84 turns, with player `(15,7)`, all 16 rats alive,
+    the lower rat still `(2,3)`, and 23 webs. From that state, branchdump can
+    move the lower rat to `(6,6)`, but every returned branch again collapses to
+    the one-cell contact line: player `(7,6)`, lower rat `(6,6)`. Example full
+    branch:
+    `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^^^^^<<<vvv<<^^^<<<<<<vv>v<<<<>>>>>>`.
+    Immediate `^`, `v`, or `.` loses; moving east overruns the rat to `(8,6)`.
+  - `tinderrectangle`: the best cut point in that branch is turn 113:
+    `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^^^^^<<<vvv<<^^^<<<<<<vv>v<<<<`.
+    It reproduces the left-wall pump shape with extra right-side cleanup:
+    player `(1,6)`, lower rat `(1,4)`, all 16 rats alive, and only 19 webs.
+    Direct suffixes still fail in the same way (`>>>>>>` gives player `(7,6)` /
+    rat `(6,6)`, then all non-kill continuations fail), and branchdump for
+    `winready` / `playerat:14,7` from this cut point returned no branch in the
+    tested budgets. This suggests the missing trick is not more right-side
+    preparation; it is a different release geometry that gives the player
+    separation before the rat reaches row 6.
+  - `cooperation/blocked_v2`: the best current frontier is
+    `^< ^^ <^ <^ <v <^ v> .> <> vv ^v .v <v ^v v^ vv >v ^> ^> v< v> ^<`.
+    It verifies as `Playing` for 22 turns with 3 rats at `(9,13)`, `(9,14)`,
+    and `(0,15)`, zero planks, and trigger 2 still present. Trigger 2 is the
+    plausible way to open the left rat, because it can zap/detonate the
+    `(2,15)/(3,15)` explosives and clear web `(1,15)`. However, from both the
+    15-turn pre-trigger-4 frontier and the 22-turn 3-rat frontier, targeted
+    checks for `trigger:2`, `reachable:5,11`, `reachable:3,14`,
+    `ratat:5,11`, `ratat:3,14`, `cellnot:1,15,web`,
+    `cellnot:2,15,explosive`, `cellnot:6,11,explosive`,
+    `reachable:6,11`, and `playerat:6,12` returned no branches in the tested
+    budgets. Treat trigger-2 access as the current blocker, not the later mop-up.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 8.
