@@ -700,8 +700,9 @@ fn lookup_goal_reached(
         }
         LookupGoal::CellIs(x, y, kind) => current.cell_kind_at(x as usize, y as usize) == kind,
         LookupGoal::CellNot(x, y, kind) => current.cell_kind_at(x as usize, y as usize) != kind,
-        LookupGoal::PlayerAt(x, y) => positions_matching(current, |cell| cell == CellKind::Player)
-            .contains(&(x, y)),
+        LookupGoal::PlayerAt(x, y) => {
+            positions_matching(current, |cell| cell == CellKind::Player).contains(&(x, y))
+        }
         LookupGoal::RatAt(x, y) => rat_at(current, (x, y)),
         LookupGoal::RatGone(x, y) => !rat_at(current, (x, y)),
         LookupGoal::RatDrop => count_rats(current) < count_rats(initial),
@@ -717,11 +718,7 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         LookupGoal::Win => heuristic(current),
         LookupGoal::WinReady => {
             if std::env::var("TRAP_H").is_ok() && current.width() >= 16 {
-                rectangle_trap_heuristic(
-                    current,
-                    count_rats(initial),
-                    count_explosives(initial),
-                )
+                rectangle_trap_heuristic(current, count_rats(initial), count_explosives(initial))
             } else {
                 heuristic(current)
             }
@@ -773,9 +770,11 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
                 + Features::from_grid(current).triggers as i64 * 1_000
                 + Features::from_grid(current).explosives as i64 * 100
         }
-        LookupGoal::WinReady => count_rats(current) as i64 * 1_000_000
-            + Features::from_grid(current).explosives as i64 * 100
-            + Features::from_grid(current).webs as i64,
+        LookupGoal::WinReady => {
+            count_rats(current) as i64 * 1_000_000
+                + Features::from_grid(current).explosives as i64 * 100
+                + Features::from_grid(current).webs as i64
+        }
         LookupGoal::TriggerNumber(number) => {
             trigger_count(current, number) as i64 * 1_000_000 + count_rats(current) as i64 * 1_000
         }
@@ -1640,11 +1639,7 @@ fn component_has_local_rat_death(grid: &Grid, start: (usize, usize)) -> bool {
         for (dx, dy) in dirs {
             let nx = x as i32 + dx;
             let ny = y as i32 + dy;
-            if nx < 0
-                || ny < 0
-                || nx as usize >= grid.width()
-                || ny as usize >= grid.height()
-            {
+            if nx < 0 || ny < 0 || nx as usize >= grid.width() || ny as usize >= grid.height() {
                 continue;
             }
             let next = (nx as usize, ny as usize);
@@ -1738,6 +1733,7 @@ fn solve_lookup_goal_branches(
     max_nodes: usize,
     goal: LookupGoal,
     max_results: usize,
+    min_rats: Option<usize>,
 ) -> Vec<Branch> {
     let nplayers = count_players(grid);
     let tuples = all_action_tuples(nplayers);
@@ -1797,6 +1793,11 @@ fn solve_lookup_goal_branches(
             if play_state == PlayState::Won
                 || lookup_goal_reached(goal, grid, &next_grid, play_state)
             {
+                if play_state != PlayState::Won
+                    && min_rats.is_some_and(|min_rats| count_rats(&next_grid) < min_rats)
+                {
+                    continue;
+                }
                 let hash = next_grid.search_hash();
                 if reached.insert(hash) {
                     let path = reconstruct(&nodes, node_idx);
@@ -1894,6 +1895,7 @@ fn solve_ratdrop_chain(
                 segment_nodes,
                 LookupGoal::RatDrop,
                 segment_results,
+                None,
             );
             eprintln!(
                 "  drop step {} branch path={} features={:?} produced {} result(s)",
@@ -2149,7 +2151,8 @@ fn nearest_reachable_any_trigger_distance(grid: &Grid) -> Option<i64> {
             if matches!(grid.cell_kind_at(x, y), CellKind::Trigger(_)) {
                 let distance = dist[y][x];
                 if distance != i32::MAX {
-                    best = Some(best.map_or(distance as i64, |current| current.min(distance as i64)));
+                    best =
+                        Some(best.map_or(distance as i64, |current| current.min(distance as i64)));
                 }
             }
         }
@@ -3421,6 +3424,7 @@ fn solve_trigger_order_lookup(
                 segment_nodes,
                 LookupGoal::TriggerNumber(number),
                 segment_results,
+                None,
             );
             eprintln!(
                 "  trigger {} lookup branch path={} features={:?} produced {} result(s)",
@@ -3501,7 +3505,10 @@ fn solve_trigger_order_lookup(
 
     branches.sort_by_key(|branch| branch.score);
     for branch in branches {
-        eprintln!("  trigger lookup order done, mopping from score={}", branch.score);
+        eprintln!(
+            "  trigger lookup order done, mopping from score={}",
+            branch.score
+        );
         if let Some(mop) = solve_with_context(
             &branch.grid,
             depth,
@@ -3570,6 +3577,7 @@ fn solve_any_trigger_order_lookup(
                     segment_nodes,
                     LookupGoal::TriggerNumber(number),
                     segment_results,
+                    None,
                 );
                 if results.is_empty() {
                     continue;
@@ -3601,7 +3609,10 @@ fn solve_any_trigger_order_lookup(
         }
 
         if next_branches.is_empty() {
-            eprintln!("  trigger-any lookup step {}: no reachable branches", step_idx + 1);
+            eprintln!(
+                "  trigger-any lookup step {}: no reachable branches",
+                step_idx + 1
+            );
             return None;
         }
 
@@ -6633,13 +6644,14 @@ fn main() {
     if mode == "branchdump" {
         // solver branchdump <csv> [--prefix MOVES] [--goal win|trigger:n|ratat:x,y|ratgone:x,y]
         //                         [--depth N] [--secs S] [--maxnodes N] [--results N]
-        //                         [--eval x,y] [--states]
+        //                         [--min-rats N] [--eval x,y] [--states]
         let mut prefix_str = String::new();
         let mut goal = LookupGoal::Win;
         let mut depth = 60usize;
         let mut secs = 30.0f64;
         let mut max_nodes = 500_000usize;
         let mut results = 20usize;
+        let mut min_rats: Option<usize> = None;
         let mut eval_point: Option<(i32, i32)> = None;
         let mut print_states = false;
         let mut i = 3;
@@ -6669,6 +6681,10 @@ fn main() {
                     results = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--min-rats" => {
+                    min_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
                 "--eval" => {
                     eval_point = parse_optional_point(&args[i + 1]);
                     i += 2;
@@ -6694,17 +6710,25 @@ fn main() {
             return;
         }
         eprintln!(
-            "branchdump: players={} prefix={} goal={:?} depth={} secs={} maxnodes={} results={}",
+            "branchdump: players={} prefix={} goal={:?} depth={} secs={} maxnodes={} results={} min_rats={:?}",
             nplayers,
             prefix.len(),
             goal,
             depth,
             secs,
             max_nodes,
-            results
+            results,
+            min_rats
         );
-        let branches =
-            solve_lookup_goal_branches(&start_grid, depth, secs, max_nodes, goal, results);
+        let branches = solve_lookup_goal_branches(
+            &start_grid,
+            depth,
+            secs,
+            max_nodes,
+            goal,
+            results,
+            min_rats,
+        );
         for (idx, branch) in branches.iter().enumerate() {
             let mut full_path = prefix.clone();
             full_path.extend(branch.path.clone());
@@ -6713,7 +6737,10 @@ fn main() {
                 .map(|point| {
                     let dist = distance_from_player(&branch.grid, point);
                     let kind = branch.grid.cell_kind_at(point.0 as usize, point.1 as usize);
-                    format!(" eval=({},{}) dist={} kind={:?}", point.0, point.1, dist, kind)
+                    format!(
+                        " eval=({},{}) dist={} kind={:?}",
+                        point.0, point.1, dist, kind
+                    )
                 })
                 .unwrap_or_default();
             println!(

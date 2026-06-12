@@ -248,6 +248,10 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   `state_hash`, `search_hash`, and `solver::step()` using `step_grid`). Direct
   searches still only get roughly low tens of thousands of states/sec on the
   hard levels because state expansion and heuristic evaluation dominate.
+- `solver`: `branchdump` now supports `--min-rats N`. Use this when a tactical
+  goal such as `ratgone`, `playerat`, or `cellnot` should not be accepted after
+  spending the rat needed for the next mechanism. Wins are still reported even
+  if they have fewer than `N` rats.
 - `release`: `v<vv^^>>v` remains the best opener. From that state, trigger 5 is
   easy (`v<>>>^`), but waypoint probes to trigger 6 at `(17,16)` / `(19,18)` and
   trigger 2 at `(0,16)` all returned `UNREACHABLE` in 40s budgets. Broader
@@ -255,6 +259,14 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   the opener found no branch, so neither player-trigger nor obvious rat-trigger
   activation of trigger 2 was found. Do not assume static reachability of
   trigger 6 means it is dynamically reachable; rat pressure prevents the route.
+- `release`: an explosion-focused probe from `v<vv^^>>v` found a long diagnostic
+  lead
+  `v<vv^^>>v^^^^^^^vvvvv^^^>><>v^<<^^<^^^^^<vvvvvvvvvv>^v>^^^^^<^^^^^<vvvvvvvvvv<<^^^^^^^^^<vvvvvv<^^^^^^<vvvv><`.
+  It moves a rat to `(2,16)`, adjacent to explosive `(1,16)`, but `trigger:2`,
+  `cellnot:1,16,explosive`, and follow-up explosion probes found no branch. The
+  rat prefers the black hole north unless the player can stand due west on
+  `(0,16)`, which is the inaccessible trigger cell. Treat this as a dead
+  diagnostic lead, not progress.
 - `reload_v3`: the direct trigger-7 opener `^^^^^<<<<<<^^^` consumes the only
   reachable triggers and leaves zero reachable trigger continuations. A better
   non-trigger branch,
@@ -264,6 +276,13 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   behind web/explosive; `trigger:6` and `win` from that state returned no
   branch. Trigger 7 after the one-rat state mostly clears upper webs and still
   leaves the bottom-left rat inaccessible.
+- `reload_v3`: targeted lower-left structural probes found no branch for
+  `cellnot:1,21,web` or `cellnot:2,21,explosive` from either the initial state or
+  the 32-move non-trigger branch. Direct `playerat:9,4` and `trigger:6` probes
+  also found no branch from the initial state / 32-move branch. Explicit orders
+  `7,6`, `7,5,6`, and `7,4,5,6` repeatedly produced zero continuations after
+  trigger 7; trigger 7 first is still the wrong objective unless a setup event
+  changes access to the top trigger cage.
 - `tinderrectangle`: the ignition table confirms either rat corner `(0,0)` or
   `(16,0)` plus a player on row 3 can win in one move. A new useful partial,
   `<<<<<>^>>^>^>>v>vv>>^^^>>vvvv`, puts the lower rat at `(2,3)` and the player
@@ -272,11 +291,27 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   `cellnot:2,2,web`, `ratat:1,3`, and `ratat:1,2` all failed in tested budgets.
   The web cut must happen before the rat settles at `(2,3)`, or the route must
   target the right-corner ignition instead.
+- `tinderrectangle`: full ignition enumeration also shows lower-rat winning
+  placements `(2..6,6)` with the player on the far-right safe cells `(14,6)`,
+  `(14,7)`, `(15,7)`, `(13,8)`, `(14,8)`, or `(15,8)`. Preserved-rat
+  `playerat:14,7` / `playerat:14,8` branches from
+  `<<<^<^<>^>>>vv^^>>v>v.>>><>v` are reachable, but diagnostics put the lower
+  rat at `(8,6)`, outside the winning band. Composite `geomlure` searches for
+  rat `(2..6,6)` plus those safe cells failed from both the initial state and
+  that prefix, with and without `--preserve-rats`. The missing mechanism is
+  holding the lower rat in `(2..6,6)` while crossing right; simply reaching the
+  safe side is not enough.
 - `chase`: continuing from `>>>.^v<<<>>>vv<^` with `dropchain` repeats the known
   family and never changes `(11,16)` from web. Focused probes for
   `cellnot:11,16,web` and `cellnot:11,15,plank` from the 16-move prefix found no
   branches. The helper-rat alteration, if it exists, has to happen before the
   known ratdrop chain.
+- `chase`: a direct A* probe found a lower-count but dead 3-rat lead,
+  `>>v>v<^^<<>>>>^^^<^^^>>>^>>v^^^^^>^^^^vv<<vvvv<vvv<vvv>vv^^<<vvvvv>>>>>>>^>>>v>>>^^v<>^^^^^^^^^^^^^^^^^^<<<`.
+  It leaves rats at `(15,0)`, `(11,17)`, and `(0,19)`, with zero explosives or
+  triggers; the latter two are isolated behind webs. `win`, `cellnot:11,16,web`,
+  and `ratgone:11,17` continuations immediately fail. Do not continue this
+  3-rat lead.
 - `cooperation/handoff`: the clean first event
   `v^ >^ >^ >^ >^ >^ ^^` kills the far-right rat without consuming triggers,
   but from that 7-move state `ratgone:10,6` and `cellnot:10,5,web` found no
@@ -294,6 +329,12 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   immediate ratdrop continuations reduce to three rats with only one reachable.
   A 120s BFS from the prefix did not find a win and over-walled the center in its
   best state.
+- `cooperation/tug_of_war`: the top rat is structurally suspicious. It starts in
+  the tiny component `{(7,0),(8,0)}`; after simple first moves such as `^v` it
+  moves from `(7,0)` to `(8,0)`, so `ratgone:7,0` is misleading. `playerat:8,0`,
+  `cellnot:7,1,web`, and `wp2` to `.|8,0` all returned no branch. Since zaps do
+  not clear webs, this rat needs a concrete explosion/web-clear mechanism before
+  trigger choreography can solve the level.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
@@ -315,14 +356,18 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
    `v<vv^^>>v` (triggers 3 then 4). Test trigger 5 via suffix `v<>>>^`, then
    look for a way to make trigger 2 change indirectly; direct player routes to
    trigger 2 and trigger 6 have failed dynamically.
-3. **Solve `tinderrectangle` as an ignition lure.** The winning geometry is a
-   top rat entering `(0,0)` or `(16,0)`. Find the safe facing/timing that opens
-   the web without letting the rat kill the player.
+3. **Solve `tinderrectangle` as an ignition lure.** The winning geometry is
+   either a corner rat at `(0,0)` / `(16,0)` with the player on row 3, or the
+   lower rat at `(2..6,6)` with the player on the far-right safe cells. The next
+   attack should hold the lower rat in that band while crossing right; existing
+   safe-side branches let it drift to `(8,6)`.
 4. **Use `release` as the template for `ai_takeover`.** Once `release` is
    solved, port its trigger order to `ai_takeover` and account for trigger 7/8
    and cyborg pathing.
 5. **For two-player levels, work in `wp2` waypoint pairs.** Start with
-   `handoff` because it is small; then use mirrored plans for `tug_of_war`.
+   structural access checks (`cellnot` / `playerat`) before trigger choreography;
+   `tug_of_war` currently needs a mechanism for the top rat component, and
+   `handoff` needs a mechanism for the `(10,6)` sealed rat before the P2 sweep.
 6. **`blocked_v2`:** rigorously test winnability before assuming solvable.
 
 ---
@@ -347,7 +392,8 @@ solver/solutions/
 > Tooling scripts have paths hard-coded to the session workspace (`/tmp/infestation`); adjust on resume.
 
 ## 6. Session context
-- A session Stop-hook with goal **"solve all the puzzles"** is active (blocks stopping until
-  all 11 are solved; auto-clears on success). Resume by working §4.
+- A session Stop-hook with goal **"solve all the puzzles"** may be active in
+  some environments. The current remaining hard set is the 8 listed in §3.
+  Resume by working §4.
 - Fork created with `gh repo fork`; push with `gh auth setup-git --hostname github.com` then
   `git push fork claude/new-puzzles`. No PR was opened to upstream (`davidspies/infestation`).
