@@ -574,6 +574,47 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   trigger 2 or 6 all returned empty with `--min-rats 20`. This rules out the
   obvious "rats lined up at x=16 eventually push through" hypothesis in the
   tested depth/budget; a solution needs a different earlier event.
+- Follow-up human-mechanism pass on 2026-06-12 found no verified wins but ruled
+  out several attractive next moves. `reload_v3` all-rat staged prefix
+  `^^^^^<<<<<<^^<^^^^^^^>>>>>>>>>>vvvvvv<<<<<>>>>>^^^^^^<<<<<<<<<vvv`
+  has player `(7,5)`, rats `(19,2)`, `(11,5)`, `(0,21)`, and only trigger 7
+  reachable. Preserved-rat branchdumps from that state for `trigger:6`,
+  `trigger:5`, and `cellnot:10,5,web` all returned empty. Consuming trigger 7
+  with suffix `vvv` leaves zero reachable triggers; from that post-trigger-7
+  state, six 240s branchdumps for `trigger:5`, `trigger:6`,
+  `cellnot:10,5,web`, `ratat:10,5`, `cellnot:2,21,explosive`, and
+  `cellnot:1,21,web` also returned empty. Treat this top-rat/trigger-7 staging
+  as a dead mechanism unless a prior event changes bottom/top access.
+- `tinderrectangle`: the prepared-safe 71-turn branch can cut a door near the
+  lower rat and start a row-3 chase, but that route is a one-cell-deep corridor
+  trap. Example continuation to rat `(6,3)` / player `(7,3)`:
+  `^^^^<<vvv<<^^^<<<<<<<>>>>` after the 71-turn prefix. From there, every
+  preserved-rat continuation is forced east until the wall at `(11,3)`, where
+  the only non-losing move kills the lower rat. Stepping north into the web row
+  at the earlier junction also loses because a top rat joins the chase. This
+  narrows the lower-row solution further: the release must not create a
+  one-cell tail chase on row 3.
+- `release`: the left trigger-2 route was sharpened. From `v<vv^^>>v`, `wp` to
+  `(2,17)` is unreachable, and preserved-rat branchdumps for `ratat:2,17`,
+  `cellnot:2,17,web`, `ratat:0,16`, early `trigger:6`,
+  `cellnot:1,16,explosive`, and `cellnot:0,17,explosive` returned empty. The
+  first-explosion probe again reached the known near-miss
+  `v<vv^^>>v^vvv<<<<^<^^<<><`, with a rat at `(2,16)`, but continuing from
+  there to clear `(1,16)` also returned empty. The blocker is concrete:
+  `(1,16)` is an explosive between the rat and trigger 2, so the rat cannot
+  activate left trigger 2 unless that explosive is cleared before the rat
+  arrives.
+- `chase`: static source inspection confirms explosions are only 3x3 and zaps
+  do not affect webs/planks unless they detonate adjacent explosives. A
+  90-second branchdump for `cellnot:11,16,web` from the initial state with
+  `--min-rats 5` returned empty. Since no initial explosive is adjacent to
+  `(11,16)`, the `(11,17)` rat remains a hard structural blocker unless a route
+  first opens player access to the web or creates an adjacent explosion.
+- `cyborg_rats/ai_takeover`: from opener `v<vv^^>>v`, relaxed branchdumps
+  without `--min-rats` for `trigger:7`, `trigger:8`, and `ratgone:18,4`
+  returned empty, and direct A* `lookup --goal win` returned `NO_SOLUTION`
+  quickly. The extra triggers/cyborgs do not bypass the `release` skeleton from
+  the standard opener in the tested budget.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
