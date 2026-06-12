@@ -1017,6 +1017,65 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   block positions return empty. The common 7-turn right sweep remains a dead
   family because it spends the board while `(10,5)` stays web.
 
+### Current run notes - 2026-06-12
+
+No new verified wins. The useful progress this run was pruning human-looking
+mechanisms that repeatedly attracted search time.
+
+- `solver`: added two diagnostic affordances:
+  - `lookup --goal triggeropen:N,K` means trigger `N` has been consumed and the
+    player still has at least `K` reachable cells. This was added to reject
+    trigger activations that immediately self-seal.
+  - `branchdump --no-canonical` uses full `state_hash()` instead of
+    `search_hash()`, which is necessary when approach side or player position is
+    the point of the diagnostic.
+- `tinderrectangle`: the lower row-6 chase from `<^^<v<^<<vv<>` is locally
+  dead. Continuing east keeps the lower rat one move behind; every north escape
+  is `GameOver`, and turning west is only safe because it kills the lower rat.
+  The side-loop prefix `<^^<vv<^^<<<` has the same tempo problem. Do not repeat
+  the "make one row-6 gap" family unless a new blocker/tempo mechanism is found.
+- `chase`: the helper route
+  `^>>>^^>^>^>>>>>v>v^^^>vvv` really breaks `(12,15)`, but not `(11,15)`.
+  `ratgeom`'s synthetic `(11,15)` break requires player `(11,16)` facing south;
+  that cell is behind the plank being broken, so the staging is unreachable from
+  the turn-22/24 frontier. Do not deepen this helper-left-plank family.
+- `release`: the right isolated rat `(18,4)` cannot be lured through web
+  `(18,5)`, and pushing the right-side released rats into x=17 is blocked by
+  walls. Trigger 2 remains the plausible way to blast `(18,5)`, but direct
+  trigger-2 probes from `v>v`, `v<vv^^`, `v>>>v`, and `v<vv^^>>v` returned no
+  candidates. The next useful hypothesis must be rat-triggering or earlier
+  lower-left setup, not another top sweep.
+- `reload_v3`: the preserved roaming-rat family around
+  `^>>>>>>>^^vvvvvv<<<^^<<^^<<<<^<<<<<<<<v<v` is locally dead. Reaching trigger
+  2 by the player sacrifices the roaming rat; rat-triggering trigger 2 preserves
+  all three rats but strands them with zero reachable rats. Do not continue that
+  family without a way to preserve post-trigger access.
+- `cyborg_rats/ai_takeover`: prefix
+  `v>v^>>v^<<vv^^<<vvv<<^^^<<<vv<<^^^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^^>^^^^^>>>^>>>>>>>>>>>`
+  reaches player `(15,2)` with trigger-7 cells at distances 8-10, but only
+  `(16,9)` is dynamically reachable. The branch `...vvv>vvvv` consumes trigger
+  7 and leaves `player_reachable cells=1`; `triggeropen:7,2`,
+  `playerat:15,9`, and `playerat:16,11` all failed from the relevant prefixes.
+  Stop pursuing this trigger-7 lane; it structurally self-seals.
+- `cooperation/handoff`: no viable pre-trigger handoff was found. The common
+  7-turn sweep `v^ >^ >^ >^ >^ >^ ^^` opens the board but leaves `(10,6)` sealed
+  with `(10,5)` still web. `ratgeom` for `(10,6)->(11,7)` works only with a
+  player on the far-right island, and route searches to `playerat:14,7`,
+  `playerat:14,8`, `ratat:11,7`, `cellnot:10,5,web`, and `reachable:10,6`
+  returned empty in the checked windows.
+- `cooperation/tug_of_war`: the top rat at `(7,0)` remains sealed in the
+  two-cell pocket `{(7,0),(8,0)}`. Initial probes failed to change
+  `(7,1)/(8,1)` webs or `(7,2)/(8,2)` planks. Trigger choreography `1/2/3`
+  from the known trigger-1 route ends in 0- or 1-reachable-rat basins. Do not
+  keep treating this as a symmetric trigger-order puzzle.
+- `cooperation/blocked_v2`: the clean 36-turn frontier
+  `^< ^^ <^ <^ <v <^ v> .> <> vv ^v .v <v ^v v^ vv >v ^> ^> v< v> ^< ^> ^< <> << <> << << <^ <^ v^ v> v> v> >v`
+  leaves three rats and both trigger-2 cells unreachable. From that frontier,
+  `trigger:2`, `reachable:5,11`, and `reachable:3,14` all failed. From the
+  initial board, direct `trigger:2`, `reachablege:7`, and `allreachable` also
+  failed in the checked budgets; the best all-reachable attempt still left the
+  lower-left rat isolated. Treat trigger-2 access as the structural blocker.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 8.

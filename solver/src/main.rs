@@ -110,6 +110,14 @@ fn player_dist_map(grid: &Grid) -> Vec<Vec<i32>> {
     dist
 }
 
+fn player_reachable_cell_count(grid: &Grid) -> usize {
+    player_dist_map(grid)
+        .iter()
+        .flatten()
+        .filter(|&&dist| dist != i32::MAX)
+        .count()
+}
+
 fn rat_component_map(grid: &Grid) -> (Vec<Vec<i32>>, Vec<usize>) {
     let h = grid.height();
     let w = grid.width();
@@ -680,6 +688,7 @@ enum LookupGoal {
     RectangleLowerSeparated,
     TriggerNumber(u8),
     TriggerNumberOnly(u8),
+    TriggerNumberOpen(u8, usize),
     CellChanged(i32, i32),
     CellIs(i32, i32, CellKind),
     CellNot(i32, i32, CellKind),
@@ -718,6 +727,23 @@ impl LookupGoal {
             "trigger" => Self::TriggerNumber(arg.parse().expect("trigger number")),
             "triggeronly" | "triggerstrict" | "triggerexact" => {
                 Self::TriggerNumberOnly(arg.parse().expect("trigger number"))
+            }
+            "triggeropen" | "triggerreachable" => {
+                let mut parts = arg.split(',');
+                let number = parts
+                    .next()
+                    .expect("trigger number")
+                    .trim()
+                    .parse()
+                    .expect("trigger number");
+                let reachable_cells = parts
+                    .next()
+                    .expect("reachable cell count")
+                    .trim()
+                    .parse()
+                    .expect("reachable cell count");
+                assert!(parts.next().is_none(), "expected trigger,reachable_cells");
+                Self::TriggerNumberOpen(number, reachable_cells)
             }
             "cell" | "cellchanged" => {
                 let (x, y) = parse_required_point(arg);
@@ -980,6 +1006,10 @@ fn lookup_goal_reached(
             trigger_count(current, number) < trigger_count(initial, number)
         }
         LookupGoal::TriggerNumberOnly(number) => only_trigger_changed(initial, current, number),
+        LookupGoal::TriggerNumberOpen(number, reachable_cells) => {
+            trigger_count(current, number) < trigger_count(initial, number)
+                && player_reachable_cell_count(current) >= reachable_cells
+        }
         LookupGoal::CellChanged(x, y) => {
             current.cell_kind_at(x as usize, y as usize)
                 != initial.cell_kind_at(x as usize, y as usize)
@@ -1051,6 +1081,20 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
                 .min()
                 .unwrap_or(1_000);
             nearest + heuristic(current) / 1_000
+        }
+        LookupGoal::TriggerNumberOpen(number, reachable_cells) => {
+            let dist = player_dist_map(current);
+            let nearest = trigger_positions(current, number)
+                .iter()
+                .filter_map(|&(x, y)| {
+                    let d = dist[y as usize][x as usize];
+                    (d != i32::MAX).then_some(d as i64)
+                })
+                .min()
+                .unwrap_or(1_000);
+            let reachable_penalty =
+                reachable_cells.saturating_sub(player_reachable_cell_count(current)) as i64;
+            nearest + reachable_penalty * 1_000 + heuristic(current) / 1_000
         }
         LookupGoal::CellChanged(x, y) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
@@ -1164,6 +1208,12 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
         ),
         LookupGoal::TriggerNumber(number) | LookupGoal::TriggerNumberOnly(number) => {
             trigger_count(current, number) as i64 * 1_000_000 + count_rats(current) as i64 * 1_000
+        }
+        LookupGoal::TriggerNumberOpen(number, reachable_cells) => {
+            trigger_count(current, number) as i64 * 1_000_000
+                + reachable_cells.saturating_sub(player_reachable_cell_count(current)) as i64
+                    * 1_000
+                + count_rats(current) as i64 * 1_000
         }
         LookupGoal::CellChanged(x, y) => {
             (current.cell_kind_at(x as usize, y as usize)
@@ -2182,11 +2232,19 @@ fn solve_lookup_goal_branches(
     goal: LookupGoal,
     max_results: usize,
     min_rats: Option<usize>,
+    canonical: bool,
 ) -> Vec<Branch> {
     let nplayers = count_players(grid);
     let tuples = all_action_tuples(nplayers);
     let start = Instant::now();
     let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
+    let state_key = |state: &Grid| {
+        if canonical {
+            state.search_hash()
+        } else {
+            state.state_hash()
+        }
+    };
     let mut nodes = vec![Node {
         grid: grid.clone(),
         parent: usize::MAX,
@@ -2194,7 +2252,7 @@ fn solve_lookup_goal_branches(
         depth: 0,
     }];
     let mut visited = HashSet::new();
-    visited.insert(grid.search_hash());
+    visited.insert(state_key(grid));
     let mut reached = HashSet::new();
     let mut q = VecDeque::new();
     q.push_back(0usize);
@@ -2246,7 +2304,7 @@ fn solve_lookup_goal_branches(
                 {
                     continue;
                 }
-                let hash = next_grid.search_hash();
+                let hash = state_key(&next_grid);
                 if reached.insert(hash) {
                     let path = reconstruct(&nodes, node_idx);
                     results.push(Branch {
@@ -2260,7 +2318,7 @@ fn solve_lookup_goal_branches(
                 continue;
             }
 
-            let hash = next_grid.search_hash();
+            let hash = state_key(&next_grid);
             if visited.insert(hash) {
                 q.push_back(node_idx);
             }
@@ -2344,6 +2402,7 @@ fn solve_ratdrop_chain(
                 LookupGoal::RatDrop,
                 segment_results,
                 None,
+                true,
             );
             eprintln!(
                 "  drop step {} branch path={} features={:?} produced {} result(s)",
@@ -3879,6 +3938,7 @@ fn solve_trigger_order_lookup(
                 goal,
                 segment_results,
                 None,
+                true,
             );
             eprintln!(
                 "  trigger {} lookup branch path={} features={:?} produced {} result(s)",
@@ -4032,6 +4092,7 @@ fn solve_any_trigger_order_lookup(
                     LookupGoal::TriggerNumber(number),
                     segment_results,
                     None,
+                    true,
                 );
                 if results.is_empty() {
                     continue;
@@ -7543,6 +7604,7 @@ fn main() {
         let mut min_rats: Option<usize> = None;
         let mut eval_point: Option<(i32, i32)> = None;
         let mut print_states = false;
+        let mut canonical = true;
         let mut i = 3;
         while i < args.len() {
             match args[i].as_str() {
@@ -7582,6 +7644,10 @@ fn main() {
                     print_states = true;
                     i += 1;
                 }
+                "--no-canonical" => {
+                    canonical = false;
+                    i += 1;
+                }
                 _ => {
                     i += 1;
                 }
@@ -7599,7 +7665,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "branchdump: players={} prefix={} goal={:?} depth={} secs={} maxnodes={} results={} min_rats={:?}",
+            "branchdump: players={} prefix={} goal={:?} depth={} secs={} maxnodes={} results={} min_rats={:?} canonical={}",
             nplayers,
             prefix.len(),
             goal,
@@ -7607,7 +7673,8 @@ fn main() {
             secs,
             max_nodes,
             results,
-            min_rats
+            min_rats,
+            canonical
         );
         let branches = solve_lookup_goal_branches(
             &start_grid,
@@ -7617,6 +7684,7 @@ fn main() {
             goal,
             results,
             min_rats,
+            canonical,
         );
         for (idx, branch) in branches.iter().enumerate() {
             let mut full_path = prefix.clone();
