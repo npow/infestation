@@ -1947,6 +1947,49 @@ real new mechanism frontier.
   preserving the lower rat at `(5,5)` while moving the player to `(13,7)` or
   `(14,7)`, and opening `(13,2)` while preserving that rat, returned no branch.
 
+### Status check - 2026-06-12 23:45Z
+
+- Rechecked the upstream-rule concern. This checkout only has `fork` configured
+  as a remote, but a stale local `upstream/ai-solutions` ref contains rule/source
+  differences and an encoded-solution verifier. Exporting that branch into
+  `/tmp`, building `verify_solution`, converting the pushed `SOLUTIONS.md`, and
+  replaying all 34 encoded solutions there produced `Won` for every recorded
+  solution, including `old_levels/old_levels`. The recorded wins are therefore
+  still valid under that branch's game code.
+- No new hard puzzle has a verified `result=Won`. All solver processes from this
+  wave finished; no `target/release/solver` processes were left active at this
+  checkpoint.
+- Long continuations from the previous batch finished with `NO_SOLUTION`:
+  `tinderrectangle` from `<<^<<^<>^>>>vv^^<<`, `release` from
+  `v<vv^^>>vv><<v<<<^<^^<<>`, `blocked_v2` from the B17 trigger-3 frontier, and
+  `tug_of_war` from the 22-turn frontier. Their best states did not produce a
+  win candidate.
+- `cooperation/handoff` / `release` branchdumps from the 23:28Z batch ended
+  with no accepted branches for the tested resource-preserving goals. The
+  `ai_takeover` safe-trigger-7 route-shaping probes also ended empty for direct
+  trigger-6/8 opening, right-column detonation, `(17,19)` web opening, reachable
+  staging cells near 6/8, and moving the `(18,4)` rat to `(18,5)`.
+- A k=2 novelty-search lane was run for `release`, `ai_takeover`, `handoff`,
+  `tug_of_war`, `blocked_v2`, and `tinderrectangle`. All returned
+  `NO_SOLUTION` quickly; treat this as a cheap negative portfolio result, not a
+  proof of unsolvability.
+- `tinderrectangle`: a first `cellnotratat:3,4,web,5,5` probe was a bad goal:
+  `(3,4)` was already open, so the returned branches were trivial. Corrected
+  lower-door checks from `<<^<<^<>^>>>vv^^<<` for `(5,6)`, `(4,6)`, and `(3,6)`
+  opening while keeping the lower rat at `(5,5)` returned no branches; `rectsep`
+  from the same prefix also returned no branch. The lower release still needs a
+  different timing/setup, not a direct cut from this separated state.
+- `reload_v3`: from staged prefix `^^^^^<<<<<<^^<^^^^^vv`, branchdumps found
+  real but likely dead diagnostic branches. One opens `(3,21)` by turn 83:
+  `^^^^^<<<<<<^^<^^^^^vv^^^^>>>>>>>>>>vvvvvv<<>>^^^^^^<<<<<<<<<vvvvv<vvvvvvvvvvvvvv<<<`.
+  It verifies `Playing` with rats `(19,2)`, `(11,5)`, `(0,21)`, 6 explosives,
+  13 webs, all triggers preserved, and only `reachable_rats=1/3`; follow-up
+  `trigger:6` from that state returned no branch. Another fires trigger 7 by
+  turn 71:
+  `^^^^^<<<<<<^^<^^^^^vvvv>^^^^^^>>>>>>>>>vvvvvv<<<<<>>>>>^^>>>>vvvvvvvv<<`.
+  It leaves trigger 2 nearby but still only one reachable rat; strict trigger-2
+  and compound lower-left cleanup checks from that state returned no branches.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
