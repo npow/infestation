@@ -972,6 +972,36 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
     continuation can stage P2 at `(11,14)` with a rat at `(9,15)`, but clearing
     `(10,15)` is an immediate contact trap and does not open the lower-left
     pocket.
+- `solver`: added `ratgeom`, a synthetic one-turn mechanism diagnostic:
+  `target/release/solver ratgeom <level> [prefix] --source x,y --target x,y`.
+  It enumerates player placements/facings and stalls through the real engine to
+  answer whether a specific rat step is locally possible. This is not a solver;
+  use it to distinguish "the move cannot happen" from "the route to the
+  required lure square is hard."
+- `release`: a sidecar pass clarified a crucial trigger rule: stepping on a
+  trigger does not zap its own neighbors; only same-number sibling triggers left
+  on the board zap. Therefore stepping on right trigger 2 `(19,7)` would not
+  detonate the adjacent right explosive column. The useful trigger-2 activation,
+  if it exists, must be left trigger 2 `(0,16)` so sibling `(19,7)` zaps the
+  right side. Direct probes for `ratat:0,16`, `playerat:0,16`, and
+  `cellnot:0,16,2` while preserving at least 22 rats returned empty. The
+  tempting `5 -> 6 -> 2` hypothesis also failed: after opener `v<vv^^>>v`,
+  trigger-5 branch `v<>>>^`, no trigger-6 continuation was found; direct
+  trigger-6 branchdumps from the opener and post-trigger-5 state also returned
+  empty.
+- `chase`: a real early helper-rat mechanism exists:
+  `^>>>^^>^>^>>>>>v>v^^^>vvv` verifies as `Playing` and puts the mobile helper
+  rat at `(12,15)`, breaking plank `(12,15)` before the known ratdrop family.
+  `ratgeom` shows a synthetic placement can make that rat step left onto
+  `(11,15)`, which would break the other plank, but actual branch searches from
+  the prefix found no route to the needed left-side lure position and no
+  `cellnot:11,15,plank` branch with 7+ rats. Treat this as a useful mechanism
+  clue, not a solved route.
+- `cooperation/handoff`: sidecar checks plus `ratgeom` confirm the sealed
+  `(10,6)` rat has local geometry to step onto trigger `(11,7)` only under
+  synthetic player placements, but route searches to those pre-trigger/body
+  block positions return empty. The common 7-turn right sweep remains a dead
+  family because it spends the board while `(10,5)` stays web.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth

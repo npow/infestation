@@ -382,6 +382,110 @@ fn print_ignition_geometries(grid: &Grid, limit: usize) {
     }
 }
 
+fn player_symbols_for_index(index: usize) -> [&'static str; 4] {
+    match index {
+        0 => ["▲", "▼", "►", "◄"],
+        1 => ["△", "▽", "▷", "◁"],
+        _ => panic!("unsupported player index {index}"),
+    }
+}
+
+fn print_rat_step_geometries(
+    grid: &Grid,
+    source_rat: (usize, usize),
+    target: (i32, i32),
+    limit: usize,
+) {
+    let nplayers = count_players(grid);
+    assert!(nplayers <= 2, "rat geometry supports at most two players");
+    let base_tokens = csv_tokens(grid);
+    let player_positions = positions_for(grid, CellKind::Player);
+    let mut candidate_cells = Vec::new();
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            let token = &base_tokens[y][x];
+            if is_mutation_floor(token)
+                || is_player_token(token)
+                || player_positions.contains(&(x, y))
+            {
+                candidate_cells.push((x, y));
+            }
+        }
+    }
+
+    let mut printed = 0usize;
+    let stall_actions = vec![Action::Stall; nplayers];
+    let mut seen = HashSet::new();
+    for &p0 in &candidate_cells {
+        for &p1 in if nplayers == 2 {
+            candidate_cells.as_slice()
+        } else {
+            &[(usize::MAX, usize::MAX)]
+        } {
+            let player_cells = if nplayers == 2 {
+                vec![p0, p1]
+            } else {
+                vec![p0]
+            };
+            if player_cells.iter().any(|&pos| pos == source_rat) || (nplayers == 2 && p0 == p1) {
+                continue;
+            }
+
+            for s0 in player_symbols_for_index(0) {
+                for s1 in if nplayers == 2 {
+                    player_symbols_for_index(1)
+                } else {
+                    ["", "", "", ""]
+                } {
+                    let mut tokens = base_tokens.clone();
+                    for row in &mut tokens {
+                        for token in row {
+                            if is_player_token(token) {
+                                *token = ".".to_string();
+                            }
+                        }
+                    }
+                    tokens[source_rat.1][source_rat.0] = "R".to_string();
+                    tokens[p0.1][p0.0] = s0.to_string();
+                    if nplayers == 2 {
+                        tokens[p1.1][p1.0] = s1.to_string();
+                    }
+                    let candidate = grid_from_csv(&tokens_to_csv(&tokens));
+                    let (next, play_state) = step(&candidate, &stall_actions);
+                    if play_state == PlayState::GameOver || !rat_at(&next, target) {
+                        continue;
+                    }
+                    let key = (
+                        p0,
+                        p1,
+                        s0.to_string(),
+                        s1.to_string(),
+                        positions_key(&next, rat_or_cyborg),
+                    );
+                    if !seen.insert(key) {
+                        continue;
+                    }
+                    if nplayers == 2 {
+                        println!(
+                            "p1=({},{},{}) p2=({},{},{}) target=({},{}) result={:?}",
+                            p0.0, p0.1, s0, p1.0, p1.1, s1, target.0, target.1, play_state
+                        );
+                    } else {
+                        println!(
+                            "player=({},{},{}) target=({},{}) result={:?}",
+                            p0.0, p0.1, s0, target.0, target.1, play_state
+                        );
+                    }
+                    printed += 1;
+                    if printed >= limit {
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn adjacent_trigger_count(grid: &Grid, x: usize, y: usize) -> usize {
     let mut count = 0;
     for dy in -1i32..=1 {
@@ -5610,6 +5714,52 @@ fn main() {
         println!("state={play_state:?} turns_applied={applied}");
         if play_state == PlayState::Playing {
             print_ignition_geometries(&state, limit);
+        }
+        return;
+    }
+
+    if mode == "ratgeom" {
+        // solver ratgeom <csv> [prefix] --source x,y --target x,y [--limit N]
+        // Enumerate synthetic player placements where stalling makes a specific rat move
+        // to a target. This is a local mechanism diagnostic, not a solver.
+        let mut prefix_str = String::new();
+        let mut source = None;
+        let mut target = None;
+        let mut limit = 80usize;
+        let mut i = 3;
+        if i < args.len() && !args[i].starts_with("--") {
+            prefix_str = args[i].clone();
+            i += 1;
+        }
+        while i < args.len() {
+            match args[i].as_str() {
+                "--source" => {
+                    let point = parse_required_point(&args[i + 1]);
+                    source = Some((point.0 as usize, point.1 as usize));
+                    i += 2;
+                }
+                "--target" => {
+                    target = Some(parse_required_point(&args[i + 1]));
+                    i += 2;
+                }
+                "--limit" => {
+                    limit = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                _ => i += 1,
+            }
+        }
+        let nplayers = count_players(&grid);
+        let path = parse_action_string(&prefix_str, nplayers);
+        let (state, play_state, applied) = replay_path(&grid, &path);
+        println!("state={play_state:?} turns_applied={applied}");
+        if play_state == PlayState::Playing {
+            print_rat_step_geometries(
+                &state,
+                source.expect("--source x,y is required"),
+                target.expect("--target x,y is required"),
+                limit,
+            );
         }
         return;
     }
