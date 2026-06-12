@@ -1076,6 +1076,82 @@ mechanisms that repeatedly attracted search time.
   failed in the checked budgets; the best all-reachable attempt still left the
   lower-left rat isolated. Treat trigger-2 access as the structural blocker.
 
+### Human-mechanism pass - 2026-06-12 later
+
+No new verified wins. The useful change in understanding was separating likely
+authoring blockers from still-plausible mechanism chains.
+
+- `cooperation/handoff` now looks structurally unwinnable as authored. The left
+  rat component is sealed at the start:
+  `{(0,3),(0,4),(0,5),(0,6),(0,7),(1,7)}`. Its boundary is walls or
+  out-of-bounds, explosions do not destroy walls, zaps only add walls, and no
+  explosive has a 3x3 blast that reaches the component. The common trigger-1
+  branch
+  `v^ >^ >^ >^ >^ >< ^^ v^ ^^ ^^ v^ v^ vv <v`
+  is safe but leaves `(10,6)` and `(1,7)` sealed; consuming trigger 2 afterward
+  with
+  `v^ >^ >^ >^ >^ >< ^^ v^ ^^ ^^ v^ v^ vv <v ^^ ^^ ^^ ^<`
+  removes the remaining explosives and still leaves both rats sealed.
+- `cooperation/tug_of_war` also looks structurally unwinnable as authored. The
+  top rat is confined to `{(7,0),(8,0)}` behind webs `(7,1),(8,1)` and planks
+  `(7,2),(8,2)`. Static trigger/explosion analysis found no event that changes
+  those cells; the nearest top explosive `(6,4)` misses them. A lower rat would
+  have to break a plank, but the player positions needed to lure that require
+  already being above the same web/plank barrier.
+- `tinderrectangle`: the top/right breach failure is more specific than
+  "cannot ignite." Opening `(13,2)` lets a neighboring top rat enter diagonally,
+  bypassing the north-facing sword; the directly-above rat is not the only
+  threat. The row-6 lower route can stage
+  `<^^<v<<<v<>>` with lower rat `(3,6)` and player `(4,6)`, but the immediate
+  north escape `^` is `GameOver` because the rat moves diagonally into the
+  player's new cell. A credible solution needs a pre-existing gap in the top
+  pack near the breach, or a real explosive/web clear before opening row 2.
+- `chase`: the best real mechanism is still
+  `^>>>^^>^>^>>>>>v>v^^^>vvv`, which breaks `(12,15)` and puts the helper rat at
+  `(12,15)`, but `(11,15)` remains the blocker. Continuing with `<` holds that
+  helper by sword-blocking it from `(13,15)` facing west; then `^` is
+  `GameOver`, stalling freezes the local state, and `<<` kills the helper rat.
+  Targeted route probes from the helper prefix could not stage the needed
+  body-block cell `(11,14)`/`(11,13)`, and all initial explosives are too far
+  from `(11,15)`, `(12,15)`, and `(11,16)` for a non-trigger explosion chain.
+  The only remaining plausible mechanism is a simultaneous body-block frame
+  with opener rat at `(12,15)`, another rat at or moving through `(11,14)`, and
+  the player west/northwest, but targeted route probes did not stage it.
+- `cyborg_rats/ai_takeover`: the currently reachable trigger 7 is `(16,9)`.
+  Reaching it requires walking through `(16,8)`, destroying that web; when
+  trigger 7 fires, sibling zaps from `(15,9)` and `(16,11)` turn empty
+  neighbors into walls, including `(16,8)` and `(16,10)`, isolating the player.
+  Verified dead branch:
+  `v>v^>>v^<<vv^^<<vvv<<^^^<<<vv<<^^^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^^>^^^^^>>>^>>>>>>>>>>>vvv>vvvv`.
+  The next plausible hypothesis is firing 7 without first emptying `(16,8)`,
+  or having a non-player entity preserve that cell at zap time.
+- `release`: static trigger analysis confirms the intended end event is left
+  trigger 2 `(0,16)`: firing it leaves right trigger 2 `(19,7)` as the sibling
+  zap source and detonates `(18,6..8)`, clearing web `(18,5)`. Firing right 2
+  does the opposite and only clears the bottom-left. A reachable trigger-6 route
+  from `v<vv^^>>v` exists:
+  `v<vv^^>>vv<v<.........<<^^^^^^^^^<<<<v^v^v^v^v^^^^>>>>>>><><><>>>>>>v>v>v>vvvvvvvvv>>>vvvv`,
+  but it kills the corridor rat and leaves only `(18,4)` sealed behind
+  `(18,5)`. The viable variant must fire 6 while preserving a bottom/left actor
+  that can consume left 2.
+- `reload_v3`: static trigger analysis says the paper chain should be bottom
+  `1,2,3,4,5` opening top `5/6`, then top `6` releasing `(0,21)`. Captured
+  `triglookup` runs for `1,2,3,4,5,6`, `7,1,2,3,4,5,6`, and
+  `1,7,2,3,4,5,6` all collapsed into two-rat or zero-reachable-rat basins
+  before trigger 5/6. The chain is plausible, but no route preserved both the
+  roaming rat and player access.
+- `cooperation/blocked_v2`: there is a real mechanism lead. The initial
+  `(0,7)` rat can be preserved and moved into the interior:
+  `^< ^^ v^ ^^ vv ^v` leaves all 9 rats alive and puts that rat at `(3,8)`.
+  The lower `3` trigger branch was the wrong event; it leaves `(6,10)` web
+  intact. The upper trigger 3 route
+  `v< vv v< << << << << <^ ^v ^< ^< v< << << << << << << <^`
+  clears `(6,10)`/the central explosive wall but kills the top pack, leaving 5
+  rats. From that state, relaxed continuations to `ratat:5,11`, `trigger:2`,
+  `cellnot:1,15,web`, and a direct `cont` solve found no branch in the checked
+  windows. The remaining plausible path is to combine the preserved `(3,8)` rat
+  with the upper-3 clearing without losing the necessary lure geometry.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 8.
