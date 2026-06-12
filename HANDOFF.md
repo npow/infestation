@@ -104,7 +104,8 @@ run. Treat the oracle as a microscope for human hypotheses:
    - `solver ignitions` for one-step explosive geometry.
    - `solver trace` for exact rat movement after a proposed human line.
    - `solver branchdump` / `solver lookup --goal playerat:x,y|ratat:x,y|ratgone:x,y|trigger:n`
-     for tactical subgoals.
+     for tactical subgoals. Use `ratcell:ratx,raty,cellx,celly,kind` for
+     compound checks such as "rat is at `(6,6)` while `(7,6)` is still empty".
    - `solver wp` / `solver wp2` after deciding the plan; waypoints should encode
      the human route, not discover the route from scratch.
    - `solver triglookup` with explicit trigger orders after the trigger plan is
@@ -698,6 +699,53 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   disappear, web `(1,15)` and explosive `(2,15)` did not change, and trigger 2
   was not consumed. Both trigger-2 cells `(3,14)` and `(5,11)` were waypoint
   unreachable for both players in targeted `wp2` probes.
+- Parallel human-mechanism pass later on 2026-06-12 found **no new verified
+  wins**, but produced better frontiers and stronger blocker evidence:
+  - `solver`: `lookup` / `branchdump` now support
+    `--goal ratcell:ratx,raty,cellx,celly,kind`. This is diagnostic-only and
+    was useful for testing whether a rat can reach a target while an adjacent
+    escape/stop cell remains unchanged.
+  - `tinderrectangle`: a new all-rats-preserved left-wall pump is
+    `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv>^^^^<<<vvv<<^^^<<<<<vvv<<<<`.
+    It verifies as `Playing` for 99 turns, with player `(1,6)`, all 16 rats
+    alive, and the lower rat at `(1,4)`. This is real separation, but immediate
+    left-edge ignition kills the player; `>>` falls back into the known
+    `(2,6)` rat / `(3,6)` player contact line. Suffix `^^^` kills the lower
+    rat and puts the player at `(1,3)` with 15 top rats left, but the top row is
+    still sealed by row-2 webs. Entering row 2 under the pack is unsafe because
+    diagonal rats can enter the player cell despite the sword.
+  - `tinderrectangle`: from the 99-turn pump and from the row-3 suffix, direct
+    `ratat:0,0` / `win` continuations returned no branch in the tested budgets.
+    The remaining viable idea is still a rat-triggered border explosive, but
+    it likely requires opening a row-2 web without standing under a diagonal
+    top rat.
+  - `cyborg_rats/ai_takeover`: constrained trigger-order probes
+    `4,5,7,...`, `3,5,7,...`, and related beams all failed when trying to
+    reach trigger 7 after the first two central triggers. Direct lure probes
+    for the `(18,4)` cyborg to `(18,5)`, `(18,6)`, `(19,7)`, or detonating
+    `(18,6)` also returned no branches. Do not keep spending on the standard
+    3/4/5 opener unless a new structural event appears before trigger 7.
+  - `reload_v3`: new preserved-rat prefix `^^^^^<<<<<<^^<^^^^^vv` verifies as
+    `Playing` for 21 turns with player `(6,6)` and rats `(19,2)`, `(11,5)`,
+    `(0,21)`. It proves the top-cage rat can be moved to `(11,5)` while
+    preserving all 3 rats, but `(10,5)` remains web, `(9,6)` remains explosive,
+    and trigger 6 is still unreachable. Targeted `trigger:5`, `trigger:6`, and
+    `cellnot:10,5,web` checks from this state returned empty.
+  - `chase`: the better structural intermediate is the plank line, not the web:
+    if `(11,15)` or `(12,15)` could be broken by a helper rat, the player might
+    then clear `(11,16)` and reach the sealed `(11,17)` rat. Initial preserved
+    checks for `cellnot:11,15,plank`, `cellnot:12,15,plank`, `ratat:11,15`,
+    and `reachable:11,16` returned no branches in the tested budget.
+  - `cooperation/tug_of_war`: the top pocket now looks structurally impossible
+    as authored. The blocker cells `(7,1)`, `(8,1)`, `(7,2)`, and `(8,2)` have
+    no adjacent explosive; zaps do not clear webs/planks unless they detonate
+    an adjacent explosive, and rats cannot enter the web cells. Treat this as a
+    likely authoring blocker unless source mechanics are changed.
+  - `cooperation/handoff`: preserved checks still did not place the sealed
+    `(10,6)` rat onto remote trigger `(11,7)`, clear `(10,5)`, or make
+    `(10,6)` reachable before the common dead trigger line.
+  - `cooperation/blocked_v2`: preserved-rat checks still did not remove
+    `(0,15)` or consume trigger 2; paired waypoint access to trigger 2 failed.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
@@ -720,21 +768,20 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
    a single `(18,4)` rat, but that mechanism strands it behind `(18,5)`. The next
    useful attack must handle `(18,4)` before the top sweep or open its web
    without spending the adjacent explosive chain.
-3. **Solve `tinderrectangle` as an ignition lure.** The lower-rat route can
-   reach the winning row but currently reaches it in contact with the player.
-   The next useful attempt is a separation mechanism: create a loop or blocker
-   so the rat reaches `(2..6,6)` while the player is already on the far-right
-   safe cells. Also keep the alternate `(13,8)` top/right-pack geometry in mind,
-   but first solve the tactical problem of clearing row 2 without occupying the
-   top rat's descent cell.
+3. **Solve `tinderrectangle` as an ignition lure.** The new 99-turn pump proves
+   real separation on the left wall, but not a safe ignition. Next test the
+   row-2/top-pack opening problem directly: find a way to clear a row-2 web or
+   force a top-left rat into `(0,0)` without the player standing under a
+   diagonal attacker. Do not just extend the old row-6 contact line.
 4. **Do not treat `ai_takeover` as a solved-by-`release` clone.** It has the
    right-side `(18,5)` opening that `release` lacks, but the standard opener
    still cannot reach or safely use triggers 7/8. Use `release` for trigger
    vocabulary only, not as a move skeleton.
 5. **For two-player levels, work in `wp2` waypoint pairs.** Start with
-   structural access checks (`cellnot` / `playerat`) before trigger choreography;
-   `tug_of_war` currently needs a mechanism for the top rat component, and
-   `handoff` needs a mechanism for the `(10,6)` sealed rat before the P2 sweep.
+   structural access checks (`cellnot` / `playerat`) before trigger
+   choreography. `tug_of_war` may be unwinnable as authored because the top
+   pocket has no legal web/plank-clearing event; `handoff` still needs a
+   mechanism for the `(10,6)` sealed rat before the P2 sweep.
 6. **`blocked_v2`:** rigorously test winnability before assuming solvable.
 
 ---
