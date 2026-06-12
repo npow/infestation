@@ -1693,6 +1693,52 @@ real new mechanism frontier.
   Do not spend more search budget on `chase` unless upstream changes invalidate
   the recorded solution.
 
+### Continuation pass - 2026-06-12 post-chase parallel audit
+
+- `reload_v3`: the trigger-2-first branch
+  `^>>>>>>>^^^vvv<<v<^` is a real 19-turn `triggeronly:2` state with all 3 rats
+  alive and one reachable rat. It is better than the 18-turn variant, which
+  strands all rats. However, bounded follow-ups from it found no preserved-rat
+  branch to `triggeronly:1`, `triggeronly:3`, or a win. The trigger-1 branch
+  `^>>>>>>>^^vvvvvv<<<^^<<^^<<<^<<<<<<<<<v<v>` remains the cleaner station
+  after 42 turns: trigger 1 is spent, `(9,22)` is open, trigger 2 is reachable,
+  and the roaming rat is still adjacent. But `wp` to trigger 2 spends that
+  roaming rat, `lure` cannot carry it toward `(17,13)/(17,14)` with rat
+  preservation, and branchdumps from this station found no preserved-rat
+  `triggeronly:2`, `triggeronly:3`, or `triggeronly:6` branch. Treat both
+  `2->...` and `1->2` as false milestones unless the next idea changes the
+  roaming-rat position before the trigger is fired.
+- `cooperation/blocked_v2`: a fresh trigger-4 mechanism improves the old B17
+  frontier. From
+  `^< ^^ v^ ^^ v^ ^^ v^ ^> v> ^> vv ^v v^ ^v vv ^v vv`, firing trigger 4 via
+  suffix `^v v> ^> v< v>` reaches a 4-rat state; one more move `^<` reaches a
+  3-rat state:
+  `^< ^^ v^ ^^ v^ ^^ v^ ^> v> ^> vv ^v v^ ^v vv ^v vv ^v v> ^> v< v> ^<`.
+  Diagnostics there: rats `(9,13)`, `(9,14)`, `(0,15)`, reachable rats `2/3`,
+  triggers 5 and 2 still present, but trigger 2 is unreachable. Enlarged
+  follow-ups from this B23 state found no `win`, no `ratsle:2`, no
+  `triggeronly:2`, and no changes to `(1,15)` web or `(2,15)/(3,15)`
+  explosives. Trigger 5 is reachable but only burns the trigger-5 family down
+  to two triggers while leaving all 3 rats and the lower-left boundary intact.
+  B23 is a better diagnostic basin, not a solved route.
+- `tinderrectangle`: independent audit confirmed the P135/P160 lower-release
+  family remains a contact trap. The useful buffer
+  `PBUF = P135^^^^<<vvv<<^^^<<<v<<` verifies with all 16 rats alive, player
+  `(5,4)`, and lower rat `(2,3)`, but it cannot open `(3,4)` safely or reach
+  `rectsep`. Opening `(2,4)` from P135 while preserving all rats lands with
+  player `(2,4)` and lower rat `(2,3)`; `rectsep` and `win` from that contact
+  state returned no branch. The next hypothesis must change release geometry
+  before `(2,4)` opens, not extend the same buffer.
+- `release` / `cyborg_rats/ai_takeover`: these are now clearly different
+  blockers. In `release`, after `v<vv^^>>v`, rat `(18,4)` is physically isolated
+  behind web `(18,5)`; the useful trigger must be left trigger 2 `(0,16)`,
+  because right trigger 2 zaps the wrong side. In `ai_takeover`, `(18,5)` is
+  already open and the blocker is trigger-7 timing: the known route steps
+  through and destroys `(16,8)` before firing trigger 7, then trigger 7 walls
+  `(16,8)` behind the player and collapses reachability to a one-cell pocket.
+  The next `ai_takeover` target is a non-collapsing trigger-7 event such as
+  `triggeropen:7,50` from a route that does not first vacate/destroy `(16,8)`.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
