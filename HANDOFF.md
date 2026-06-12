@@ -542,6 +542,38 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   `v< v^ v^ << <^ <^ ^^ ^v ^^` leaves the `(0,15)` rat unreachable; no branch
   for trigger 2, detonating `(2,15)`, row-17 black-hole lure staging, or
   `ratgone:0,15` under the tested constraints.
+- Follow-up mechanism pass on 2026-06-12 found no verified wins, but sharpened
+  three single-player blockers. `novelty` search with `--k 2` exhausted quickly
+  on `tinderrectangle`, `release`, `release` staged at `v<vv^^>>v^vv><<`,
+  `reload_v3`, the 45-move `reload_v3` branch, `chase`, and
+  `cyborg_rats/ai_takeover`; it is not a useful frontier by itself.
+- `tinderrectangle`: from the 71-turn prepared-safe branch, exact branchdump
+  checks can move the lower rat down through `(2,4)`, `(2,5)`, and into the
+  winning row `(2..6,6)` while preserving all 16 rats. Representative
+  `(6,6)` branch:
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^>^^<<<vvv<<^^^<<<<<vvv<<<<>>>>>>`.
+  It verifies as `Playing` for 105 turns, with player `(7,6)` and lower rat
+  `(6,6)`. However, internal BFS from that state found no win within depth 40,
+  and a solo `geomlure` from the prepared branch for lower row plus safe cells
+  returned `NO_SOLUTION` at depth 180 / 161s. The problem is synchronization:
+  the player is in contact with the lower rat when the rat reaches the winning
+  band; moving down detonates the rectangle but kills the player.
+- `reload_v3`: there is a preserved-rat branch that clears the right-side web
+  `(16,7)`:
+  `^^^^^<<<<<<^^<^^^^^^^>>>>>>>>>>vvvvv`. A six-move continuation
+  `<<<<<` also clears the top-cage web band through `(11,8)`:
+  `^^^^^<<<<<<^^<^^^^^^^>>>>>>>>>>vvvvvv<<<<<`. Both verify as `Playing` with
+  all 3 rats. Diagnostics still show top trigger 6 `(9,4)` and trigger 5
+  `(9,5)` unreachable. Follow-up branchdump checks for `reachable:9,4`,
+  `reachable:9,5`, `reachable:10,5`, `trigger:6`, `cellnot:10,5,web`,
+  `cellnot:9,6,explosive`, and `playerat:9,4` all returned empty. Clearing the
+  outer right/top webs is not enough to enter the trigger-6 cage.
+- `release`: from staged branch `v<vv^^>>v^vv><<`, direct structural checks for
+  changing the x=17 wall cells `(17,5..8)`, opening `(18,5)`, detonating
+  `(18,6)`, moving rats to `(17,6..8)` / `(18,6)` / `(19,7)`, and firing
+  trigger 2 or 6 all returned empty with `--min-rats 20`. This rules out the
+  obvious "rats lined up at x=16 eventually push through" hypothesis in the
+  tested depth/budget; a solution needs a different earlier event.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
