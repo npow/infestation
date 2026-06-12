@@ -626,6 +626,78 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   returned empty, and direct A* `lookup --goal win` returned `NO_SOLUTION`
   quickly. The extra triggers/cyborgs do not bypass the `release` skeleton from
   the standard opener in the tested budget.
+- Mechanism-first parallel pass on 2026-06-12 found **no new verified wins**,
+  but it tightened the current human map of the 8 hard levels. This pass
+  deliberately tested blocker-changing mechanisms rather than broad direct
+  `solve` runs.
+- `tinderrectangle`: the 71-turn prepared-safe branch
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv`
+  remains the best constructive lead. From it, branchdump can place the lower
+  rat at `(2,6)` and `(6,6)` with all 16 rats alive; for example the
+  `(6,6)` branch
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^>^^^<<<vvv<<^^^<<<<<vvv<<<<>>>>>>`
+  verifies as `Playing`, with player `(7,6)` and lower rat `(6,6)`. However,
+  every immediate ignition move from that contact state either kills the player
+  or just continues the one-cell chase. BFS/A* continuations from the contact
+  state found no win.
+- `tinderrectangle`: a stronger safe-side state can put the player at `(15,7)`
+  with all 16 rats alive:
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^`.
+  From there, branchdump can still move the lower rat to `(2,6)` and `(6,6)`,
+  but the returned branches again end with the player directly east of the rat.
+  A combined `geomlure` for rat `(2..6,6)` plus safe cells
+  `(14,6),(14,7),(15,7),(13,8),(14,8),(15,8)` returned `NO_SOLUTION` quickly
+  from that state. Treat this as evidence that the lower-rat route needs a
+  genuine separation loop, not just more safe-side preparation.
+- `tinderrectangle`: full ignition enumeration shows an alternate winning
+  geometry: rat `(13,8)` with the player on row 3 or row 6 can detonate the
+  bottom explosive row. This suggests a possible top/right-pack drop instead
+  of the lower-rat row-6 route. Manual checks show the immediate obstacle:
+  clearing the rightmost row-2 web by stepping onto `(15,2)` lets the top rat
+  enter the player's cell and causes `GameOver`. Branchdumps for `ratat:13,8`
+  from both the initial state and the prepared state returned no branches in
+  this pass, and a combined `geomlure` for `(13,8)` plus safe row-6 cells timed
+  out with the known lower-rat near-miss, not a right-pack drop.
+- `release`: parallel audit reconfirmed the concrete blocker. After
+  `v<vv^^>>v`, `(18,4)` is still isolated behind web `(18,5)` and the right
+  explosive column `(18,6..8)` is intact. Branchdumps from the opener and from
+  post-trigger-5 for `cellnot:18,5,web` and `trigger:2` returned no branches;
+  waypoint probes to `(19,7)`, `(0,16)`, `(18,5)`, and `(17,5)` are unreachable.
+  The known dead sweep still verifies only as `Playing`, leaving exactly the
+  `(18,4)` rat.
+- `cyborg_rats/ai_takeover`: unlike `release`, `(18,5)` starts open, so the
+  `(18,4)` rat is statically in the main component. That does not make the
+  standard opener solve it: targeted branchdumps for `trigger:2`, `trigger:7`,
+  `trigger:8`, and `ratgone:18,4` from the initial/opener states returned no
+  candidates, and trigger-7 waypoints `(16,9)`, `(15,9)`, `(16,11)` are
+  unreachable after the opener. Do not assume `release`'s skeleton transfers
+  mechanically here.
+- `reload_v3`: the bottom-left blocker is still `(0,21)` behind web `(1,21)`
+  and explosive `(2,21)`. Initial and staged probes found no route to
+  `cellnot:1,21,web`, `cellnot:2,21,explosive`, or `trigger:6`. The preserved
+  trigger-2 branch `^>>>>>>>^^^vvv<<v<` and the top/right web-clearing branch
+  `^^^^^<<<<<<^^<^^^^^^^>>>>>>>>>>vvvvvv<<<<<` both preserve all 3 rats but
+  leave trigger 6 unreachable. The only clean mechanism still appears to be
+  firing trigger 6 before access collapses; no route to do so is known.
+- `chase`: the `(11,17)` rat remains isolated behind web `(11,16)`. Source
+  inspection plus targeted branchdumps confirm zaps do not clear that web,
+  no initial explosive is adjacent to it, and no helper-rat route to
+  `(11,16)` / plank alteration was found before the known ratdrop chains.
+  Waypoints to `(11,17)` remain unreachable from both the initial state and the
+  16-move known prefix.
+- `cooperation/tug_of_war`: top rat movement from `(7,0)` to `(8,0)` is only
+  pocket motion, not progress. The top pocket's webs `(7,1)/(8,1)` and planks
+  `(7,2)/(8,2)` did not change in targeted branchdumps, and the known
+  trigger-1 prefix still leaves that rat unreachable.
+- `cooperation/handoff`: the sealed `(10,6)` rat remains the blocker.
+  Targeted checks did not move/remove it, place it on remote trigger `(11,7)`,
+  clear web `(10,5)`, or reach/change `(11,7)` before the common trigger line.
+  The traced trigger-2 family ends with `rats=2`, `explosives=0`,
+  `triggers=0`, and `reachable_rats=0`.
+- `cooperation/blocked_v2`: lower-left rat `(0,15)` still did not move or
+  disappear, web `(1,15)` and explosive `(2,15)` did not change, and trigger 2
+  was not consumed. Both trigger-2 cells `(3,14)` and `(5,11)` were waypoint
+  unreachable for both players in targeted `wp2` probes.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
@@ -648,14 +720,17 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
    a single `(18,4)` rat, but that mechanism strands it behind `(18,5)`. The next
    useful attack must handle `(18,4)` before the top sweep or open its web
    without spending the adjacent explosive chain.
-3. **Solve `tinderrectangle` as an ignition lure.** The winning geometry is
-   either a corner rat at `(0,0)` / `(16,0)` with the player on row 3, or the
-   lower rat at `(2..6,6)` with the player on the far-right safe cells. The best
-   new lead is from `<^^^`: prepare the safe side while the lower rat remains at
-   `(2,3)`, then find a delayed release into `(2..6,6)`.
-4. **Use `release` as the template for `ai_takeover`.** Once `release` is
-   solved, port its trigger order to `ai_takeover` and account for trigger 7/8
-   and cyborg pathing.
+3. **Solve `tinderrectangle` as an ignition lure.** The lower-rat route can
+   reach the winning row but currently reaches it in contact with the player.
+   The next useful attempt is a separation mechanism: create a loop or blocker
+   so the rat reaches `(2..6,6)` while the player is already on the far-right
+   safe cells. Also keep the alternate `(13,8)` top/right-pack geometry in mind,
+   but first solve the tactical problem of clearing row 2 without occupying the
+   top rat's descent cell.
+4. **Do not treat `ai_takeover` as a solved-by-`release` clone.** It has the
+   right-side `(18,5)` opening that `release` lacks, but the standard opener
+   still cannot reach or safely use triggers 7/8. Use `release` for trigger
+   vocabulary only, not as a move skeleton.
 5. **For two-player levels, work in `wp2` waypoint pairs.** Start with
    structural access checks (`cellnot` / `playerat`) before trigger choreography;
    `tug_of_war` currently needs a mechanism for the top rat component, and
