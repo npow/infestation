@@ -19,9 +19,9 @@ struct Solution<'a> {
 
 #[derive(Deserialize)]
 pub struct DecodedSolution {
-    pub level: String,
-    pub grid: String,
-    pub actions: Vec<Vec<Action>>,
+    pub(crate) level: String,
+    pub(crate) grid: String,
+    pub(crate) actions: Vec<Vec<Action>>,
 }
 
 /// Encode a solution as zlib-compressed, base64-encoded JSON.

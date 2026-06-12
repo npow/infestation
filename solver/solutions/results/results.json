@@ -59,12 +59,6 @@
     "strategy": "",
     "moves": ""
   },
-  "tinderbox.csv": {
-    "status": "NO_SOLUTION",
-    "arrows": "",
-    "strategy": "",
-    "moves": ""
-  },
   "lock_in.csv": {
     "status": "NO_SOLUTION",
     "arrows": "",
@@ -120,6 +114,12 @@
     "moves": ""
   },
   "cooperation/blocked_v2.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "tinderbox_v2.csv": {
     "status": "NO_SOLUTION",
     "arrows": "",
     "strategy": "",

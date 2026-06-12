@@ -11,7 +11,7 @@ LEVELS = [
     "triggering_explosives_v3.csv",
     "explosives2.csv",
     "synchronicity.csv",
-    "tinderbox.csv",
+    "tinderbox_v2.csv",
     "tinderrectangle.csv",
     "no_retreat.csv",
     "order_of_operations_new_v2.csv",

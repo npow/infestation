@@ -8,7 +8,7 @@ SOLVER = "/tmp/infestation/repo/target/release/solver"
 LV = "/tmp/infestation/repo/levels"
 
 LEVELS = [
-    "tinderbox.csv", "tinderrectangle.csv", "no_retreat.csv",
+    "tinderbox_v2.csv", "tinderrectangle.csv", "no_retreat.csv",
     "cyborg_rats/ai_takeover.csv", "release.csv", "lock_in.csv",
     "reload_v3.csv", "chase.csv",
     "cooperation/tug_of_war.csv", "cooperation/handoff.csv", "cooperation/blocked_v2.csv",

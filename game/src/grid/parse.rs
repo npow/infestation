@@ -140,7 +140,7 @@ impl LevelMetadata {
 }
 
 impl Grid {
-    pub fn from_csv(csv_str: &str) -> Self {
+    pub(crate) fn from_csv(csv_str: &str) -> Self {
         Self::parse_csv(csv_str, HashMap::new(), HashMap::new())
     }
 

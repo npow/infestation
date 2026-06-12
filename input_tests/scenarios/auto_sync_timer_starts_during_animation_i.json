@@ -1,0 +1,14 @@
+{
+  "context": {
+    "player_count": 2,
+    "play_state": "playing",
+    "is_animating": true,
+    "can_undo": true,
+    "can_exit": true
+  },
+  "context_changes": [{ "t": 0.1, "is_animating": false }],
+  "events": [
+    { "t": 0.0, "key": "Up", "action": "press" },
+    { "t": 0.016, "key": "Up", "action": "release" }
+  ]
+}

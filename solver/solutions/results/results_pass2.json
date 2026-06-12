@@ -17,12 +17,6 @@
     "strategy": "",
     "moves": ""
   },
-  "tinderbox.csv": {
-    "status": "NO_SOLUTION",
-    "arrows": "",
-    "strategy": "",
-    "moves": ""
-  },
   "cyborg_rats/ai_takeover.csv": {
     "status": "NO_SOLUTION",
     "arrows": "",
@@ -66,6 +60,12 @@
     "moves": ""
   },
   "cooperation/tug_of_war.csv": {
+    "status": "NO_SOLUTION",
+    "arrows": "",
+    "strategy": "",
+    "moves": ""
+  },
+  "tinderbox_v2.csv": {
     "status": "NO_SOLUTION",
     "arrows": "",
     "strategy": "",

@@ -4,6 +4,7 @@ use std::collections::hash_map::Entry;
 use std::collections::{BinaryHeap, HashMap};
 
 use crate::direction::Dir8;
+use crate::enum_all::EnumAll;
 use crate::game::rat::RatMoveKey;
 use crate::grid::{Cell, Grid};
 use crate::position::Position;
@@ -50,7 +51,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             };
 
             // Check all 8 neighbors
-            for dir in Dir8::all() {
+            for dir in Dir8::iter_all() {
                 let neighbor = pos + dir.delta();
 
                 if !neighbor.in_bounds(bounds) {
@@ -146,7 +147,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 player,
                 dir: None,
             };
-            'outer: for dir in Dir8::all() {
+            'outer: for dir in Dir8::iter_all() {
                 let new_pos = cyborg_pos + dir.delta();
 
                 let Some(&CyborgEntry {
@@ -160,7 +161,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
                 // Can't attack from in front of player (sword blocks)
                 for player_info in players {
-                    if new_pos == player_info.pos && dir == player_info.dir.opposite() {
+                    if new_pos == player_info.pos && dir == player_info.dir.opposite().into_dir8() {
                         continue 'outer;
                     }
                 }

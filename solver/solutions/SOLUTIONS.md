@@ -29,7 +29,7 @@ Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-s
 | `planks.csv` | 1 | 100 | `>>>><<<<<<<<<<^^^^^^<vvvvvv>>>>>>>>>>>>^^^^>^^^vvv<vvvv<<<<<<<<<<<<^^^^^^^>>>v>vvvv>>>>>>^^<^^^<<<vv` |
 | `rats.csv` | 1 | 13 | `v<<^^^>>>><>^` |
 | `synchronicity.csv` | 1 | 50 | `>>^v>>vvv<<v^^^^<v^v^v^^^vv>vvv>vv>><<^^>>>>>>^^^^` |
-| `tinderbox.csv` | 1 | 85 | `^>^^^^^<<<vv<<>.<>>>>^>v<<>>>v<v.><^v>><^^v<>^^<..v.^v^<v.>.vv^v<v..v^<^<<<<.vv^<^v>>` |
+| `tinderbox_v2.csv` | 1 | 85 | `^>^^^^^<<<vv<<>.<>>>>^>v<<>>>v<v.><^v>><^^v<>^^<..v.^v^<v.>.vv^v<v..v^<^<<<<.vv^<^v>>` |
 | `trapped_rat.csv` | 1 | 75 | `vvv^v.>><>>>>^^^^^^<vvvvvv<<>>^^^^^^<vvvvvv<<>>^^^^^^<vvvvvv<<>>^^^^^^^^^^<` |
 | `trapped_rat2_v2.csv` | 1 | 78 | `<^^^v><^v><^v><^^<<<vvvvvv<^^^^^^><><vvvvvv<^^^^^^><><vvvvvv<^^^^^^><><^^^^^^>` |
 | `triggering_explosives_v3.csv` | 1 | 72 | `<vvvv<<vvvv<<v^>>^^^^>>^^^^>>vvvv>>vvv^^^<^^><^<^<<^^vv<<^<<vvv>^^^>><>v` |

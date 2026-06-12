@@ -1,0 +1,12 @@
+{
+  "context": {
+    "player_count": 1,
+    "play_state": "playing",
+    "can_undo": true,
+    "can_exit": true
+  },
+  "events": [
+    { "t": 0.0, "key": "U", "action": "press" },
+    { "t": 0.016, "key": "U", "action": "release" }
+  ]
+}

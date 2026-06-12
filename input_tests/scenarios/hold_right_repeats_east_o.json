@@ -1,0 +1,38 @@
+[
+  {
+    "frame": 0,
+    "output": {
+      "player_actions": ["east"]
+    }
+  },
+  {
+    "frame": 16,
+    "output": {
+      "player_actions": ["east"]
+    }
+  },
+  {
+    "frame": 19,
+    "output": {
+      "player_actions": ["east"]
+    }
+  },
+  {
+    "frame": 22,
+    "output": {
+      "player_actions": ["east"]
+    }
+  },
+  {
+    "frame": 25,
+    "output": {
+      "player_actions": ["east"]
+    }
+  },
+  {
+    "frame": 28,
+    "output": {
+      "player_actions": ["east"]
+    }
+  }
+]

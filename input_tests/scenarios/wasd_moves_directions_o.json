@@ -1,0 +1,14 @@
+[
+  {
+    "frame": 0,
+    "output": {
+      "player_actions": ["north"]
+    }
+  },
+  {
+    "frame": 6,
+    "output": {
+      "player_actions": ["east"]
+    }
+  }
+]

@@ -7,7 +7,7 @@ SOLVER = "/tmp/infestation/repo/target/release/solver"
 LV = "/tmp/infestation/repo/levels"
 
 FAILURES = [
-    "tinderbox.csv",
+    "tinderbox_v2.csv",
     "tinderrectangle.csv",
     "lock_in.csv",
     "no_retreat.csv",

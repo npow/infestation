@@ -64,7 +64,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 for (i, j) in [(0usize, 1usize), (1, 0)] {
                     if moving[i] && dests[i] == players[j].pos && dests[j] == players[j].pos {
                         // Player i moves into player j's cell while j stays
-                        if facing_dirs[j].is_opposite(move_dirs[i].unwrap()) {
+                        if facing_dirs[j] == move_dirs[i].unwrap().opposite() {
                             // j faces i → i blocked
                             dests[i] = players[i].pos;
                         }

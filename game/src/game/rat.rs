@@ -73,7 +73,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     // Check sword blocking against all players
                     let sword_blocked = players
                         .iter()
-                        .any(|p| new_pos == p.pos && dir == p.dir.opposite());
+                        .any(|p| new_pos == p.pos && dir == p.dir.opposite().into_dir8());
                     if sword_blocked {
                         continue;
                     }

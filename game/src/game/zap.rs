@@ -1,6 +1,7 @@
 use std::borrow::BorrowMut;
 
 use crate::direction::Dir8;
+use crate::enum_all::EnumAll;
 use crate::grid::{Cell, Grid};
 
 use super::{MoveHandler, Zapping};
@@ -38,7 +39,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
         for Zapping { pos, .. } in self.zapping.drain(..) {
             // Check 8-way neighbors
-            for dir in Dir8::all() {
+            for dir in Dir8::iter_all() {
                 let neighbor = pos + dir.delta();
                 match grid.at(neighbor) {
                     Cell::Empty => *grid.at_mut(neighbor) = Cell::Wall,

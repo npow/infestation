@@ -1,6 +1,6 @@
 use std::ops::{Add, Sub};
 
-use crate::direction::Dir8;
+use crate::{direction::Dir8, enum_all::EnumAll};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub(crate) struct Position {
@@ -33,7 +33,7 @@ impl Position {
         }
         let mut best_dir = None;
         let mut best_dist = i32::MAX;
-        for dir in Dir8::all() {
+        for dir in Dir8::iter_all() {
             let new_pos = self + dir.delta();
             let d = new_pos.dist_sq(to);
             if d < best_dist {

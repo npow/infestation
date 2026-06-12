@@ -749,6 +749,7 @@ enum LookupGoal {
     RatAtWithPlayerFacing(i32, i32, i32, i32, Dir4),
     RatAtWithCell(i32, i32, i32, i32, CellKind),
     RatGone(i32, i32),
+    NoRatsAt2(i32, i32, i32, i32),
     RatsAtMost(usize),
     ReachableRatsAtLeast(usize),
     AllRatsReachable,
@@ -945,6 +946,25 @@ impl LookupGoal {
             "ratgone" => {
                 let (x, y) = parse_required_point(arg);
                 Self::RatGone(x, y)
+            }
+            "norats2" | "noratsat2" => {
+                let mut parts = arg.split(',');
+                let x1 = parts.next().expect("first x").trim().parse().expect("first x");
+                let y1 = parts.next().expect("first y").trim().parse().expect("first y");
+                let x2 = parts
+                    .next()
+                    .expect("second x")
+                    .trim()
+                    .parse()
+                    .expect("second x");
+                let y2 = parts
+                    .next()
+                    .expect("second y")
+                    .trim()
+                    .parse()
+                    .expect("second y");
+                assert!(parts.next().is_none(), "expected x1,y1,x2,y2");
+                Self::NoRatsAt2(x1, y1, x2, y2)
             }
             "ratsle" | "ratsatmost" => Self::RatsAtMost(arg.parse().expect("rat count")),
             "reachablege" | "reachableratsge" => {
@@ -1172,6 +1192,9 @@ fn lookup_goal_reached(
                 && current.cell_kind_at(cell_x as usize, cell_y as usize) == kind
         }
         LookupGoal::RatGone(x, y) => !rat_at(current, (x, y)),
+        LookupGoal::NoRatsAt2(x1, y1, x2, y2) => {
+            !rat_at(current, (x1, y1)) && !rat_at(current, (x2, y2))
+        }
         LookupGoal::RatsAtMost(count) => count_rats(current) <= count,
         LookupGoal::ReachableRatsAtLeast(count) => reachable_rat_count(current) >= count,
         LookupGoal::AllRatsReachable => reachable_rat_count(current) == count_rats(current),
@@ -1304,6 +1327,15 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
         }
+        LookupGoal::NoRatsAt2(x1, y1, x2, y2) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let targets = [(x1, y1), (x2, y2)];
+            let remaining = targets
+                .iter()
+                .filter(|&&(x, y)| rat_at(current, (x, y)))
+                .count() as i64;
+            remaining * 500_000 + nearest_target_distance(&players, &targets)
+        }
         LookupGoal::RatsAtMost(count) => {
             count_rats(current).saturating_sub(count) as i64 * 1_000_000
                 + heuristic(current) / 1_000
@@ -1432,6 +1464,9 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
             (!rat_at(current, (rat_x, rat_y)) as i64) + cell_missing
         }
         LookupGoal::RatGone(x, y) => rat_at(current, (x, y)) as i64,
+        LookupGoal::NoRatsAt2(x1, y1, x2, y2) => {
+            rat_at(current, (x1, y1)) as i64 + rat_at(current, (x2, y2)) as i64
+        }
         LookupGoal::RatsAtMost(count) => count_rats(current).saturating_sub(count) as i64,
         LookupGoal::ReachableRatsAtLeast(count) => {
             count.saturating_sub(reachable_rat_count(current)) as i64
