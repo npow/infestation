@@ -757,6 +757,8 @@ enum LookupGoal {
     ExplosivesAtMost(usize),
     WebsAtMost(usize),
     RatDrop,
+    RatsAtMostWithCellIs(usize, i32, i32, CellKind),
+    RatsAtMostWithCellNot(usize, i32, i32, CellKind),
     TriggerNumberOnlyWithCellIs(u8, i32, i32, CellKind),
     TriggerNumberOnlyWithCellNot(u8, i32, i32, CellKind),
 }
@@ -949,8 +951,18 @@ impl LookupGoal {
             }
             "norats2" | "noratsat2" => {
                 let mut parts = arg.split(',');
-                let x1 = parts.next().expect("first x").trim().parse().expect("first x");
-                let y1 = parts.next().expect("first y").trim().parse().expect("first y");
+                let x1 = parts
+                    .next()
+                    .expect("first x")
+                    .trim()
+                    .parse()
+                    .expect("first x");
+                let y1 = parts
+                    .next()
+                    .expect("first y")
+                    .trim()
+                    .parse()
+                    .expect("first y");
                 let x2 = parts
                     .next()
                     .expect("second x")
@@ -977,6 +989,14 @@ impl LookupGoal {
                 Self::ExplosivesAtMost(arg.parse().expect("explosive count"))
             }
             "websle" | "websatmost" => Self::WebsAtMost(arg.parse().expect("web count")),
+            "ratslecellis" | "ratsatmostcellis" => {
+                let (count, point, kind) = parse_count_point_and_cell_kind(arg);
+                Self::RatsAtMostWithCellIs(count, point.0, point.1, kind)
+            }
+            "ratslecellnot" | "ratsatmostcellnot" => {
+                let (count, point, kind) = parse_count_point_and_cell_kind(arg);
+                Self::RatsAtMostWithCellNot(count, point.0, point.1, kind)
+            }
             "triggeronlycellis" | "triggerstrictcellis" => {
                 let mut parts = arg.split(',');
                 let number = parts
@@ -1063,6 +1083,25 @@ fn parse_point_and_cell_kind(s: &str) -> ((i32, i32), CellKind) {
         .expect("cell kind");
     assert!(parts.next().is_none(), "expected x,y,kind");
     ((x, y), kind)
+}
+
+fn parse_count_point_and_cell_kind(s: &str) -> (usize, (i32, i32), CellKind) {
+    let mut parts = s.split(',');
+    let count = parts
+        .next()
+        .expect("rat count")
+        .trim()
+        .parse()
+        .expect("rat count");
+    let x = parts.next().expect("x").trim().parse().expect("x");
+    let y = parts.next().expect("y").trim().parse().expect("y");
+    let kind = parts
+        .next()
+        .map(str::trim)
+        .map(parse_cell_kind_name)
+        .expect("cell kind");
+    assert!(parts.next().is_none(), "expected count,x,y,kind");
+    (count, (x, y), kind)
 }
 
 fn parse_cell_kind_name(s: &str) -> CellKind {
@@ -1202,6 +1241,12 @@ fn lookup_goal_reached(
         LookupGoal::ExplosivesAtMost(count) => Features::from_grid(current).explosives <= count,
         LookupGoal::WebsAtMost(count) => Features::from_grid(current).webs <= count,
         LookupGoal::RatDrop => count_rats(current) < count_rats(initial),
+        LookupGoal::RatsAtMostWithCellIs(count, x, y, kind) => {
+            count_rats(current) <= count && current.cell_kind_at(x as usize, y as usize) == kind
+        }
+        LookupGoal::RatsAtMostWithCellNot(count, x, y, kind) => {
+            count_rats(current) <= count && current.cell_kind_at(x as usize, y as usize) != kind
+        }
         LookupGoal::TriggerNumberOnlyWithCellIs(number, x, y, kind) => {
             only_trigger_changed(initial, current, number)
                 && current.cell_kind_at(x as usize, y as usize) == kind
@@ -1364,6 +1409,24 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
                 + heuristic(current) / 1_000
         }
         LookupGoal::RatDrop => heuristic(current),
+        LookupGoal::RatsAtMostWithCellIs(count, x, y, kind) => {
+            let rats_penalty = count_rats(current).saturating_sub(count) as i64 * 1_000_000;
+            let cell_penalty = if current.cell_kind_at(x as usize, y as usize) == kind {
+                0
+            } else {
+                500_000
+            };
+            rats_penalty + cell_penalty + heuristic(current) / 1_000
+        }
+        LookupGoal::RatsAtMostWithCellNot(count, x, y, kind) => {
+            let rats_penalty = count_rats(current).saturating_sub(count) as i64 * 1_000_000;
+            let cell_penalty = if current.cell_kind_at(x as usize, y as usize) != kind {
+                0
+            } else {
+                500_000
+            };
+            rats_penalty + cell_penalty + heuristic(current) / 1_000
+        }
         LookupGoal::TriggerNumberOnlyWithCellIs(number, x, y, kind) => {
             let trigger_h =
                 lookup_goal_heuristic(LookupGoal::TriggerNumberOnly(number), initial, current);
@@ -1484,6 +1547,14 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
             Features::from_grid(current).webs.saturating_sub(count) as i64
         }
         LookupGoal::RatDrop => count_rats(current) as i64,
+        LookupGoal::RatsAtMostWithCellIs(count, x, y, kind) => {
+            count_rats(current).saturating_sub(count) as i64
+                + (current.cell_kind_at(x as usize, y as usize) != kind) as i64
+        }
+        LookupGoal::RatsAtMostWithCellNot(count, x, y, kind) => {
+            count_rats(current).saturating_sub(count) as i64
+                + (current.cell_kind_at(x as usize, y as usize) == kind) as i64
+        }
         LookupGoal::TriggerNumberOnlyWithCellIs(number, x, y, kind) => {
             trigger_count(current, number) as i64 * 1_000_000
                 + (current.cell_kind_at(x as usize, y as usize) != kind) as i64
@@ -2542,8 +2613,8 @@ fn solve_lookup_goal_branches(
                 depth: cur_depth + 1,
             });
 
-            let goal_reached =
-                play_state == PlayState::Won || lookup_goal_reached(goal, grid, &next_grid, play_state);
+            let goal_reached = play_state == PlayState::Won
+                || lookup_goal_reached(goal, grid, &next_grid, play_state);
             if goal_reached && trap_constraints.accepts(&next_grid, play_state) {
                 if play_state != PlayState::Won
                     && min_rats.is_some_and(|min_rats| count_rats(&next_grid) < min_rats)
@@ -7156,8 +7227,7 @@ fn main() {
                     i += 2;
                 }
                 "--require-reachable-trigger" | "--next-trigger" => {
-                    trap_constraints.require_reachable_trigger =
-                        Some(args[i + 1].parse().unwrap());
+                    trap_constraints.require_reachable_trigger = Some(args[i + 1].parse().unwrap());
                     i += 2;
                 }
                 "--strict" => {
@@ -7307,8 +7377,7 @@ fn main() {
                     i += 2;
                 }
                 "--require-reachable-trigger" | "--next-trigger" => {
-                    trap_constraints.require_reachable_trigger =
-                        Some(args[i + 1].parse().unwrap());
+                    trap_constraints.require_reachable_trigger = Some(args[i + 1].parse().unwrap());
                     i += 2;
                 }
                 _ => i += 1,
@@ -7902,8 +7971,7 @@ fn main() {
                     i += 2;
                 }
                 "--require-reachable-trigger" | "--next-trigger" => {
-                    trap_constraints.require_reachable_trigger =
-                        Some(args[i + 1].parse().unwrap());
+                    trap_constraints.require_reachable_trigger = Some(args[i + 1].parse().unwrap());
                     i += 2;
                 }
                 "--progress" => {
@@ -8049,8 +8117,7 @@ fn main() {
                     i += 2;
                 }
                 "--require-reachable-trigger" | "--next-trigger" => {
-                    trap_constraints.require_reachable_trigger =
-                        Some(args[i + 1].parse().unwrap());
+                    trap_constraints.require_reachable_trigger = Some(args[i + 1].parse().unwrap());
                     i += 2;
                 }
                 "--eval" => {

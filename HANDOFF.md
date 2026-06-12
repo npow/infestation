@@ -1797,6 +1797,57 @@ real new mechanism frontier.
   real advance, but the next idea must change the final pocket before or during
   the macro route; firing 7 after the macro route is the wrong last event.
 
+### Continuation pass - 2026-06-12 active parallel batch
+
+- Solver tooling now supports compound lookup goals
+  `ratslecellis:n,x,y,kind` and `ratslecellnot:n,x,y,kind`. These are
+  diagnostic-only goals for mechanism searches where both cleanup and a blocker
+  change must be true in the same accepted state. They do not change game rules.
+- A parallel batch was started under `/tmp/infestation-runs` with long-running
+  bounded `branchdump` jobs for:
+  - `reload_v3`: from the T2 prefix, require 1-rat cleanup plus `(1,21)` web or
+    `(2,21)` explosive changed, with a reachable rat and reachable trigger.
+  - `blocked_v2`: from B17/B23, require 2-rat cleanup plus `(1,15)` web changed
+    while preserving reachability/resources.
+  - `cyborg_rats/ai_takeover`: from the initial board, search for a
+    non-collapsing trigger-7 event (`triggeropen:7,50` or
+    `triggeronlycellnot:7,16,8,wall`).
+  - `release` and `tinderrectangle`: older long probes remain active for the
+    alternate left-trigger-2 opener and early `(3,4)` rectangle separation.
+  - `handoff`: initial-board search for firing trigger 2 without making
+    `(11,7)` a wall.
+- `cooperation/tug_of_war` has a new verified trigger-2 frontier after the
+  trigger-1 setup:
+  `^< ^^ ^^ ^^ ^^ ^^ ^^ ^^ <^ ^v >v ^^ <^ <^ <^ v^ v^ v^ v^ v^ <^ v^`
+  verifies as `Playing` at 22 turns. Diagnostics: players `(0,0)` and `(10,16)`;
+  rats `(7,0)`, `(4,8)`, `(5,14)`; 0 explosives; 7 webs; 5 trigger-3 cells
+  reachable; `reachable_rats=1/3`. This is progress over the previous
+  "trigger 2 unreachable" boundary.
+- Immediate `tug_of_war` follow-up is still a trap. Firing the nearest
+  lower-right trigger 3 with `>.` leaves all 3 rats unreachable and zero
+  triggers. The reachable lower rat can be lured to `(5,13)` with suffix
+  `^^ ^^ ^^`, but quick checks did not produce a `ratsle:2` cleanup or side
+  placement at `(5,15)` / `(6,14)`. Long probes for trigger-3 timing and opening
+  the top `(7,1)` web remain active.
+- `cyborg_rats/ai_takeover` has a new safe trigger-7 family from the initial
+  board. Representative verified frontier:
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>^>^`
+  verifies as `Playing` at 44 turns. It fires trigger 7 without the old
+  `(16,8)` wall trap, leaving 14 rats, 6 explosives, 28 webs, 7 triggers, and
+  `reachable_rats=13/14`; player is at `(16,9)`. Appending `^` gives another
+  live 45-turn frontier at `(16,8)` with one fewer web:
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>^>^^`.
+  This disproves the earlier assumption that trigger 7 itself is always fatal.
+- Follow-up `ai_takeover` checks from the safe trigger-7 frontier found no
+  direct branch to trigger 6, trigger 8, trigger 2, or `ratsle:10`, and strict
+  event-order probes `6,8,2`, `8,6,2`, `6,2,8`, plus `triganylookup` and
+  `macro`, returned no solution. Waypoint checks to trigger cells `(17,16)`,
+  `(19,18)`, and `(18,19)` from the 45-turn state were dynamically
+  unreachable, even though static diagnostics list those cells in the reachable
+  component. The next `ai_takeover` search should treat the 44/45-turn safe-7
+  line as a staging mechanism and look for a route-shaping move before trying
+  6/8, not repeat direct trigger-order searches.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
