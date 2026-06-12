@@ -1782,6 +1782,20 @@ real new mechanism frontier.
   `cellnot:3,15,explosive`, `ratgone:0,15`, and resource-gated `ratsle:2`
   returned no branches. A 100s A* lookup from B17 found only a worse 29-turn
   continuation with 3 rats and zero reachable triggers.
+- `reload_v3`: an event-macro run from the new T2 prefix found the best current
+  frontier, a verified 100-turn 1-rat state:
+  `vvv<<<<<<vvv><^^^>>>>>>>>>>>>>^^^^^v<<v<^^>>^^^>^^^^^<<<<vv<<<<<>>>>>^^^^^^<<<<<<<<<vvvvv<vvvv>>>>>>`.
+  Diagnostics: player `(12,11)`, final rat `(0,21)`, 5 explosives, 8 webs, 12
+  triggers, `player_reachable cells=364`, but `reachable_rats=0/1` and only
+  triggers 7 are reachable. Firing trigger 7 is possible, but it dead-ends:
+  one representative branch
+  `vvvvvvvv<<<<<vv<<<<^>>^>^^^^^^^^^^^>` leaves player `(7,8)`, final rat
+  `(0,21)`, 7 webs, 10 triggers, and `player_reachable triggers=0/10`.
+  Follow-up branchdumps from the 100-turn state found no direct win, no useful
+  `triggeronly:6`, no removal of `(1,21)` web or `(2,21)` explosive, and no
+  1-rat frontier with the final rat reachable or trigger 1 reachable. This is a
+  real advance, but the next idea must change the final pocket before or during
+  the macro route; firing 7 after the macro route is the wrong last event.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
