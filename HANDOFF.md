@@ -1223,6 +1223,62 @@ long direct solves.
   `UNREACHABLE`; direct `lookup --goal win` from the opener returned
   `NO_SOLUTION` quickly. Do not transfer `release`'s opener mechanically.
 
+### Continuation pass - 2026-06-12 evening
+
+No new verified wins. Solution artifacts were intentionally left unchanged.
+This pass shifted more work from broad search to human-style mechanism checks.
+
+- `release`: a stronger row-17 actor frontier exists:
+  `v<vv^^>>vv><<v<<<^<^^<<>>>vvv>>>>>>>>`. It verifies as `Playing` at 37
+  turns with 21 rats, player `(13,14)`, and the bottom actor at `(13,17)`.
+  This is better than the old `(2,16)` collapse: the actor can be carried east
+  along row 17 before the player leaves the lower-left. However, the actual
+  state cannot continue the actor to `(14,17)` or pair `(14,17)` with useful
+  player lure squares; branchdumps for `ratat:14,17`,
+  `ratplayer:14,17,16,14`, `ratplayer:14,17,18,14`, and
+  `ratplayer:14,17,18,13` returned empty. `ratgeom` says `(13,17)->(14,17)`
+  is locally possible from synthetic right-side placements, so the blocker is
+  route/staging, not rat movement. Trigger 5 from this frontier is reachable
+  while preserving 21 rats, but it still leaves no trigger-6 continuation.
+- `tinderrectangle`: the exact separated winning geometry was checked rather
+  than another ignition search. From the 84-turn safe-side prefix
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^`,
+  branchdumps for `ratplayer:2,6,14,7`, `ratplayer:3,6,14,7`,
+  `ratplayer:4,6,14,7`, and `ratplayer:6,6,14,7` returned empty. From the
+  135-turn staging, the lower rat can be moved to `(1,4)` with all 16 rats
+  preserved, but only with the player on the wrong side; target checks for
+  `ratat:2,5` or `ratplayer:2,5,...` from that state returned empty. Treat the
+  missing tactic as a release-gate geometry problem, not as missing cleanup.
+  A sidecar pass also found no 16-rat branches for `cellnot:3,4,web`,
+  `playerfacing:2,4,east|west|south`, or `rectsep` from the 135-turn family,
+  nor for `cellnot:2,4,web` / `cellnot:3,4,web` / `rectsep` from the 113-,
+  116-, or 84-turn pump cuts. Relaxing to 15 rats can open `(3,4)`, but only
+  after killing the lower rat; short `win` checks from those 15-rat states also
+  returned empty.
+- `reload_v3`: trigger 7 first has real all-rat branches such as
+  `^^^^^<<<<<<^^^`, but follow-up trigger 2 leaves all three rats with
+  `reachable_rats=0`. The concrete `7 -> 2` branch
+  `^^^^^<<<<<<^^^vvv>>>>>>>>>>>>>^vvvvv<<v<` verifies as `Playing` with
+  triggers reduced but no reachable rats. This reinforces that the chain fails
+  on preserving post-trigger access, not on reaching early triggers.
+- `cooperation/blocked_v2`: the preserved-rat lead
+  `^< ^^ v^ ^^ vv ^v` remains valid and keeps all 9 rats, but a sidecar pass
+  found that the only concrete route to upper trigger 3 kills the preserved
+  interior rat before trigger 3 fires. From the preserved frontier, checks for
+  `cellnot:6,10,web`, `triggeronly:3`, and `playerat:13,4` returned empty
+  across relaxed rat-count windows. From the resulting upper-3 basin, trigger 2
+  and lower-left pocket access targets also returned empty. This now looks more
+  like a structural trigger-2 blocker than a missed mop-up.
+- `cooperation/handoff` and `cooperation/tug_of_war`: quick structural
+  rechecks returned empty for the critical boundary changes (`handoff`
+  `reachable:10,6` / `cellnot:10,5,web`; `tug_of_war`
+  `cellnot:7,1,web` / `cellnot:8,1,web`). Keep treating both as likely
+  authoring blockers unless a new event can change those sealed components.
+- `cyborg_rats/ai_takeover`: from opener `v<vv^^>>v`, trigger-open checks for
+  trigger 7/8 again returned empty in short windows. The useful mental model is
+  still that reachable trigger 7 self-seals its approach unless a non-player
+  actor preserves the relevant cell during the zap.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 8.
