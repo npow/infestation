@@ -1909,6 +1909,39 @@ real new mechanism frontier.
   station the player at `(3,21)`. From the 19-turn trigger-2 state, preserving
   all 3 rats while changing `(3,21)` web also returned empty.
 
+### Status check - 2026-06-12 23:15Z
+
+- Fetched `fork` again; `HEAD` still equals `fork/claude/new-puzzles` at
+  `0b6333c`. A fresh sweep of `solver/solutions/final_solutions.json` still
+  verifies all 28 recorded original solutions as `result=Won` on this checkout.
+- No new hard puzzle has a verified `result=Won`.
+- `cooperation/blocked_v2`: found a better all-rat-preserving trigger-3
+  frontier:
+  `^< ^^ v^ ^^ vv ^v v^ ^^ v> v> v> vv vv ^v ^v ^v ^v`.
+  It verifies as `Playing` at 17 turns with 8 rats, 15 explosives, 11 webs,
+  9 triggers, and `reachable_rats=6/8`. Follow-up checks from that state for
+  `reachable:0,15`, `reachable:14,19`, `trigger:2`, `trigger:5`,
+  `cellnot:10,13,web`, and `cellnot:10,14,web` returned no branch in the tested
+  budgets, so it is a real frontier but not yet an access solution.
+- `cooperation/tug_of_war`: a late trigger-3 branch from the 22-turn frontier
+  was found and verified:
+  `^< ^^ ^^ ^^ ^^ ^^ ^^ ^^ <^ ^v >v ^^ <^ <^ <^ v^ v^ v^ v^ v^ <^ v^ ^v ^v ^v ^v ^v ^v ^v ^v ^v ^v ^v ^v ^v vv vv vv v> v> v> >>`.
+  It is not useful: it leaves 3 rats, 0 explosives, 0 triggers, and only
+  `reachable_rats=1/3`.
+- `cyborg_rats/ai_takeover`: the 113-turn 3-rat cleanup state was checked more
+  tightly. `playerat:3,17`, 18-hold detonation of `(14,12)`, 18-hold removal of
+  `(11,9)`, and 45-hold `ratsle:2` all returned empty. The 45-hold `v>` trace
+  explains the near miss: it drops to one rat only by killing the player in the
+  black-hole row.
+- `release`: backing up to the 24-turn lower-actor state did not produce a
+  branch for `cellnot:1,16,explosive` or
+  `triggeronlycellnot:6,1,16,explosive`; backing up to 23 turns did not stage
+  `ratplayer:5,17,16,14`. This weakens the hypothesis that the lower actor can
+  be preserved through trigger 6 by simply undoing the final actor-killing move.
+- `tinderrectangle`: from the fresh separated state `<<^<<^<>^>>>vv^^<<`,
+  preserving the lower rat at `(5,5)` while moving the player to `(13,7)` or
+  `(14,7)`, and opening `(13,2)` while preserving that rat, returned no branch.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
