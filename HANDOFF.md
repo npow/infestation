@@ -1,7 +1,7 @@
 # Infestation solving campaign — HANDOFF
 
 Resume doc for continuing the effort on another machine. **Goal: solve the 7
-remaining hard levels.** 28/35 non-Claude playable CSV levels + 5 new puzzles
+remaining hard levels.** 29/36 non-Claude playable CSV levels + 5 new puzzles
 are already solved & shipped.
 
 ---
@@ -70,7 +70,7 @@ so every result is exactly what the shipped game does. Binary: `target/release/s
 
 ## 3. Status
 
-### Solved - 28/35 non-Claude levels + 5 new (all oracle-verified `result=Won`)
+### Solved - 29/36 non-Claude levels + 5 new (all oracle-verified `result=Won`)
 Move strings: **`solver/solutions/SOLUTIONS.md`** (machine-readable: `final_solutions.json`).
 Browser auto-player: `solver/solutions/autoplay.js`. New puzzles: `levels/claude/`.
 
@@ -1911,10 +1911,15 @@ real new mechanism frontier.
 
 ### Status check - 2026-06-12 23:15Z
 
-- Fetched `fork` again; `HEAD` still equals `fork/claude/new-puzzles` at
-  `0b6333c`. A fresh sweep of `solver/solutions/final_solutions.json` still
-  verifies all 28 recorded original solutions as `result=Won` on this checkout.
+- Fetched `fork` again; the branch matched `fork/claude/new-puzzles` before this
+  pass. After adding `old_levels/old_levels.csv`, a fresh sweep of
+  `solver/solutions/final_solutions.json` verifies all 29 recorded original /
+  non-Claude solutions as `result=Won` on this checkout.
 - No new hard puzzle has a verified `result=Won`.
+- The portal-linked old-level hub `old_levels/old_levels.csv` is now recorded in
+  the solution artifacts. It verifies with `vvvv<<<<<` (`result=Won`,
+  9 turns). The three child old levels remain intentionally labeled broken in
+  their hub metadata and quick current-oracle solves did not find wins.
 - `cooperation/blocked_v2`: found a better all-rat-preserving trigger-3
   frontier:
   `^< ^^ v^ ^^ vv ^v v^ ^^ v> v> v> vv vv ^v ^v ^v ^v`.

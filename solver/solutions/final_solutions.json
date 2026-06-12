@@ -84,6 +84,11 @@
     "players": 1,
     "moves": 76
   },
+  "old_levels/old_levels.csv": {
+    "sol": "↓↓↓↓←←←←←",
+    "players": 1,
+    "moves": 9
+  },
   "order_of_operations_new_v2.csv": {
     "sol": "↓→→→→↑→↑↑↑→→↓→.....→→→↓←↓↓↓↓↓↓↓↓↓↓↓↓",
     "players": 1,
