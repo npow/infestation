@@ -1739,6 +1739,50 @@ real new mechanism frontier.
   The next `ai_takeover` target is a non-collapsing trigger-7 event such as
   `triggeropen:7,50` from a route that does not first vacate/destroy `(16,8)`.
 
+### Continuation pass - 2026-06-12 post-status targeted probes
+
+- `cyborg_rats/ai_takeover`: the known 128-turn pre-trigger-7 state
+  `v>v^>>v^<<vv^^<<vvv<<^^^<<<vv<<^^^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^^>^^^^^>>>^>>>>>>>>>>>vvv>vvv`
+  is a precise trap, not just a slow search basin. Diagnostics before firing 7
+  have player `(16,8)`, rats `(16,4)`, `(18,4)`, `(15,5)`, `(16,5)`,
+  `(16,6)`, and player reachability `265` cells. Appending `v` fires trigger 7
+  and leaves the player at `(16,9)` with reachability `1` and all 5 rats
+  unreachable. Bounded branchdumps from that state for `triggeropen:7,50` and
+  `triggeronlycellnot:7,16,8,wall` returned no branches. A separate south-access
+  batch from the initial board also found no branch, with at least 5 rats
+  preserved, for `cellnot:15,10,web`, `cellnot:16,12,web`,
+  `cellnotratat:15,10,web,15,9`, or `cellnotratat:16,12,web,16,11`. The next
+  `ai_takeover` idea needs an earlier top-release/trigger-6/trigger-8 mechanism;
+  do not spend more time on one- or two-move wiggles at trigger 7.
+- `reload_v3`: a better trigger-2 choreography exists:
+  `vvv<<<<<<vvv><^^^>>>>>>>>>>>>>^^^^^v<<v<^`. It verifies as `Playing` at 41
+  turns, fires trigger 2 with all 3 rats alive, keeps one rat reachable, and has
+  already cleared bottom web `(8,22)`. Diagnostics: player `(17,15)`, rats
+  `(14,5)`, `(17,14)`, `(0,21)`, `webs=15`, `triggers=12`. Follow-up probes
+  from this prefix for preserved-rat `triggeronly:1`, `triggeronly:3`,
+  `triggeronly:6`, and `cellnot:2,21,explosive` returned no branch. This is a
+  better staging prefix than the 19-turn trigger-2 false milestone, but it still
+  needs a rat-position change before the next irreversible event.
+- `release`: the alternate opener `v<vv^^>>>>v` is verified `Playing` and is
+  materially different from `v<vv^^>>v`: it fires trigger 5 before trigger 4 and
+  leaves 23 rats, 5 explosives, 27 webs, 7 triggers, and `21/23` reachable rats.
+  However, direct structural checks from the standard and alternate trigger
+  families still found no way to open `(18,5)`, make left trigger 2 `(0,16)`
+  reachable, break `(16,17)`, move a runner to `(17,19)`, or continue
+  trigger-order `3,5,6` / `3,4,6` while preserving a useful rat. The staged
+  `(2,16)` actor is real but is removed by every checked next action.
+- `cooperation/blocked_v2`: higher-budget checks tightened the B17/B23 blocker.
+  B17 still has 8 rats, 6 reachable, and trigger 2 cells `(5,11)` / `(3,14)`
+  unreachable. B23 still has rats `(9,13)`, `(9,14)`, `(0,15)` with 2 reachable,
+  and the lower-left pocket remains sealed by `(1,15)` web,
+  `(2,15)/(3,15)` explosives, and `(4,15)` web. From both B17 and B23, waypoint
+  probes to `. | 5,11` and `. | 3,14` were unreachable. Structural checks for
+  `triggeronly:2`, `triggeropen:2,20`, `triggeronlycellnot:2,1,15,web`,
+  `cellnot:1,15,web`, `cellnot:2,15,explosive`,
+  `cellnot:3,15,explosive`, `ratgone:0,15`, and resource-gated `ratsle:2`
+  returned no branches. A 100s A* lookup from B17 found only a worse 29-turn
+  continuation with 3 rats and zero reachable triggers.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
