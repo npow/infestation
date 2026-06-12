@@ -413,7 +413,9 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   states for rat `(6,6)` plus safe cells `(14,6)`, `(14,7)`, `(15,7)`,
   `(13,8)`, `(14,8)`, `(15,8)` returned no solution. The route must synchronize
   the rat's final step to `(6,6)` with the player already on the safe side, or
-  use a different earlier setup.
+  use a different earlier setup. Relaxing rat preservation from the 16-turn
+  state also timed out; its best state was only the known near-miss with rat
+  `(6,6)` and player `(10,6)`, not a safe-side placement.
 - `release`: the left trigger-2 mechanism was checked directly from the strong
   opener `v<vv^^>>v`. Preserving at least 20 rats, probes for `ratat:0,16`,
   `cellnot:1,16,explosive`, `cellnot:19,7,2`, and `cellnot:18,5,web` returned
