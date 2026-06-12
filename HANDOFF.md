@@ -836,6 +836,33 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
     remain unreachable and `(0,15)` is still sealed. Do not continue the
     trigger-5-then-trigger-2 family unless an earlier prefix changes the
     lower-left pocket first.
+  - `solver`: `lookup` / `branchdump` now support
+    `--goal ratplayer:ratx,raty,playerx,playery`. This is a diagnostic-only
+    compound target for timing puzzles where a rat location is useful only with
+    the player in the matching lure cell.
+  - `release`: trigger side matters. Consuming trigger 2 on the right side is a
+    false success because the consumed trigger cell is overwritten before zap
+    resolution, so only the left trigger-2 cell is zapped. To detonate the
+    right explosive column and clear `(18,5)`, trigger 2 likely has to be
+    consumed from the left cell `(0,16)` or the right column must be detonated
+    directly. Targeted probes from the standard opener `v<vv^^>>v` found no
+    route to `ratat:19,7`, `cellnot:18,6,explosive`, `cellnot:18,5,web`, or
+    player staging cells `(19,6)`, `(19,8)`, `(17,7)` in tested budgets.
+  - `chase`: the player can walk webs, so `(11,17)` is not web-blocked; the real
+    blocker is plank `(11,15)`/`(12,15)`. The no-trigger pocket prefix
+    `>>vv>>>>>>>>>^^^` reaches player `(13,16)` with helper rat `(13,17)`, but
+    the rat is one turn too close. Targeted `ratplayer` timing checks from
+    `>>vv>>>>>>>>>` for useful two-cell/offset stages and direct
+    `cellnot:11,15,plank` / `cellnot:12,15,plank` returned empty in the tested
+    budgets. Do not continue the adjacent-helper route unless a new entry keeps
+    the helper separated before the climb.
+  - `cooperation/blocked_v2`: a better-looking lower-trigger-3 prefix
+    `^< ^^ <^ <^ <v <^ v> .> <> vv ^v .v <v ^< vv` leaves 8 rats, 6 reachable,
+    and zero planks, but it still does not touch the lower-left mechanism. From
+    the 13-turn pre-trigger prefix `^< ^^ <^ <^ <v <^ v> .> <> vv ^v .v <v`,
+    `playerat:10,13`, `cellnot:10,13,spiderweb`, and
+    `cellnot:12,11,explosive` returned empty in the tested budgets; lower
+    trigger 3 only opens the top pack and leaves the x=10 seam unchanged.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth

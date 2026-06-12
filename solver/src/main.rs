@@ -581,6 +581,7 @@ enum LookupGoal {
     CellReachable(i32, i32),
     PlayerAt(i32, i32),
     RatAt(i32, i32),
+    RatAtWithPlayer(i32, i32, i32, i32),
     RatAtWithCell(i32, i32, i32, i32, CellKind),
     RatGone(i32, i32),
     RatsAtMost(usize),
@@ -631,6 +632,25 @@ impl LookupGoal {
             "ratat" => {
                 let (x, y) = parse_required_point(arg);
                 Self::RatAt(x, y)
+            }
+            "ratplayer" => {
+                let mut parts = arg.split(',');
+                let rat_x = parts.next().expect("rat x").trim().parse().expect("rat x");
+                let rat_y = parts.next().expect("rat y").trim().parse().expect("rat y");
+                let player_x = parts
+                    .next()
+                    .expect("player x")
+                    .trim()
+                    .parse()
+                    .expect("player x");
+                let player_y = parts
+                    .next()
+                    .expect("player y")
+                    .trim()
+                    .parse()
+                    .expect("player y");
+                assert!(parts.next().is_none(), "expected ratx,raty,playerx,playery");
+                Self::RatAtWithPlayer(rat_x, rat_y, player_x, player_y)
             }
             "ratcell" => {
                 let mut parts = arg.split(',');
@@ -769,6 +789,11 @@ fn lookup_goal_reached(
             positions_matching(current, |cell| cell == CellKind::Player).contains(&(x, y))
         }
         LookupGoal::RatAt(x, y) => rat_at(current, (x, y)),
+        LookupGoal::RatAtWithPlayer(rat_x, rat_y, player_x, player_y) => {
+            rat_at(current, (rat_x, rat_y))
+                && positions_matching(current, |cell| cell == CellKind::Player)
+                    .contains(&(player_x, player_y))
+        }
         LookupGoal::RatAtWithCell(rat_x, rat_y, cell_x, cell_y, kind) => {
             rat_at(current, (rat_x, rat_y))
                 && current.cell_kind_at(cell_x as usize, cell_y as usize) == kind
@@ -839,6 +864,13 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         LookupGoal::RatAt(x, y) => {
             let rats = rat_positions(current);
             nearest_target_distance(&rats, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::RatAtWithPlayer(rat_x, rat_y, player_x, player_y) => {
+            let rats = rat_positions(current);
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            nearest_target_distance(&rats, &[(rat_x, rat_y)])
+                + nearest_target_distance(&players, &[(player_x, player_y)])
+                + heuristic(current) / 1_000
         }
         LookupGoal::RatAtWithCell(rat_x, rat_y, cell_x, cell_y, kind) => {
             let rats = rat_positions(current);
@@ -932,6 +964,11 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
             nearest_target_distance(&players, &[(x, y)])
         }
         LookupGoal::RatAt(x, y) => !rat_at(current, (x, y)) as i64,
+        LookupGoal::RatAtWithPlayer(rat_x, rat_y, player_x, player_y) => {
+            let player_missing = !positions_matching(current, |cell| cell == CellKind::Player)
+                .contains(&(player_x, player_y)) as i64;
+            (!rat_at(current, (rat_x, rat_y)) as i64) + player_missing
+        }
         LookupGoal::RatAtWithCell(rat_x, rat_y, cell_x, cell_y, kind) => {
             let cell_missing =
                 (current.cell_kind_at(cell_x as usize, cell_y as usize) != kind) as i64;
