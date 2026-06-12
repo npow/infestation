@@ -1259,8 +1259,23 @@ This pass shifted more work from broad search to human-style mechanism checks.
   `^^^^^<<<<<<^^^`, but follow-up trigger 2 leaves all three rats with
   `reachable_rats=0`. The concrete `7 -> 2` branch
   `^^^^^<<<<<<^^^vvv>>>>>>>>>>>>>^vvvvv<<v<` verifies as `Playing` with
-  triggers reduced but no reachable rats. This reinforces that the chain fails
-  on preserving post-trigger access, not on reaching early triggers.
+  triggers reduced but no reachable rats. A sidecar pass rechecked the all-rat
+  trigger-1 rat-trigger frontier
+  `^>>>>>>>^^vvvvvv<<<^^<<^^<<<<^<<<<<<<<v<v>` and found no preserved branch for
+  `triggeronly:2/3/4/5`, bottom trigger-2 cell access, `allreachable`,
+  `cellnot:1,21,web`, or `triggeronly:6`. Relaxing to two rats only reaches the
+  dead top-trigger-2 basin with `reachable_rats=0`. This reinforces that the
+  chain fails on preserving post-trigger access, not on reaching early triggers.
+- `chase`: the 51- and 107-turn helper frontiers are too late for the `(0,19)`
+  pocket. In both, trigger 4 has already made `(2,19)` a wall, while `(1,19)`
+  remains web and the rat at `(0,19)` is unreachable. The route
+  `>.>>^^>^>>>^>><<v<^^v>>>>^^>>>^<^<<` from the 20-turn cut physically clears
+  `(3,18)/(3,19)` while preserving lower trigger-4 cells, but it self-seals the
+  player at `(13,9)` with one reachable cell. From the 20-turn cut,
+  `cellnot:1,19,web`, `playerat:1,19`, `playerat:2,19`, `ratgone:0,19`, and
+  `triggeronly:3` all returned empty; direct initial-board pocket checks also
+  returned empty. Continue only if a route clears the lower explosives without
+  self-sealing or without consuming trigger 4.
 - `cooperation/blocked_v2`: the preserved-rat lead
   `^< ^^ v^ ^^ vv ^v` remains valid and keeps all 9 rats, but a sidecar pass
   found that the only concrete route to upper trigger 3 kills the preserved
@@ -1277,7 +1292,10 @@ This pass shifted more work from broad search to human-style mechanism checks.
 - `cyborg_rats/ai_takeover`: from opener `v<vv^^>>v`, trigger-open checks for
   trigger 7/8 again returned empty in short windows. The useful mental model is
   still that reachable trigger 7 self-seals its approach unless a non-player
-  actor preserves the relevant cell during the zap.
+  actor preserves the relevant cell during the zap. Trigger 6 is statically
+  reachable from the opener, but local checks for `triggeropen:6,2`,
+  `triggeronly:6`, and strict `6,8,7` / `6,8,7,2` trigger orders produced no
+  continuation; do not treat trigger 6 as a free bottom-door opener.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
