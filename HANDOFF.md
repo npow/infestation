@@ -594,6 +594,17 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   at the earlier junction also loses because a top rat joins the chase. This
   narrows the lower-row solution further: the release must not create a
   one-cell tail chase on row 3.
+- `tinderrectangle`: the alternative vertical-release hypothesis was also
+  checked. From the 71-turn prepared-safe branch, preserved-rat branchdumps can
+  clear `(2,4)`, `(2,5)`, and `(2,6)` and can place the lower rat at `(2,6)`;
+  representative suffix:
+  `>^^^^<<<vvv<<^^^<<<<<vvv<<<<>>`, total 101. That verifies as `Playing` with
+  all 16 rats, lower rat `(2,6)`, player `(3,6)`. However, moving down ignites
+  and kills the player, moving east only shifts the one-cell chase to
+  `(3,6)`/`(4,6)`, and A*/branchdump continuations for `rectlower`,
+  `playerat:14,7`, and `playerat:15,7` returned empty. So merely opening the
+  x=2 vertical shaft is not enough; the release must give the player separation
+  before the rat reaches the lower ignition row.
 - `release`: the left trigger-2 route was sharpened. From `v<vv^^>>v`, `wp` to
   `(2,17)` is unreachable, and preserved-rat branchdumps for `ratat:2,17`,
   `cellnot:2,17,web`, `ratat:0,16`, early `trigger:6`,
