@@ -495,6 +495,53 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   `release` suffix. Do not repeat a direct cell-by-cell ASP dump. If revisiting
   ASP, encode only dynamic facts around reachable components/events, use fixed
   horizons, and verify every candidate with `target/release/solver verify`.
+- Long parallel wave on 2026-06-12: 17 independent 900s structural probes were
+  run concurrently (17-22 solver processes; memory, not CPU, was the limiting
+  resource). No verified wins and no branch outputs. Empty branchdump results:
+  `tinderrectangle` safe-side `rectlower` / `rectready`; `release` from
+  `v<vv^^>>v` for `cellnot:18,5,web`, `cellnot:18,6,explosive`,
+  `ratat:19,7`, and `trigger:2` with `--min-rats 20`; `reload_v3` from the
+  45-move trigger-1 branch for `trigger:6`, `cellnot:1,21,web`, and
+  `winready`; `chase` for preserved `cellnot:11,16,web` and
+  `reachable:11,17`; `handoff` for preserved `cellnot:10,5,web` and
+  `ratat:11,7`; `tug_of_war` for preserved `cellnot:7,1,web`; and
+  `blocked_v2` for `reachable:0,15`. The non-branch `tinder` / `geomlure`
+  processes ended without useful output under memory pressure, so treat those
+  as inconclusive rather than proof.
+- `tinderrectangle`: a better prepared-safe branch is
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv`.
+  It verifies as `Playing` for 71 turns, with player `(14,7)`, all 16 rats
+  alive, lower rat still `(2,3)`, and webs reduced from 43 to 30. This proves
+  "safe side first, pre-open lower lane, return safe" is feasible. However,
+  follow-up checks from this branch for `cellnot:3,4,web` with all 16 rats and
+  for `rectlower` returned no branches in the tested budgets. The missing step
+  is still releasing the pinned lower rat into `(2..6,6)` without overrun.
+- `release`: a sharper staging branch is `v<vv^^>>v^vv><<`. It verifies as
+  `Playing` for 15 turns with 23 rats, 5 explosives, 25 webs, player `(8,13)`,
+  and rats at `(16,6)`, `(16,7)`, `(16,8)`, plus the sealed `(18,4)` rat.
+  Trigger 2 remains unreachable; trigger 6 is player-reachable only at distance
+  48/46. Follow-up `trigger:6` and `5,6,2` trigger-order checks did not open
+  the right column. This narrows the blocker: moving rats near x=16 is possible,
+  but the required event is opening/routing through the x=17 barrier before the
+  pack collapses.
+- `reload_v3`: the fresh 45-move trigger-1 branch
+  `^>>>>>>>^^vvvvvv<<<^^<<^^<<<<^<<<<<<<<v<v^v>>` verifies as `Playing`, but
+  diagnostics show only two rats left, both unreachable: `(14,5)` and `(0,21)`;
+  trigger 6 at `(9,4)` / `(2,22)` is also unreachable. The 900s follow-up
+  probes for `trigger:6`, `cellnot:1,21,web`, and `winready` all returned empty.
+  Treat this branch as another dead low-rat basin unless a prior setup changes
+  bottom-left access.
+- Two-player blockers tightened further. `handoff` 7-turn setup
+  `v^ >^ >^ >^ >^ >^ ^^` leaves `(10,6)` sealed; no branches for clearing or
+  reaching `(11,8)`, `(12,7)`, `(12,8)` while preserving all 5 rats, and reaching
+  `(11,8)` after trigger 2 is too late (2 rats, no explosives/triggers,
+  `reachable_rats=0`). `tug_of_war` 17-turn prefix
+  `^< ^^ ^^ ^^ ^^ ^^ ^^ ^^ <^ ^v >v ^^ <^ <^ <^ v^ v^` leaves rats `(7,0)`,
+  `(4,8)`, `(3,12)` with only 1/3 reachable; direct plank-break checks for
+  `(7,2)` / `(8,2)` and staging waypoints failed. `blocked_v2` prefix
+  `v< v^ v^ << <^ <^ ^^ ^v ^^` leaves the `(0,15)` rat unreachable; no branch
+  for trigger 2, detonating `(2,15)`, row-17 black-hole lure staging, or
+  `ratgone:0,15` under the tested constraints.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
