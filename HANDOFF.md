@@ -1345,6 +1345,58 @@ This pass shifted more work from broad search to human-style mechanism checks.
   and `--min-rats 6` also returned empty, so the upper-rat-wall route is not
   just one preserved-rat short.
 
+### Continuation pass - 2026-06-12 trap/resource gates and mechanism lanes
+
+- Solver tooling now has a broader `TrapConstraints` gate for lookup-style
+  searches. In addition to reachable/trapped rats, `lookup`, `branchdump`,
+  `triglookup`, and `triganylookup` accept:
+  `--require-reachable-cell x,y` / `--cleanup-cell x,y`,
+  `--min-explosives N`, `--min-triggers N`, and `--max-webs N`.
+  These reject branches that reach a local milestone only after spending the
+  trigger/explosive/corridor resource a human would know is needed for cleanup.
+  `cargo test -p solver --no-run` and `cargo build --release -p solver` pass.
+- `tinderrectangle`: the 16-rat branch
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^^^^^<<<vvv<<^^^<<<vv<<v<<<^>>^^>>>>>v>vv>>^^^>>vvvv^^^^<<vvv<<^^^<<<<<<<`
+  is a clean diagnostic state, not proven progress. `ratgeom` from that state
+  finds no one-step way to move the lower rat left/up; all safe carry geometry
+  pulls it right until the player hits the `(11,3)` wall. Spending the lower rat
+  cheaply gives better 15-rat staging states such as suffixes `<v>`, `><v<`,
+  and `<vv>^^`, all with `reachable_rats=15/15`, `webs=15`, and
+  `trapped_unreachable_rats=0`. Quick win and `cellnot:1,2,web` probes from
+  those states returned empty, so the next real milestone is a safe top-row
+  notch, not direct ignition.
+- `reload_v3`: a useful staged prefix after the trigger-1 family is
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v>><`. It verifies as `Playing` with
+  all 3 rats alive: player `(1,18)`, roaming rat `(2,18)`, sealed rat `(0,21)`,
+  and trigger 2 still intact. The active follow-up is a direct inverse test:
+  `branchdump --prefix <that> --goal cellnot:2,21,explosive --min-rats 2`.
+  If it succeeds, immediately verify whether the `(0,21)` rat becomes solvable;
+  if it fails, this trigger-1 station likely stages the roaming rat too high.
+- `chase`: the healthier staging prefix is
+  `^>>>^^>^>^>>>>>v>vvvvv^^^^^^<<<^`, which places the player at `(10,12)` and
+  helper rat at `(11,14)` while keeping all triggers reachable. This is better
+  than letting the helper fall to `(12,15)`. Active lanes test whether this
+  staging can change web `(11,16)` or reach `winready`; any low-rat branch that
+  leaves `(11,16)` intact should be treated as another dead basin for the
+  `(11,17)` rat.
+- `tug_of_war`: do not rush trigger 2/3 from the symmetric opener. The useful
+  asymmetric staging line `>< >< ^^ ^^ ^^ ^^ ^^ ^^ <^` leaves 5 rats,
+  14 explosives, 15 triggers, and `reachable_rats=4/5`. Active lanes test
+  `explosivesle:4` and `win` while preserving at least 10 triggers and keeping
+  at least 4 rats reachable. The top pocket remains suspicious until
+  `cellnot:7,1,web` or `cellnot:8,1,web` has a concrete mechanism.
+- `handoff`: the current better branch
+  `v^ >^ >^ >^ >^ >^ ^^ vv ^v .> .> .> v> v< <<` leaves 3 rats, 5 explosives,
+  and 2 triggers. It is not enough that trigger 2 at `(2,2)` is reachable; the
+  important questions are whether `(10,6)` can be removed before resources are
+  gone or whether it can be moved to trigger `(11,7)`. Active lanes test
+  `ratgone:10,6` and `ratat:11,7` with trigger/explosive preservation.
+- `blocked_v2`: the correctly spaced staged line
+  `^< ^^ v^ ^^ v^ ^^ v^ ^> v> ^> vv ^v v^ ^v vv ^v` verifies as `Playing` with
+  8 rats, `webs=12`, no planks, and `trapped_unreachable_rats=0`. Use this
+  instead of the malformed concatenated prefix. Active lane tests
+  `triggeronly:3` while preserving 8 rats and at least 4 reachable rats.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 8.

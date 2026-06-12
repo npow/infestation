@@ -214,6 +214,7 @@ fn print_diagnostics(grid: &Grid) {
         .iter()
         .filter(|&&(x, y)| player_dist[y as usize][x as usize] != i32::MAX)
         .count();
+    let trapped_unreachable_rats = trapped_unreachable_rat_count(grid);
 
     println!(
         "features rats={} explosives={} webs={} triggers={} planks={} walls={}",
@@ -237,6 +238,7 @@ fn print_diagnostics(grid: &Grid) {
         reachable_triggers,
         triggers.len()
     );
+    println!("trapped_unreachable_rats={trapped_unreachable_rats}");
     println!("explosives=[{}]", format_positions(&explosives));
     println!("blackholes=[{}]", format_positions(&blackholes));
     for &(x, y) in &triggers {
@@ -676,6 +678,52 @@ impl LookupOrder {
             "astar" => Self::Astar,
             other => panic!("unknown lookup order {other}"),
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct TrapConstraints {
+    min_reachable_rats: Option<usize>,
+    max_trapped_rats: Option<usize>,
+    min_reachable_cells: Option<usize>,
+    min_reachable_triggers: Option<usize>,
+    require_reachable_trigger: Option<u8>,
+    require_reachable_cell: Option<(i32, i32)>,
+    min_explosives: Option<usize>,
+    min_triggers: Option<usize>,
+    max_webs: Option<usize>,
+}
+
+impl TrapConstraints {
+    fn accepts(self, grid: &Grid, play_state: PlayState) -> bool {
+        if play_state == PlayState::Won {
+            return true;
+        }
+        let features = Features::from_grid(grid);
+        self.min_reachable_rats
+            .is_none_or(|minimum| reachable_rat_count(grid) >= minimum)
+            && self
+                .max_trapped_rats
+                .is_none_or(|maximum| trapped_unreachable_rat_count(grid) <= maximum)
+            && self
+                .min_reachable_cells
+                .is_none_or(|minimum| player_reachable_cell_count(grid) >= minimum)
+            && self
+                .min_reachable_triggers
+                .is_none_or(|minimum| reachable_trigger_count(grid) >= minimum)
+            && self
+                .require_reachable_trigger
+                .is_none_or(|number| nearest_reachable_trigger_distance(grid, number).is_some())
+            && self
+                .require_reachable_cell
+                .is_none_or(|point| distance_from_player(grid, point) < 1_000)
+            && self
+                .min_explosives
+                .is_none_or(|minimum| features.explosives >= minimum)
+            && self
+                .min_triggers
+                .is_none_or(|minimum| features.triggers >= minimum)
+            && self.max_webs.is_none_or(|maximum| features.webs <= maximum)
     }
 }
 
@@ -2019,6 +2067,7 @@ fn solve_lookup(
     canonical: bool,
     goal: LookupGoal,
     min_rats: Option<usize>,
+    trap_constraints: TrapConstraints,
     progress_every: u64,
 ) -> Option<(Vec<Vec<Action>>, PlayState)> {
     let nplayers = count_players(grid);
@@ -2039,7 +2088,9 @@ fn solve_lookup(
     if min_rats.is_some_and(|minimum| count_rats(grid) < minimum) {
         return None;
     }
-    if lookup_goal_reached(goal, grid, grid, PlayState::Playing) {
+    if lookup_goal_reached(goal, grid, grid, PlayState::Playing)
+        && trap_constraints.accepts(grid, PlayState::Playing)
+    {
         return Some((Vec::new(), PlayState::Playing));
     }
 
@@ -2116,9 +2167,10 @@ fn solve_lookup(
                     continue;
                 }
                 let hash = state_key(&next_grid);
-                if !lookup_goal_reached(goal, grid, &next_grid, play_state)
-                    && visited.contains_key(&hash)
-                {
+                let accepted_goal = play_state == PlayState::Won
+                    || (lookup_goal_reached(goal, grid, &next_grid, play_state)
+                        && trap_constraints.accepts(&next_grid, play_state));
+                if !accepted_goal && visited.contains_key(&hash) {
                     continue;
                 }
                 let node_idx = nodes.len();
@@ -2128,7 +2180,7 @@ fn solve_lookup(
                     action: actions.clone(),
                     depth: cur_depth + 1,
                 });
-                if lookup_goal_reached(goal, grid, &next_grid, play_state) {
+                if accepted_goal {
                     return Some((reconstruct(&nodes, node_idx), play_state));
                 }
 
@@ -2219,7 +2271,10 @@ fn solve_lookup(
                 action: actions.clone(),
                 depth: next_depth,
             });
-            if lookup_goal_reached(goal, grid, &next_grid, play_state) {
+            if play_state == PlayState::Won
+                || (lookup_goal_reached(goal, grid, &next_grid, play_state)
+                    && trap_constraints.accepts(&next_grid, play_state))
+            {
                 return Some((reconstruct(&nodes, node_idx), play_state));
             }
 
@@ -2387,6 +2442,7 @@ fn solve_lookup_goal_branches(
     goal: LookupGoal,
     max_results: usize,
     min_rats: Option<usize>,
+    trap_constraints: TrapConstraints,
     canonical: bool,
 ) -> Vec<Branch> {
     let nplayers = count_players(grid);
@@ -2451,26 +2507,28 @@ fn solve_lookup_goal_branches(
                 depth: cur_depth + 1,
             });
 
-            if play_state == PlayState::Won
-                || lookup_goal_reached(goal, grid, &next_grid, play_state)
-            {
+            let goal_reached =
+                play_state == PlayState::Won || lookup_goal_reached(goal, grid, &next_grid, play_state);
+            if goal_reached && trap_constraints.accepts(&next_grid, play_state) {
                 if play_state != PlayState::Won
                     && min_rats.is_some_and(|min_rats| count_rats(&next_grid) < min_rats)
                 {
+                    // Keep exploring this branch: the irreversible event may be useful only
+                    // after a short stabilization sequence.
+                } else {
+                    let hash = state_key(&next_grid);
+                    if reached.insert(hash) {
+                        let path = reconstruct(&nodes, node_idx);
+                        results.push(Branch {
+                            grid: next_grid,
+                            score: lookup_branch_score(&nodes[node_idx].grid, path.len()),
+                            path,
+                        });
+                        results.sort_by_key(|branch| branch.score);
+                        results.truncate(raw_result_limit);
+                    }
                     continue;
                 }
-                let hash = state_key(&next_grid);
-                if reached.insert(hash) {
-                    let path = reconstruct(&nodes, node_idx);
-                    results.push(Branch {
-                        grid: next_grid,
-                        score: lookup_branch_score(&nodes[node_idx].grid, path.len()),
-                        path,
-                    });
-                    results.sort_by_key(|branch| branch.score);
-                    results.truncate(raw_result_limit);
-                }
-                continue;
             }
 
             let hash = state_key(&next_grid);
@@ -2557,6 +2615,7 @@ fn solve_ratdrop_chain(
                 LookupGoal::RatDrop,
                 segment_results,
                 None,
+                TrapConstraints::default(),
                 true,
             );
             eprintln!(
@@ -3894,6 +3953,53 @@ fn parse_trigger_order(s: &str) -> Vec<u8> {
         .collect()
 }
 
+#[must_use]
+fn parse_trap_constraint_arg(
+    args: &[String],
+    index: usize,
+    trap_constraints: &mut TrapConstraints,
+) -> Option<usize> {
+    match args[index].as_str() {
+        "--min-reachable-rats" | "--min-reachable" => {
+            trap_constraints.min_reachable_rats = Some(args[index + 1].parse().unwrap());
+            Some(index + 2)
+        }
+        "--max-trapped-rats" | "--max-trapped" => {
+            trap_constraints.max_trapped_rats = Some(args[index + 1].parse().unwrap());
+            Some(index + 2)
+        }
+        "--min-reachable-cells" => {
+            trap_constraints.min_reachable_cells = Some(args[index + 1].parse().unwrap());
+            Some(index + 2)
+        }
+        "--min-reachable-triggers" => {
+            trap_constraints.min_reachable_triggers = Some(args[index + 1].parse().unwrap());
+            Some(index + 2)
+        }
+        "--require-reachable-trigger" | "--next-trigger" => {
+            trap_constraints.require_reachable_trigger = Some(args[index + 1].parse().unwrap());
+            Some(index + 2)
+        }
+        "--require-reachable-cell" | "--cleanup-cell" => {
+            trap_constraints.require_reachable_cell = parse_optional_point(&args[index + 1]);
+            Some(index + 2)
+        }
+        "--min-explosives" => {
+            trap_constraints.min_explosives = Some(args[index + 1].parse().unwrap());
+            Some(index + 2)
+        }
+        "--min-triggers" => {
+            trap_constraints.min_triggers = Some(args[index + 1].parse().unwrap());
+            Some(index + 2)
+        }
+        "--max-webs" => {
+            trap_constraints.max_webs = Some(args[index + 1].parse().unwrap());
+            Some(index + 2)
+        }
+        _ => None,
+    }
+}
+
 fn parse_optional_point(s: &str) -> Option<(i32, i32)> {
     let trimmed = s.trim();
     if trimmed == "." || trimmed == "_" || trimmed.eq_ignore_ascii_case("any") {
@@ -4051,6 +4157,7 @@ fn solve_trigger_order_lookup(
     mop_weight: i64,
     depth: usize,
     strict_trigger_order: bool,
+    trap_constraints: TrapConstraints,
 ) -> Option<Vec<Vec<Action>>> {
     let mut branches = vec![Branch {
         grid: grid.clone(),
@@ -4093,6 +4200,7 @@ fn solve_trigger_order_lookup(
                 goal,
                 segment_results,
                 None,
+                trap_constraints,
                 true,
             );
             eprintln!(
@@ -4208,6 +4316,7 @@ fn solve_any_trigger_order_lookup(
     mop_strategy: &str,
     mop_weight: i64,
     depth: usize,
+    trap_constraints: TrapConstraints,
 ) -> Option<Vec<Vec<Action>>> {
     let mut branches = vec![Branch {
         grid: grid.clone(),
@@ -4247,6 +4356,7 @@ fn solve_any_trigger_order_lookup(
                     LookupGoal::TriggerNumber(number),
                     segment_results,
                     None,
+                    trap_constraints,
                     true,
                 );
                 if results.is_empty() {
@@ -6942,8 +7052,13 @@ fn main() {
         let mut mop_weight = 5i64;
         let mut depth = 400usize;
         let mut strict_trigger_order = false;
+        let mut trap_constraints = TrapConstraints::default();
         let mut i = 3;
         while i < args.len() {
+            if let Some(next_i) = parse_trap_constraint_arg(&args, i, &mut trap_constraints) {
+                i = next_i;
+                continue;
+            }
             match args[i].as_str() {
                 "--order" => {
                     order = Some(parse_trigger_order(&args[i + 1]));
@@ -6989,6 +7104,27 @@ fn main() {
                     depth = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--min-reachable-rats" | "--min-reachable" => {
+                    trap_constraints.min_reachable_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--max-trapped-rats" | "--max-trapped" => {
+                    trap_constraints.max_trapped_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--min-reachable-cells" => {
+                    trap_constraints.min_reachable_cells = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--min-reachable-triggers" => {
+                    trap_constraints.min_reachable_triggers = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--require-reachable-trigger" | "--next-trigger" => {
+                    trap_constraints.require_reachable_trigger =
+                        Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
                 "--strict" => {
                     strict_trigger_order = true;
                     i += 1;
@@ -7008,7 +7144,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "trigger-lookup solve: order={:?}, players={}, prefix={}, segdepth={}, segsecs={}, segnodes={}, results={}, beam={}, strict={}",
+            "trigger-lookup solve: order={:?}, players={}, prefix={}, segdepth={}, segsecs={}, segnodes={}, results={}, beam={}, strict={}, trap={:?}",
             order,
             nplayers,
             prefix.len(),
@@ -7017,7 +7153,8 @@ fn main() {
             segment_nodes,
             segment_results,
             beam,
-            strict_trigger_order
+            strict_trigger_order,
+            trap_constraints
         );
         let t0 = Instant::now();
         match solve_trigger_order_lookup(
@@ -7033,6 +7170,7 @@ fn main() {
             mop_weight,
             depth,
             strict_trigger_order,
+            trap_constraints,
         ) {
             Some(suffix) => {
                 let mut path = prefix;
@@ -7065,8 +7203,13 @@ fn main() {
         let mut mop_strategy = "gbfs".to_string();
         let mut mop_weight = 5i64;
         let mut depth = 400usize;
+        let mut trap_constraints = TrapConstraints::default();
         let mut i = 3;
         while i < args.len() {
+            if let Some(next_i) = parse_trap_constraint_arg(&args, i, &mut trap_constraints) {
+                i = next_i;
+                continue;
+            }
             match args[i].as_str() {
                 "--steps" => {
                     steps = args[i + 1].parse().unwrap();
@@ -7112,6 +7255,27 @@ fn main() {
                     depth = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--min-reachable-rats" | "--min-reachable" => {
+                    trap_constraints.min_reachable_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--max-trapped-rats" | "--max-trapped" => {
+                    trap_constraints.max_trapped_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--min-reachable-cells" => {
+                    trap_constraints.min_reachable_cells = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--min-reachable-triggers" => {
+                    trap_constraints.min_reachable_triggers = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--require-reachable-trigger" | "--next-trigger" => {
+                    trap_constraints.require_reachable_trigger =
+                        Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
                 _ => i += 1,
             }
         }
@@ -7126,7 +7290,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "trigger-any-lookup solve: players={} prefix={} steps={} segdepth={} segsecs={} segnodes={} results={} beam={}",
+            "trigger-any-lookup solve: players={} prefix={} steps={} segdepth={} segsecs={} segnodes={} results={} beam={} trap={:?}",
             nplayers,
             prefix.len(),
             steps,
@@ -7134,7 +7298,8 @@ fn main() {
             segment_secs,
             segment_nodes,
             segment_results,
-            beam
+            beam,
+            trap_constraints
         );
         let t0 = Instant::now();
         match solve_any_trigger_order_lookup(
@@ -7149,6 +7314,7 @@ fn main() {
             &mop_strategy,
             mop_weight,
             depth,
+            trap_constraints,
         ) {
             Some(suffix) => {
                 let mut path = prefix;
@@ -7643,9 +7809,14 @@ fn main() {
         let mut canonical = true;
         let mut goal = LookupGoal::Win;
         let mut min_rats: Option<usize> = None;
+        let mut trap_constraints = TrapConstraints::default();
         let mut progress_every = 100_000u64;
         let mut i = 3;
         while i < args.len() {
+            if let Some(next_i) = parse_trap_constraint_arg(&args, i, &mut trap_constraints) {
+                i = next_i;
+                continue;
+            }
             match args[i].as_str() {
                 "--prefix" => {
                     prefix_str = args[i + 1].clone();
@@ -7679,6 +7850,27 @@ fn main() {
                     min_rats = Some(args[i + 1].parse().unwrap());
                     i += 2;
                 }
+                "--min-reachable-rats" | "--min-reachable" => {
+                    trap_constraints.min_reachable_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--max-trapped-rats" | "--max-trapped" => {
+                    trap_constraints.max_trapped_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--min-reachable-cells" => {
+                    trap_constraints.min_reachable_cells = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--min-reachable-triggers" => {
+                    trap_constraints.min_reachable_triggers = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--require-reachable-trigger" | "--next-trigger" => {
+                    trap_constraints.require_reachable_trigger =
+                        Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
                 "--progress" => {
                     progress_every = args[i + 1].parse().unwrap();
                     i += 2;
@@ -7703,7 +7895,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "lookup solve: players={} prefix={} order={} depth={} secs={} maxnodes={} canonical={} weight={} goal={:?} min_rats={:?}",
+            "lookup solve: players={} prefix={} order={} depth={} secs={} maxnodes={} canonical={} weight={} goal={:?} min_rats={:?} trap={:?}",
             nplayers,
             prefix.len(),
             match order {
@@ -7717,7 +7909,8 @@ fn main() {
             canonical,
             weight,
             goal,
-            min_rats
+            min_rats,
+            trap_constraints
         );
         let t0 = Instant::now();
         match solve_lookup(
@@ -7730,6 +7923,7 @@ fn main() {
             canonical,
             goal,
             min_rats,
+            trap_constraints,
             progress_every,
         ) {
             Some((suffix, play_state)) => {
@@ -7764,11 +7958,16 @@ fn main() {
         let mut max_nodes = 500_000usize;
         let mut results = 20usize;
         let mut min_rats: Option<usize> = None;
+        let mut trap_constraints = TrapConstraints::default();
         let mut eval_point: Option<(i32, i32)> = None;
         let mut print_states = false;
         let mut canonical = true;
         let mut i = 3;
         while i < args.len() {
+            if let Some(next_i) = parse_trap_constraint_arg(&args, i, &mut trap_constraints) {
+                i = next_i;
+                continue;
+            }
             match args[i].as_str() {
                 "--prefix" => {
                     prefix_str = args[i + 1].clone();
@@ -7796,6 +7995,27 @@ fn main() {
                 }
                 "--min-rats" => {
                     min_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--min-reachable-rats" | "--min-reachable" => {
+                    trap_constraints.min_reachable_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--max-trapped-rats" | "--max-trapped" => {
+                    trap_constraints.max_trapped_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--min-reachable-cells" => {
+                    trap_constraints.min_reachable_cells = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--min-reachable-triggers" => {
+                    trap_constraints.min_reachable_triggers = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--require-reachable-trigger" | "--next-trigger" => {
+                    trap_constraints.require_reachable_trigger =
+                        Some(args[i + 1].parse().unwrap());
                     i += 2;
                 }
                 "--eval" => {
@@ -7827,7 +8047,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "branchdump: players={} prefix={} goal={:?} depth={} secs={} maxnodes={} results={} min_rats={:?} canonical={}",
+            "branchdump: players={} prefix={} goal={:?} depth={} secs={} maxnodes={} results={} min_rats={:?} trap={:?} canonical={}",
             nplayers,
             prefix.len(),
             goal,
@@ -7836,6 +8056,7 @@ fn main() {
             max_nodes,
             results,
             min_rats,
+            trap_constraints,
             canonical
         );
         let branches = solve_lookup_goal_branches(
@@ -7846,6 +8067,7 @@ fn main() {
             goal,
             results,
             min_rats,
+            trap_constraints,
             canonical,
         );
         for (idx, branch) in branches.iter().enumerate() {
