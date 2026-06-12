@@ -231,6 +231,18 @@ fn print_diagnostics(grid: &Grid) {
     );
     println!("explosives=[{}]", format_positions(&explosives));
     println!("blackholes=[{}]", format_positions(&blackholes));
+    for &(x, y) in &triggers {
+        let dist = player_dist[y as usize][x as usize];
+        let dist_text = if dist == i32::MAX {
+            "unreachable".to_string()
+        } else {
+            dist.to_string()
+        };
+        println!(
+            "trigger {:?} at ({x},{y}) player_dist={dist_text}",
+            grid.cell_kind_at(x as usize, y as usize)
+        );
+    }
 
     for &(x, y) in &rats {
         let dist = player_dist[y][x];
@@ -558,8 +570,11 @@ impl LookupOrder {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum LookupGoal {
     Win,
+    WinReady,
     TriggerNumber(u8),
     CellChanged(i32, i32),
+    CellIs(i32, i32, CellKind),
+    CellNot(i32, i32, CellKind),
     PlayerAt(i32, i32),
     RatAt(i32, i32),
     RatGone(i32, i32),
@@ -571,6 +586,7 @@ impl LookupGoal {
         let Some((kind, arg)) = input.split_once(':') else {
             return match input {
                 "win" => Self::Win,
+                "readywin" | "winready" => Self::WinReady,
                 "ratdrop" => Self::RatDrop,
                 other => panic!("unknown lookup goal {other}"),
             };
@@ -580,6 +596,14 @@ impl LookupGoal {
             "cell" | "cellchanged" => {
                 let (x, y) = parse_required_point(arg);
                 Self::CellChanged(x, y)
+            }
+            "cellis" | "cellkind" => {
+                let (point, kind) = parse_point_and_cell_kind(arg);
+                Self::CellIs(point.0, point.1, kind)
+            }
+            "cellnot" => {
+                let (point, kind) = parse_point_and_cell_kind(arg);
+                Self::CellNot(point.0, point.1, kind)
             }
             "playerat" => {
                 let (x, y) = parse_required_point(arg);
@@ -602,6 +626,42 @@ fn parse_required_point(s: &str) -> (i32, i32) {
     parse_optional_point(s).expect("x,y point")
 }
 
+fn parse_point_and_cell_kind(s: &str) -> ((i32, i32), CellKind) {
+    let mut parts = s.split(',');
+    let x = parts.next().expect("x").trim().parse().expect("x");
+    let y = parts.next().expect("y").trim().parse().expect("y");
+    let kind = parts
+        .next()
+        .map(str::trim)
+        .map(parse_cell_kind_name)
+        .expect("cell kind");
+    assert!(parts.next().is_none(), "expected x,y,kind");
+    ((x, y), kind)
+}
+
+fn parse_cell_kind_name(s: &str) -> CellKind {
+    match s.to_ascii_lowercase().as_str() {
+        "empty" | "." => CellKind::Empty,
+        "wall" | "#" => CellKind::Wall,
+        "player" | "p" => CellKind::Player,
+        "rat" | "r" => CellKind::Rat,
+        "cyborg" | "cyborgrat" | "c" => CellKind::CyborgRat,
+        "plank" | "=" => CellKind::Plank,
+        "web" | "spiderweb" | "w" => CellKind::Spiderweb,
+        "blackhole" | "hole" | "o" => CellKind::BlackHole,
+        "explosive" | "x" => CellKind::Explosive,
+        other => {
+            if let Some(number) = other.strip_prefix("trigger") {
+                return CellKind::Trigger(number.parse().expect("trigger number"));
+            }
+            if let Ok(number) = other.parse() {
+                return CellKind::Trigger(number);
+            }
+            panic!("unknown cell kind {s}");
+        }
+    }
+}
+
 fn trigger_count(grid: &Grid, number: u8) -> usize {
     let mut count = 0;
     for y in 0..grid.height() {
@@ -614,6 +674,14 @@ fn trigger_count(grid: &Grid, number: u8) -> usize {
     count
 }
 
+fn win_ready(grid: &Grid) -> bool {
+    let nplayers = count_players(grid);
+    let Ok(tuples) = std::panic::catch_unwind(|| all_action_tuples(nplayers)) else {
+        return false;
+    };
+    winning_action(grid, &tuples).is_some()
+}
+
 fn lookup_goal_reached(
     goal: LookupGoal,
     initial: &Grid,
@@ -622,6 +690,7 @@ fn lookup_goal_reached(
 ) -> bool {
     match goal {
         LookupGoal::Win => play_state == PlayState::Won,
+        LookupGoal::WinReady => play_state == PlayState::Won || win_ready(current),
         LookupGoal::TriggerNumber(number) => {
             trigger_count(current, number) < trigger_count(initial, number)
         }
@@ -629,6 +698,8 @@ fn lookup_goal_reached(
             current.cell_kind_at(x as usize, y as usize)
                 != initial.cell_kind_at(x as usize, y as usize)
         }
+        LookupGoal::CellIs(x, y, kind) => current.cell_kind_at(x as usize, y as usize) == kind,
+        LookupGoal::CellNot(x, y, kind) => current.cell_kind_at(x as usize, y as usize) != kind,
         LookupGoal::PlayerAt(x, y) => positions_matching(current, |cell| cell == CellKind::Player)
             .contains(&(x, y)),
         LookupGoal::RatAt(x, y) => rat_at(current, (x, y)),
@@ -644,6 +715,17 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
 
     match goal {
         LookupGoal::Win => heuristic(current),
+        LookupGoal::WinReady => {
+            if std::env::var("TRAP_H").is_ok() && current.width() >= 16 {
+                rectangle_trap_heuristic(
+                    current,
+                    count_rats(initial),
+                    count_explosives(initial),
+                )
+            } else {
+                heuristic(current)
+            }
+        }
         LookupGoal::TriggerNumber(number) => {
             let dist = player_dist_map(current);
             let nearest = trigger_positions(current, number)
@@ -657,6 +739,10 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             nearest + heuristic(current) / 1_000
         }
         LookupGoal::CellChanged(x, y) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::CellIs(x, y, _) | LookupGoal::CellNot(x, y, _) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
         }
@@ -687,12 +773,21 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
                 + Features::from_grid(current).triggers as i64 * 1_000
                 + Features::from_grid(current).explosives as i64 * 100
         }
+        LookupGoal::WinReady => count_rats(current) as i64 * 1_000_000
+            + Features::from_grid(current).explosives as i64 * 100
+            + Features::from_grid(current).webs as i64,
         LookupGoal::TriggerNumber(number) => {
             trigger_count(current, number) as i64 * 1_000_000 + count_rats(current) as i64 * 1_000
         }
         LookupGoal::CellChanged(x, y) => {
             (current.cell_kind_at(x as usize, y as usize)
                 == initial.cell_kind_at(x as usize, y as usize)) as i64
+        }
+        LookupGoal::CellIs(x, y, kind) => {
+            (current.cell_kind_at(x as usize, y as usize) != kind) as i64
+        }
+        LookupGoal::CellNot(x, y, kind) => {
+            (current.cell_kind_at(x as usize, y as usize) == kind) as i64
         }
         LookupGoal::PlayerAt(x, y) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);

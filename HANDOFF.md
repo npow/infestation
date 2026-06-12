@@ -238,6 +238,63 @@ No new verified wins yet. Useful observations to preserve:
   partial as a dead basin unless the earlier route changes how the lower rat is
   held while the player crosses.
 
+### Current run notes - 2026-06-12
+
+No new verified wins yet. The session focused on mechanism checks and stopped
+the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
+`ai_takeover`.
+
+- `solver`: the fast oracle path is already present (`step_grid`,
+  `state_hash`, `search_hash`, and `solver::step()` using `step_grid`). Direct
+  searches still only get roughly low tens of thousands of states/sec on the
+  hard levels because state expansion and heuristic evaluation dominate.
+- `release`: `v<vv^^>>v` remains the best opener. From that state, trigger 5 is
+  easy (`v<>>>^`), but waypoint probes to trigger 6 at `(17,16)` / `(19,18)` and
+  trigger 2 at `(0,16)` all returned `UNREACHABLE` in 40s budgets. Broader
+  `cellnot:0,16,2` and `cellnot:19,7,2` probes from both the initial state and
+  the opener found no branch, so neither player-trigger nor obvious rat-trigger
+  activation of trigger 2 was found. Do not assume static reachability of
+  trigger 6 means it is dynamically reachable; rat pressure prevents the route.
+- `reload_v3`: the direct trigger-7 opener `^^^^^<<<<<<^^^` consumes the only
+  reachable triggers and leaves zero reachable trigger continuations. A better
+  non-trigger branch,
+  `^^^^^<<<<<<^^<^^^^^vvvvvvv>>>>>>`, kills the middle rat while preserving the
+  trigger resources. From there, trigger-2 and trigger-1 branches can reach a
+  one-rat state, but the remaining bottom-left rat `(0,21)` is still sealed
+  behind web/explosive; `trigger:6` and `win` from that state returned no
+  branch. Trigger 7 after the one-rat state mostly clears upper webs and still
+  leaves the bottom-left rat inaccessible.
+- `tinderrectangle`: the ignition table confirms either rat corner `(0,0)` or
+  `(16,0)` plus a player on row 3 can win in one move. A new useful partial,
+  `<<<<<>^>>^>^>>v>vv>>^^^>>vvvv`, puts the lower rat at `(2,3)` and the player
+  safely on the right side, but the rat is then pinned because `(1,2)`, `(2,2)`,
+  and adjacent exits are still webs. From that settled state, `cellnot:1,2,web`,
+  `cellnot:2,2,web`, `ratat:1,3`, and `ratat:1,2` all failed in tested budgets.
+  The web cut must happen before the rat settles at `(2,3)`, or the route must
+  target the right-corner ignition instead.
+- `chase`: continuing from `>>>.^v<<<>>>vv<^` with `dropchain` repeats the known
+  family and never changes `(11,16)` from web. Focused probes for
+  `cellnot:11,16,web` and `cellnot:11,15,plank` from the 16-move prefix found no
+  branches. The helper-rat alteration, if it exists, has to happen before the
+  known ratdrop chain.
+- `cooperation/handoff`: the clean first event
+  `v^ >^ >^ >^ >^ >^ ^^` kills the far-right rat without consuming triggers,
+  but from that 7-move state `ratgone:10,6` and `cellnot:10,5,web` found no
+  branch. `dropchain` and a 120s BFS both re-enter the same one-rat sealed basin
+  around `(10,6)`. The next attempt should handle `(10,6)` before the P2 sweep,
+  not after it.
+- `cooperation/blocked_v2`: `ratgone:x,y` is misleading here because rats move
+  out of their starting cells. The branch
+  `v< v^ v^ v^ <^ <^ <<` does not prove the `(14,19)` rat is solved; diagnostics
+  show a lower rat still alive at `(15,18)`. Direct BFS and `dropchain` from this
+  lead stall with separated lower-left / mid-bottom rats. Use rat count plus
+  diagnostics, not just `ratgone`, when evaluating this level.
+- `cooperation/tug_of_war`: the trigger-1 prefix
+  `^< ^^ ^^ ^^ ^^ ^^ ^^ ^^ <^ ^v >v` still looks like the best first event, but
+  immediate ratdrop continuations reduce to three rats with only one reachable.
+  A 120s BFS from the prefix did not find a win and over-walled the center in its
+  best state.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 8.
@@ -250,15 +307,14 @@ No new verified wins yet. Useful observations to preserve:
 
 ## 4. Planned next steps (start here)
 
-1. **Speed up the oracle (highest ROI, ~half-planned).** It's ~3,800 states/sec because
-   every move round-trips through CSV `parse`+`serialize`. Add to `game/src/testing.rs`:
-   `pub fn step_grid(grid:&Grid, actions:&[Action]) -> (Grid, PlayState)` (Grid is `Clone`),
-   and a way to hash a `Grid`'s cells directly (derive/expose). Switch `solver/src/main.rs`
-   `step()` and the visited-set hashing off strings. Est. **10-50×** → deep search becomes
-   feasible. (I was reading `game/src/grid.rs` to do this when paused.)
+1. **Do not repeat broad direct searches.** The grid-step/hash speedup is already
+   in the tree, but the current hard cases still fail because the heuristic
+   prefers irreversible dead basins. Use mechanism-specific goals and inspect
+   diagnostics after every irreversible event.
 2. **Continue `release` from the known prefix.** Start with
    `v<vv^^>>v` (triggers 3 then 4). Test trigger 5 via suffix `v<>>>^`, then
-   branch explicitly on trigger 2 vs 6 and inspect the resulting state.
+   look for a way to make trigger 2 change indirectly; direct player routes to
+   trigger 2 and trigger 6 have failed dynamically.
 3. **Solve `tinderrectangle` as an ignition lure.** The winning geometry is a
    top rat entering `(0,0)` or `(16,0)`. Find the safe facing/timing that opens
    the web without letting the rat kill the player.
