@@ -759,6 +759,8 @@ enum LookupGoal {
     RatDrop,
     RatsAtMostWithCellIs(usize, i32, i32, CellKind),
     RatsAtMostWithCellNot(usize, i32, i32, CellKind),
+    RatsAtMostWithPlayerAt(usize, i32, i32),
+    RatsAtMostWithPlayerFacing(usize, i32, i32, Dir4),
     TriggerNumberOnlyWithCellIs(u8, i32, i32, CellKind),
     TriggerNumberOnlyWithCellNot(u8, i32, i32, CellKind),
 }
@@ -997,6 +999,14 @@ impl LookupGoal {
                 let (count, point, kind) = parse_count_point_and_cell_kind(arg);
                 Self::RatsAtMostWithCellNot(count, point.0, point.1, kind)
             }
+            "ratsleplayer" | "ratsatmostplayer" | "ratsleplayerat" => {
+                let (count, (x, y)) = parse_count_and_point(arg);
+                Self::RatsAtMostWithPlayerAt(count, x, y)
+            }
+            "ratsleplayerfacing" | "ratsatmostplayerfacing" | "ratsleplayerdir" => {
+                let (count, (x, y), dir) = parse_count_point_and_dir(arg);
+                Self::RatsAtMostWithPlayerFacing(count, x, y, dir)
+            }
             "triggeronlycellis" | "triggerstrictcellis" => {
                 let mut parts = arg.split(',');
                 let number = parts
@@ -1102,6 +1112,39 @@ fn parse_count_point_and_cell_kind(s: &str) -> (usize, (i32, i32), CellKind) {
         .expect("cell kind");
     assert!(parts.next().is_none(), "expected count,x,y,kind");
     (count, (x, y), kind)
+}
+
+fn parse_count_and_point(s: &str) -> (usize, (i32, i32)) {
+    let mut parts = s.split(',');
+    let count = parts
+        .next()
+        .expect("rat count")
+        .trim()
+        .parse()
+        .expect("rat count");
+    let x = parts.next().expect("x").trim().parse().expect("x");
+    let y = parts.next().expect("y").trim().parse().expect("y");
+    assert!(parts.next().is_none(), "expected count,x,y");
+    (count, (x, y))
+}
+
+fn parse_count_point_and_dir(s: &str) -> (usize, (i32, i32), Dir4) {
+    let mut parts = s.split(',');
+    let count = parts
+        .next()
+        .expect("rat count")
+        .trim()
+        .parse()
+        .expect("rat count");
+    let x = parts.next().expect("x").trim().parse().expect("x");
+    let y = parts.next().expect("y").trim().parse().expect("y");
+    let dir = parts
+        .next()
+        .map(str::trim)
+        .map(parse_dir4_name)
+        .expect("player direction");
+    assert!(parts.next().is_none(), "expected count,x,y,dir");
+    (count, (x, y), dir)
 }
 
 fn parse_cell_kind_name(s: &str) -> CellKind {
@@ -1246,6 +1289,13 @@ fn lookup_goal_reached(
         }
         LookupGoal::RatsAtMostWithCellNot(count, x, y, kind) => {
             count_rats(current) <= count && current.cell_kind_at(x as usize, y as usize) != kind
+        }
+        LookupGoal::RatsAtMostWithPlayerAt(count, x, y) => {
+            count_rats(current) <= count
+                && positions_matching(current, |cell| cell == CellKind::Player).contains(&(x, y))
+        }
+        LookupGoal::RatsAtMostWithPlayerFacing(count, x, y, dir) => {
+            count_rats(current) <= count && player_facing(current, (x, y), dir)
         }
         LookupGoal::TriggerNumberOnlyWithCellIs(number, x, y, kind) => {
             only_trigger_changed(initial, current, number)
@@ -1427,6 +1477,24 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             };
             rats_penalty + cell_penalty + heuristic(current) / 1_000
         }
+        LookupGoal::RatsAtMostWithPlayerAt(count, x, y) => {
+            let rats_penalty = count_rats(current).saturating_sub(count) as i64 * 1_000_000;
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            rats_penalty + nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::RatsAtMostWithPlayerFacing(count, x, y, dir) => {
+            let rats_penalty = count_rats(current).saturating_sub(count) as i64 * 1_000_000;
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let facing_penalty = if player_facing(current, (x, y), dir) {
+                0
+            } else {
+                1_000
+            };
+            rats_penalty
+                + nearest_target_distance(&players, &[(x, y)])
+                + facing_penalty
+                + heuristic(current) / 1_000
+        }
         LookupGoal::TriggerNumberOnlyWithCellIs(number, x, y, kind) => {
             let trigger_h =
                 lookup_goal_heuristic(LookupGoal::TriggerNumberOnly(number), initial, current);
@@ -1554,6 +1622,17 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
         LookupGoal::RatsAtMostWithCellNot(count, x, y, kind) => {
             count_rats(current).saturating_sub(count) as i64
                 + (current.cell_kind_at(x as usize, y as usize) == kind) as i64
+        }
+        LookupGoal::RatsAtMostWithPlayerAt(count, x, y) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            count_rats(current).saturating_sub(count) as i64
+                + nearest_target_distance(&players, &[(x, y)])
+        }
+        LookupGoal::RatsAtMostWithPlayerFacing(count, x, y, dir) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            count_rats(current).saturating_sub(count) as i64
+                + nearest_target_distance(&players, &[(x, y)])
+                + (!player_facing(current, (x, y), dir) as i64)
         }
         LookupGoal::TriggerNumberOnlyWithCellIs(number, x, y, kind) => {
             trigger_count(current, number) as i64 * 1_000_000

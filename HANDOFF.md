@@ -1847,6 +1847,39 @@ real new mechanism frontier.
   component. The next `ai_takeover` search should treat the 44/45-turn safe-7
   line as a staging mechanism and look for a route-shaping move before trying
   6/8, not repeat direct trigger-order searches.
+- Latest `ai_takeover` progress: the lower trigger-7 route is now the best
+  constructive lead. Verified prefix
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvvv<`
+  reaches a live 60-turn post-trigger-8 state with 16 rats, 5 explosives, and
+  trigger 2 still present. A better pre-trigger-2 drain is
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvvv<<<<<<<<<<<<<<<^^^v>>>>>>>>>><<<<<<<<`
+  (`J`), verified `Playing` at 96 turns with 6 rats, 5 explosives, 26 webs,
+  trigger 2 still present, and 5/6 rats reachable.
+- From `J`, targeted branchdumps for the bottom-row cyborg cluster found
+  verified 3-rat trigger-preserving frontiers. The shortest useful one is
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvvv<<<<<<<<<<<<<<<^^^v>>>>>>>>>><<<<<<<<>>>>`,
+  verified `Playing` at 100 turns. Diagnostics: player `(10,19)`, rats
+  `(18,4)`, `(11,9)`, `(12,19)`, 5 explosives, 26 webs, 2 triggers, and 2/3
+  rats reachable. A more open variant is
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvvv<<<<<<<<<<<<<<<^^^v>>>>>>>>>><<<<<<<<<<<^^^v>>>>>><<<<`,
+  verified `Playing` at 113 turns with rats `(18,4)`, `(11,9)`, `(3,17)` and
+  25 webs.
+- Firing left trigger 2 from the 100-turn 3-rat state with suffix
+  `<<<<<<<^^^<<<` is live and changes the shape: full prefix
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvvv<<<<<<<<<<<<<<<^^^v>>>>>>>>>><<<<<<<<>>>><<<<<<<^^^<<<`
+  verifies `Playing` at 113 turns with all 3 rats reachable:
+  rats `(18,4)`, `(11,9)`, `(2,16)`, player `(0,16)`, 2 explosives, 25 webs,
+  and no triggers. This is much better than the old post-trigger-2 basin, but
+  no cleanup is known yet.
+- Failed continuations from that post-trigger 3-rat state: `events` reports
+  `NO_EVENTS`, `lookup --goal win` returns `NO_SOLUTION` quickly, and
+  `branchdump --goal ratsle:2` found no branch in the tested depth/budget.
+  Immediate tactical probes show `>` is safe but `>>` dies; `v`, `<`, `.>`,
+  and `..>` are safe displacement moves. A `ratgone:2,16` result with suffix
+  `v` is only coordinate movement, not a kill. The next useful attack is a
+  hand-modeled cleanup/lure for the local `(2,16)` cyborg or a route that uses
+  the two remaining explosives at `(14,12)` / `(15,12)` before the local rat
+  becomes a contact trap.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
