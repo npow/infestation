@@ -920,6 +920,59 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
     An ASP/SAT route would require first adding solver tooling rather than just
     writing an encoding against an available backend.
 
+- Follow-up parallel/human pass later on 2026-06-12 found **no new verified
+  wins**. All solver processes were stopped before handoff.
+  - `release`: a sidecar audit and local checks both reconfirmed that the
+    apparent trigger-6-to-left-trigger-2 route is blocked from the standard
+    opener. Triggering right `2` zaps the wrong side, while the useful left
+    trigger-2 cell `(0,16)` remains inaccessible. Preserved checks for
+    clearing `(1,16)`, placing a rat on `(0,16)`, opening `(18,5)`, or using
+    `ratcell:2,16,1,16,empty` returned no branch. Do not continue the
+    trigger-5/6/right-column family without a different opener.
+  - `reload_v3`: the trigger-2-first prefix `^>>>>>>>^^^vvv<<v<` should be
+    deprioritized. A stronger trigger-1-first branch exists:
+    `^>>>>>>>^^vvvvvv<<<^^<<^^<<<<^<<<<<<<<v<v>`. It verifies as `Playing`
+    with all 3 rats alive, player `(2,18)`, roaming rat `(4,18)`, lower
+    trigger `1` consumed, and the bottom corridor partly opened. From there,
+    trigger `2` is reachable only via
+    `^>>>>>>>^^vvvvvv<<<^^<<^^<<<<^<<<<<<<<v<v>^>^^^>>>>>>>>>>>>>>^`, which
+    verifies as `Playing` but leaves only two rats, both unreachable. Follow-up
+    `trigger:3`, `trigger:4`, `trigger:5`, and `cellnot:1,21,web` checks from
+    that two-rat state returned empty; stricter pre-trigger-2 checks for
+    `trigger:2`, `trigger:3`, and `trigger:5` with `--min-rats 3` also returned
+    empty. The new lead is useful as a mechanism clue, but not a continuation
+    yet: firing trigger 2 while preserving the roaming rat remains the blocker.
+  - `tinderrectangle`: the 135-turn delayed staging branch
+    `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^^^^^<<<vvv<<^^^<<<vv<<v<<<^>>^^>>>>>v>vv>>^^^>>vvvv`
+    has player `(14,7)`, lower rat `(2,3)`, all 16 rats alive, and only 18
+    webs. It can clear `(2,4)` while preserving rats, but that puts the player
+    directly under the rat and re-enters the contact trap. It found no branch
+    to clear `(3,4)` from that safe-side staging. Opening `(3,4)` early is easy
+    (`<^^<v<^<<^`), but `geomlure` from that prefix immediately reports
+    `NO_SOLUTION`, and direct safe-side/`rectsep` probes did not produce a
+    separated lower-row ignition state. The missing trick is still a release
+    geometry that opens `(3,4)` without starting an unescapable tail chase.
+  - `chase`: the bottom-helper route was rechecked. The helper in
+    `>>vv>>>>>>>>>^^^` is the `(0,19)` rat released through the bottom webs,
+    not the right-side rat. It reaches `(13,17)` with the player at `(13,16)`
+    facing north, but targeted checks still did not break `(12,15)` or
+    `(11,15)` or clear `(11,16)`. Early trigger-4, trigger-5, and trigger-2
+    variants did not affect the blocker cells. Treat the adjacent helper route
+    as the wrong timing unless a different pre-release setup appears.
+  - `cooperation/handoff`: sidecar checks again found no pre-trigger mechanism
+    for sealed rat `(10,6)`: no branch to `ratat:11,7`,
+    `cellnot:10,5,web`, or `reachable:10,6` from either the initial board or
+    the common 7-turn setup. Reaching southeast lure cells after the common
+    sweep spends all triggers and leaves the sealed rat unreachable.
+  - `cooperation/blocked_v2`: the 33-turn upper-trigger-3 prefix is a dead
+    basin for the lower-left trigger-2 pocket. Both trigger-2 cells are
+    unreachable after upper 3, and checks for `trigger:2`,
+    `cellnot:1,15,web`, `cellnot:2,15,explosive`,
+    `cellnot:3,15,explosive`, and `cellnot:4,15,web` returned empty. A short
+    continuation can stage P2 at `(11,14)` with a rat at `(9,15)`, but clearing
+    `(10,15)` is an immediate contact trap and does not open the lower-left
+    pocket.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 8.
