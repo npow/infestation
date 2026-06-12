@@ -864,6 +864,62 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
     `cellnot:12,11,explosive` returned empty in the tested budgets; lower
     trigger 3 only opens the top pack and leaves the x=10 seam unchanged.
 
+- Parallel mechanism pass later on 2026-06-12 found **no new verified wins**,
+  but added one useful diagnostic and ruled out another attractive human line:
+  - `solver`: `lookup` / `branchdump` now support
+    `--goal playerfacing:x,y,dir` and
+    `--goal ratplayerfacing:ratx,raty,playerx,playery,dir`. Accepted
+    directions are `north/south/east/west`, `n/s/e/w`, arrow glyphs, or
+    `up/down/left/right`. These are diagnostic-only and exist for timing
+    puzzles where facing changes the sword-block outcome.
+  - `chase`: the helper-plank route has a sharper necessary condition. If the
+    helper rat can be held at `(13,16)` while the player is at `(13,15)` facing
+    south, the rat's direct north attack should be sword-blocked and it may
+    enter a plank instead. However, exact `ratplayerfacing` probes from both the
+    pre-pocket prefix `>>vv>>>>>>>>>` and the cleaner trigger frontier
+    `>>>.^vvv<^` found no branch to `(rat=13,16, player=13,15, south)` in the
+    tested horizons. Offset variants `(rat=13,16, player=14,15, south)`,
+    `(rat=14,16, player=13,15, south)`, and the one-row-up timing
+    `(rat=13,15, player=13,14, south)` also returned empty. The older
+    `>>vv>>>>>>>>>^^^^` state is therefore confirmed as the wrong timing: it
+    reaches player `(13,15)` facing north, which cannot force the plank break.
+  - `tinderrectangle`: a stronger delayed side-loop frontier exists:
+    `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^^^^^<<<vvv<<^^^<<<vv<<v<<<^>>^^>>>>>v>vv>>^^^>>vvvv`.
+    It verifies as `Playing` for 135 turns with player `(14,7)`, lower rat
+    `(2,3)`, all 16 rats alive, `(2,5)`/`(2,6)` open, and `(2,4)`/`(3,4)` still
+    web. This is better delayed-release staging than the old 84/113-turn
+    frontiers, but `rectsep` from it returned no branch; direct release still
+    collapses into diagonal contact.
+  - `release`: explicit `3,2` and `4,2` trigger-order probes still cannot make
+    trigger 2 reachable. From the standard opener `v<vv^^>>v`, checks for
+    `(18,5)` opening with the `(18,4)` rat preserved and for changing left
+    trigger 2 `(0,16)` returned no branches. The right trigger-2 activation
+    remains a false lead because it zaps the wrong side.
+  - `reload_v3`: the known all-rat staging prefix
+    `^^^^^<<<<<<^^<^^^^^vv` remains only a blocker witness: the top rat can be
+    moved to `(11,5)` while `(10,5)` remains a web, but preserved checks still
+    could not put a rat on `(10,5)`, clear `(10,5)`, clear `(9,6)`, open
+    `(1,21)`/`(2,21)`, or reach trigger 6.
+  - `cyborg_rats/ai_takeover`: cyborg movement did not create a bypass in the
+    tested budgets. Relaxed probes still found no route to trigger 7/8 or
+    right-side `(18,5)` staging from the standard opener.
+  - `cooperation/handoff`: the reachable trigger-2 family is confirmed dead:
+    after consuming it, the board can reach `rats=2`, `explosives=0`,
+    `triggers=0`, `reachable_rats=0`, with rats at `(10,6)` and `(1,7)`. Checks
+    for `cellnot:10,5,web`, `ratat:11,7`, and
+    `ratcell:11,7,10,5,web` still found no route.
+  - `cooperation/tug_of_war`: the top pocket remains a likely authoring blocker.
+    Waypointing to `(8,0)` failed, and checks for changing `(7,1)` web or
+    `(7,2)` plank returned empty.
+  - `cooperation/blocked_v2`: trigger 2 remains the blocker. Split `wp2`
+    checks for both players to `(5,11)` and `(3,14)` failed from the best
+    early frontier; lookup also failed to consume trigger 2, open `(10,13)`,
+    open `(1,15)`, or remove `(2,15)` in the tested budgets.
+  - Environment note: neither `clingo` nor the Python `clingo` module is
+    installed in this workspace, and `z3`/`ortools`/`pysat` are also absent.
+    An ASP/SAT route would require first adding solver tooling rather than just
+    writing an encoding against an available backend.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 8.

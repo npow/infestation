@@ -567,7 +567,7 @@ impl LookupOrder {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum LookupGoal {
     Win,
     WinReady,
@@ -580,8 +580,10 @@ enum LookupGoal {
     CellNot(i32, i32, CellKind),
     CellReachable(i32, i32),
     PlayerAt(i32, i32),
+    PlayerFacing(i32, i32, Dir4),
     RatAt(i32, i32),
     RatAtWithPlayer(i32, i32, i32, i32),
+    RatAtWithPlayerFacing(i32, i32, i32, i32, Dir4),
     RatAtWithCell(i32, i32, i32, i32, CellKind),
     RatGone(i32, i32),
     RatsAtMost(usize),
@@ -629,6 +631,28 @@ impl LookupGoal {
                 let (x, y) = parse_required_point(arg);
                 Self::PlayerAt(x, y)
             }
+            "playerfacing" | "playerdir" => {
+                let mut parts = arg.split(',');
+                let x = parts
+                    .next()
+                    .expect("player x")
+                    .trim()
+                    .parse()
+                    .expect("player x");
+                let y = parts
+                    .next()
+                    .expect("player y")
+                    .trim()
+                    .parse()
+                    .expect("player y");
+                let dir = parts
+                    .next()
+                    .map(str::trim)
+                    .map(parse_dir4_name)
+                    .expect("player direction");
+                assert!(parts.next().is_none(), "expected playerx,playery,dir");
+                Self::PlayerFacing(x, y, dir)
+            }
             "ratat" => {
                 let (x, y) = parse_required_point(arg);
                 Self::RatAt(x, y)
@@ -651,6 +675,33 @@ impl LookupGoal {
                     .expect("player y");
                 assert!(parts.next().is_none(), "expected ratx,raty,playerx,playery");
                 Self::RatAtWithPlayer(rat_x, rat_y, player_x, player_y)
+            }
+            "ratplayerfacing" | "ratplayerdir" => {
+                let mut parts = arg.split(',');
+                let rat_x = parts.next().expect("rat x").trim().parse().expect("rat x");
+                let rat_y = parts.next().expect("rat y").trim().parse().expect("rat y");
+                let player_x = parts
+                    .next()
+                    .expect("player x")
+                    .trim()
+                    .parse()
+                    .expect("player x");
+                let player_y = parts
+                    .next()
+                    .expect("player y")
+                    .trim()
+                    .parse()
+                    .expect("player y");
+                let dir = parts
+                    .next()
+                    .map(str::trim)
+                    .map(parse_dir4_name)
+                    .expect("player direction");
+                assert!(
+                    parts.next().is_none(),
+                    "expected ratx,raty,playerx,playery,dir"
+                );
+                Self::RatAtWithPlayerFacing(rat_x, rat_y, player_x, player_y, dir)
             }
             "ratcell" => {
                 let mut parts = arg.split(',');
@@ -696,6 +747,16 @@ impl LookupGoal {
             "websle" | "websatmost" => Self::WebsAtMost(arg.parse().expect("web count")),
             other => panic!("unknown lookup goal {other}"),
         }
+    }
+}
+
+fn parse_dir4_name(input: &str) -> Dir4 {
+    match input {
+        "n" | "north" | "^" | "up" => Dir4::North,
+        "s" | "south" | "v" | "down" => Dir4::South,
+        "e" | "east" | ">" | "right" => Dir4::East,
+        "w" | "west" | "<" | "left" => Dir4::West,
+        other => panic!("unknown direction {other}"),
     }
 }
 
@@ -788,11 +849,15 @@ fn lookup_goal_reached(
         LookupGoal::PlayerAt(x, y) => {
             positions_matching(current, |cell| cell == CellKind::Player).contains(&(x, y))
         }
+        LookupGoal::PlayerFacing(x, y, dir) => player_facing(current, (x, y), dir),
         LookupGoal::RatAt(x, y) => rat_at(current, (x, y)),
         LookupGoal::RatAtWithPlayer(rat_x, rat_y, player_x, player_y) => {
             rat_at(current, (rat_x, rat_y))
                 && positions_matching(current, |cell| cell == CellKind::Player)
                     .contains(&(player_x, player_y))
+        }
+        LookupGoal::RatAtWithPlayerFacing(rat_x, rat_y, player_x, player_y, dir) => {
+            rat_at(current, (rat_x, rat_y)) && player_facing(current, (player_x, player_y), dir)
         }
         LookupGoal::RatAtWithCell(rat_x, rat_y, cell_x, cell_y, kind) => {
             rat_at(current, (rat_x, rat_y))
@@ -861,11 +926,22 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
         }
+        LookupGoal::PlayerFacing(x, y, _) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
+        }
         LookupGoal::RatAt(x, y) => {
             let rats = rat_positions(current);
             nearest_target_distance(&rats, &[(x, y)]) + heuristic(current) / 1_000
         }
         LookupGoal::RatAtWithPlayer(rat_x, rat_y, player_x, player_y) => {
+            let rats = rat_positions(current);
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            nearest_target_distance(&rats, &[(rat_x, rat_y)])
+                + nearest_target_distance(&players, &[(player_x, player_y)])
+                + heuristic(current) / 1_000
+        }
+        LookupGoal::RatAtWithPlayerFacing(rat_x, rat_y, player_x, player_y, _) => {
             let rats = rat_positions(current);
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&rats, &[(rat_x, rat_y)])
@@ -963,11 +1039,20 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)])
         }
+        LookupGoal::PlayerFacing(x, y, dir) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            nearest_target_distance(&players, &[(x, y)])
+                + (!player_facing(current, (x, y), dir) as i64)
+        }
         LookupGoal::RatAt(x, y) => !rat_at(current, (x, y)) as i64,
         LookupGoal::RatAtWithPlayer(rat_x, rat_y, player_x, player_y) => {
             let player_missing = !positions_matching(current, |cell| cell == CellKind::Player)
                 .contains(&(player_x, player_y)) as i64;
             (!rat_at(current, (rat_x, rat_y)) as i64) + player_missing
+        }
+        LookupGoal::RatAtWithPlayerFacing(rat_x, rat_y, player_x, player_y, dir) => {
+            let facing_missing = !player_facing(current, (player_x, player_y), dir) as i64;
+            (!rat_at(current, (rat_x, rat_y)) as i64) + facing_missing
         }
         LookupGoal::RatAtWithCell(rat_x, rat_y, cell_x, cell_y, kind) => {
             let cell_missing =
@@ -1103,6 +1188,31 @@ fn parse_action_string(action_str: &str, nplayers: usize) -> Vec<Vec<Action>> {
             })
             .collect()
     }
+}
+
+fn player_facing(grid: &Grid, point: (i32, i32), dir: Dir4) -> bool {
+    let (x, y) = point;
+    if x < 0 || y < 0 {
+        return false;
+    }
+    let (x, y) = (x as usize, y as usize);
+    if x >= grid.width() || y >= grid.height() {
+        return false;
+    }
+    let csv = grid.to_csv();
+    let Some(row) = csv.lines().nth(y) else {
+        return false;
+    };
+    let Some(cell) = row.split(',').nth(x) else {
+        return false;
+    };
+    matches!(
+        (cell, dir),
+        ("▲" | "△", Dir4::North)
+            | ("▼" | "▽", Dir4::South)
+            | ("►" | "▷", Dir4::East)
+            | ("◄" | "◁", Dir4::West)
+    )
 }
 
 fn replay_path(grid: &Grid, path: &[Vec<Action>]) -> (Grid, PlayState, usize) {
