@@ -1152,6 +1152,77 @@ authoring blockers from still-plausible mechanism chains.
   windows. The remaining plausible path is to combine the preserved `(3,8)` rat
   with the upper-3 clearing without losing the necessary lure geometry.
 
+### Late human-mechanism pass - 2026-06-12
+
+No new verified wins. This pass used four parallel explorer agents plus local
+`release` / `ai_takeover` work, with short tactical oracle checks rather than
+long direct solves.
+
+- `release`: the most useful new constructive state is
+  `v<vv^^>>vv><<v<<<^<^^<<><`. It verifies as `Playing` with 21 rats, player
+  `(2,11)`, and a bottom actor staged at `(2,16)`. This is close to the human
+  idea "open the lower-left lane, then use trigger 2", but it still fails:
+  waypoint probes from that state to trigger 6 at `(17,16)` and `(19,18)` both
+  return `UNREACHABLE`, and a `17,16;0,16` waypoint chain is also unreachable.
+  Direct branchdumps from this state for `trigger:6`, `cellnot:1,16,explosive`,
+  `ratat:19,18`, and `cellnot:16,17,plank` returned empty. The important
+  insight is that a staged actor at `(2,16)` is possible, but if the player moves
+  south before trigger 6 opens the lane the actor falls into the black-hole
+  pocket; if the player leaves to the right first, current searches cannot keep
+  the actor alive and reach trigger 6.
+- `release`: the likely intended escape after trigger 6 would require a rat to
+  traverse the newly opened row-17 lane and break plank `(16,17)`, letting the
+  player return left to trigger 2. The checked prefixes did not reach this
+  choreography. Do not just rerun trigger-5/6: strict `triglookup` order `5,6`
+  from `v<vv^^>>v` again produced no trigger-6 continuation before falling into
+  the old dead family.
+- `tinderrectangle`: a stronger prepared-safe frontier is
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^^^^^<<<vvv<<^^^<<<vv<<v<<<^>>^^>>>>>v>vv>>^^^>>vvvv`.
+  It verifies as `Playing` with player `(14,7)`, all 16 rats alive, lower rat
+  `(2,3)`, and only 18 webs. From there, preserved release can clear `(2,4)`,
+  but the lower rat and player enter a forced contact chase down the x=2 shaft:
+  moving north kills the lower rat, moving sideways dies, and moving down just
+  repeats the trap. Branchdumps / lookups for `rectsep`, `win`, and
+  `cellnot:3,4,web` returned empty. This is now clearly a separation-loop
+  problem, not an ignition-discovery problem.
+- `reload_v3`: trigger 2 and trigger 7 are real early mechanisms, but spending
+  them in either order still loses access to trigger 6. The trigger-2-first
+  prefix `^>>>>>>>^^^^<<<<v<v>>` leaves two rats with `reachable_rats=0` and
+  only trigger 7 reachable. The promising one-rat reload state
+  `^>>>>>>>^^^^<<<<v<v>>^^<<<<<<<<<<^^<^^^^^vvvvvvv>>>>>><<<<<^^` leaves only
+  `(0,21)` and both 7s reachable, but taking either 7 does not open trigger 6.
+  The known 126-turn one-rat partial still has `(2,22)` unreachable, and pressing
+  its remaining trigger 2 leaves zero reachable trigger continuations.
+- `chase`: the suspected body-block square is reachable. Prefix
+  `^>>>^^>^>^>>>>>v>v^^^vvv` verifies as `Playing` with all 8 rats, player
+  `(13,15)`, helper rat `(11,14)`, and both throat planks intact. However,
+  immediate `<`/`>` falls into the old `(12,15)` helper trap; `^v` dies; `^<`
+  kills the helper. Branchdumps from the `(11,14)` / `(12,14)` staging states
+  for `cellnot:11,15,plank` and `cellnot:11,16,web` returned empty even with
+  `--min-rats 7`. Trigger 5 is reachable in the area but spends the geometry
+  without opening the throat.
+- `cooperation/blocked_v2`: the near-miss around `(6,11)` is now locally
+  checked. From the final near-miss, one-turn enumeration shows north pulls the
+  rat back to `(6,10)`, south pulls it to `(7,12)`, and east/west/stall leave it
+  at `(6,11)`; the trigger count never changes. From the turn-28 predecessor,
+  only P2 south moves the target rat, and it moves `(6,10) -> (6,11)`, not onto
+  trigger `(5,11)`. Bounded branchdumps for `trigger:2`, `playerat:4,11`,
+  `reachable:4,11`, and `ratat:5,11` from the upper-3 family returned empty.
+  The preserved-rat prefix `^< ^^ v^ ^^ vv ^v` still cannot be combined with
+  upper-3 clearing in checked budgets.
+- `cooperation/blocked_v2`: a new 8-rat lower-trigger-3 branch exists:
+  `^< ^^ v^ ^^ vv ^v v^ ^^ v> v> v> vv vv ^v ^v ^< ^v`. It verifies as
+  `Playing`, but it consumes the lower 3, leaves the `(6,10)` / trigger-2 pocket
+  untouched, and direct `trigger:2` checks from it returned empty. Treat it as a
+  decoy basin unless a new route changes the trigger-2 pocket first.
+- `cyborg_rats/ai_takeover`: after standard opener `v<vv^^>>v`, diagnostics are
+  better than `release`: 22 of 23 rats are reachable and trigger 7 has static
+  distances around 36-38. But dynamic checks still fail. Branchdumps from the
+  opener for `trigger:7`, `ratat:16,9`, and `cellnot:16,10,empty` returned
+  empty; waypoints to `(15,9)`, `(16,9)`, and `(16,11)` all returned
+  `UNREACHABLE`; direct `lookup --goal win` from the opener returned
+  `NO_SOLUTION` quickly. Do not transfer `release`'s opener mechanically.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 8.
