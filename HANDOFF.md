@@ -451,6 +451,50 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   `release` skeleton with additional trigger-7/8 and cyborg behavior. No deeper
   search was run this pass; solve or invalidate the `release` trigger-2
   mechanism first.
+- Parallel mechanism pass on 2026-06-12 found **no new verified wins**. It did
+  improve the durable map of dead branches:
+  - `release`: the trigger-5 / trigger-6 family can be pushed to one remaining
+    rat, but that rat is always `(18,4)` behind web `(18,5)`. A representative
+    one-rat pre-trigger-6 branch is
+    `v<vv^^>>vv<>>>^^vvv<<<<<<^^^<<<<v^^^^^^^^^v>>>^^>>>><><><><><><>>>>>>><<<<<<<<<vvvvvv<<<<<^^^^^^>>>>>>>>>>v`;
+    diagnostics show `rats=1`, player `(10,3)`, rat `(18,4)`,
+    `reachable_rats=0/1`. Follow-up `lookup --goal win` from that state returns
+    no solution quickly. Direct post-trigger-5 probes for `ratgone:18,4`,
+    `cellnot:18,5,web`, `trigger:2`, and `ratat:19,7` with high rat
+    preservation also returned empty. Treat this as a dead mechanism unless a
+    setup handles `(18,4)` before the top sweep.
+  - `tinderrectangle`: the old lower-rat route is still an overrun; when the rat
+    reaches `(6,6)`, the player is only around `(10,6)`, and safe-side branches
+    then leave the rat at `(8,6)`. New better lead: from prefix `<^^^`, the
+    player can reach `(14,7)` with all 16 rats preserved while the lower rat is
+    still held at `(2,3)`, e.g. `ASCII <^^^>>v>vv>>^^^>>vvvv`. The next
+    mechanism to test is **prepare safe side first, then release lower rat**.
+  - `reload_v3`: trigger 2 can be fired while preserving all 3 rats
+    (`^>>>>>>>^^^vvv<<v<`), but diagnostics show rats at `(14,5)`, `(17,13)`,
+    `(0,21)` with `reachable_rats=0/3`. Follow-up `cellnot:1,21,web`,
+    `trigger:1`, and `trigger:6` from that prefix returned no branches.
+  - `chase`: preserving as few as 4 rats, direct probes for
+    `cellnot:11,16,web`, `reachable:11,17`, and `ratat:11,16` still returned no
+    branches. Event enumeration did not change `(11,16)` or make `(11,17)`
+    reachable.
+  - `cooperation/handoff`: from the 7-turn setup
+    `v^ >^ >^ >^ >^ >^ ^^`, `wp2` waypoints `.|10,6;.|11,7` are unreachable,
+    and `ratat:11,7`, `cellnot:10,5,web`, and `reachable:10,6` return no
+    branches. All-5-rat-preserved initial checks for `ratat:11,7` and
+    `trigger:2` also returned empty.
+  - `cooperation/tug_of_war`: the 17-turn partial
+    `^< ^^ ^^ ^^ ^^ ^^ ^^ ^^ <^ ^v >v ^^ <^ <^ <^ v^ v^` verifies only as
+    `Playing`. From there, `cellnot:7,1,web`, `cellnot:7,2,plank`, and
+    `ratsle:2` returned empty. All-rats-preserved top enclosure checks still
+    fail.
+  - `cooperation/blocked_v2`: preserve-all-rats checks for `reachable:0,15`
+    and `cellnot:1,15,web` returned empty. Relaxed `wp2` to `.|0,15` and
+    `.|3,14;.|0,15` both report waypoint 0 unreachable.
+- ASP/clingo idea: a quick prototype for one-player, one-rat suffixes exposed
+  that a naive full-cell-state encoding grounds poorly even for a horizon-1
+  `release` suffix. Do not repeat a direct cell-by-cell ASP dump. If revisiting
+  ASP, encode only dynamic facts around reachable components/events, use fixed
+  horizons, and verify every candidate with `target/release/solver verify`.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
@@ -468,15 +512,16 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
    in the tree, but the current hard cases still fail because the heuristic
    prefers irreversible dead basins. Use mechanism-specific goals and inspect
    diagnostics after every irreversible event.
-2. **Continue `release` from the known prefix.** Start with
-   `v<vv^^>>v` (triggers 3 then 4). Test trigger 5 via suffix `v<>>>^`, then
-   look for a way to make trigger 2 change indirectly; direct player routes to
-   trigger 2 and trigger 6 have failed dynamically.
+2. **Continue `release` from a new hypothesis, not the trigger-5/6 one-rat
+   family.** The known prefix `v<vv^^>>v` plus trigger 5 can reduce the board to
+   a single `(18,4)` rat, but that mechanism strands it behind `(18,5)`. The next
+   useful attack must handle `(18,4)` before the top sweep or open its web
+   without spending the adjacent explosive chain.
 3. **Solve `tinderrectangle` as an ignition lure.** The winning geometry is
    either a corner rat at `(0,0)` / `(16,0)` with the player on row 3, or the
-   lower rat at `(2..6,6)` with the player on the far-right safe cells. The next
-   attack should hold the lower rat in that band while crossing right; existing
-   safe-side branches let it drift to `(8,6)`.
+   lower rat at `(2..6,6)` with the player on the far-right safe cells. The best
+   new lead is from `<^^^`: prepare the safe side while the lower rat remains at
+   `(2,3)`, then find a delayed release into `(2..6,6)`.
 4. **Use `release` as the template for `ai_takeover`.** Once `release` is
    solved, port its trigger order to `ai_takeover` and account for trigger 7/8
    and cyborg pathing.
