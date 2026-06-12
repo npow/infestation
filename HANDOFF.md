@@ -1297,6 +1297,54 @@ This pass shifted more work from broad search to human-style mechanism checks.
   `triggeronly:6`, and strict `6,8,7` / `6,8,7,2` trigger orders produced no
   continuation; do not treat trigger 6 as a free bottom-door opener.
 
+### Continuation pass - 2026-06-12 composite-goal/tooling pass
+
+- Solver tooling now supports compound timing goals in `lookup` / `branchdump`:
+  `cellnotratat:x,y,kind,ratx,raty`,
+  `triggeronlycellis:n,x,y,kind`, and
+  `triggeronlycellnot:n,x,y,kind`. `lookup` also accepts `--min-rats N`.
+  These were added specifically for human-style timing checks such as "open
+  this web while this actor is still alive" and "fire this trigger without
+  walling the escape cell." `cargo build --release -p solver` and
+  `cargo test -p solver` pass after the change.
+- `release`: the promising clean trigger-6 + left-trigger-2 mechanism was
+  checked more directly. From staged prefix
+  `v<vv^^>>vv><<v<<<^<^^<<><`, `lookup --goal
+  cellnotratat:1,16,explosive,2,16 --min-rats 20` ran to timeout with no
+  branch; a matching `branchdump` also returned empty.
+  The sidecar rat-geometry check also found no one-step way for the `(2,16)`
+  actor to move onto `(1,16)` or `(0,16)` before trigger 6 clears the blocker.
+  Treat the useful requirement as: clear `(1,16)` without spending the left
+  actor, or find a different actor entirely.
+- `release`: a separate 1-rat continuation from the macro best state
+  `v<vv^^>>v...>>>>` also timed out trying to clear `(18,5)` or kill `(18,4)`.
+  The board remains the same isolated-right-rat shape: the player can reach
+  trigger 6, but the right rat is sealed behind `(18,5)`.
+- `reload_v3`: the trigger-1 station is real but timing-sensitive. From
+  `P41 = ^>>>>>>>^^vvvvvv<<<^^<<^^<<<<^<<<<<<<<v<v`, immediate `^` gives a
+  new all-rat state with the roaming rat at `(4,17)`, but `lookup` found no
+  all-rat branch from that state to `triggeronly:1`, `triggeronlycellnot:1,1,21,web`,
+  or `ratat:10,22`; a BFS-style branchdump for `triggeronly:1` from this state
+  was still running. The older P42/P43 trigger-1 follow-ups remain dead for
+  all checked trigger-2/6/7 and lower-left web targets.
+- `cyborg_rats/ai_takeover`: the body-block idea around trigger 7 was modeled
+  exactly in `/tmp/ai_t7_local.py` using `/tmp/infestation-clingo/bin/python`.
+  From the 113-turn trigger-7 lane prefix, the local state space saturated
+  (`expanded=355`, `seen=71`, `trigger7_events=9`) with zero unsealed trigger-7
+  events. In every event, `(16,8)` and `(16,10)` are empty before the zap and
+  walls after it. The mechanical reason is `cyborg_rat.rs`'s `Dist` ordering:
+  stepping into the cells orthogonally adjacent to the player is disfavored, so
+  the closest body stops at `(16,7)`, one turn too high. Do not spend more time
+  on this exact body-block lane unless the approach position changes.
+- `blocked_v2`: a stronger all-rat staging path is
+  `^< ^^ v^ ^^ vv ^v vv vv v^ vv v^ <v <^ <v <^ <> ^. ^. ^.`, with the
+  follow-up `v^ v^ ^^ <^` reaching the upper rat wall while preserving all 9.
+  From that wall state, `trigger:3` with `--min-rats 9` and `--min-rats 8`
+  returns empty immediately; `cellnot:14,4,web --min-rats 7` from the previous
+  staging also returns empty. Relaxed `trigger:3` checks with `--min-rats 7`
+  and `--min-rats 6` also returned empty, so the upper-rat-wall route is not
+  just one preserved-rat short.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 8.

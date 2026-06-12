@@ -692,6 +692,7 @@ enum LookupGoal {
     CellChanged(i32, i32),
     CellIs(i32, i32, CellKind),
     CellNot(i32, i32, CellKind),
+    CellNotAndRatAt(i32, i32, CellKind, i32, i32),
     CellReachable(i32, i32),
     PlayerAt(i32, i32),
     PlayerFacing(i32, i32, Dir4),
@@ -707,6 +708,8 @@ enum LookupGoal {
     ExplosivesAtMost(usize),
     WebsAtMost(usize),
     RatDrop,
+    TriggerNumberOnlyWithCellIs(u8, i32, i32, CellKind),
+    TriggerNumberOnlyWithCellNot(u8, i32, i32, CellKind),
 }
 
 impl LookupGoal {
@@ -756,6 +759,33 @@ impl LookupGoal {
             "cellnot" => {
                 let (point, kind) = parse_point_and_cell_kind(arg);
                 Self::CellNot(point.0, point.1, kind)
+            }
+            "cellnotratat" | "cellnot-and-ratat" => {
+                let mut parts = arg.split(',');
+                let x = parts
+                    .next()
+                    .expect("cell x")
+                    .trim()
+                    .parse()
+                    .expect("cell x");
+                let y = parts
+                    .next()
+                    .expect("cell y")
+                    .trim()
+                    .parse()
+                    .expect("cell y");
+                let kind = parts
+                    .next()
+                    .map(str::trim)
+                    .map(parse_cell_kind_name)
+                    .expect("cell kind");
+                let rat_x = parts.next().expect("rat x").trim().parse().expect("rat x");
+                let rat_y = parts.next().expect("rat y").trim().parse().expect("rat y");
+                assert!(
+                    parts.next().is_none(),
+                    "expected cellx,celly,kind,ratx,raty"
+                );
+                Self::CellNotAndRatAt(x, y, kind, rat_x, rat_y)
             }
             "reachable" | "cellreachable" => {
                 let (x, y) = parse_required_point(arg);
@@ -879,6 +909,62 @@ impl LookupGoal {
                 Self::ExplosivesAtMost(arg.parse().expect("explosive count"))
             }
             "websle" | "websatmost" => Self::WebsAtMost(arg.parse().expect("web count")),
+            "triggeronlycellis" | "triggerstrictcellis" => {
+                let mut parts = arg.split(',');
+                let number = parts
+                    .next()
+                    .expect("trigger number")
+                    .trim()
+                    .parse()
+                    .expect("trigger number");
+                let x = parts
+                    .next()
+                    .expect("cell x")
+                    .trim()
+                    .parse()
+                    .expect("cell x");
+                let y = parts
+                    .next()
+                    .expect("cell y")
+                    .trim()
+                    .parse()
+                    .expect("cell y");
+                let kind = parts
+                    .next()
+                    .map(str::trim)
+                    .map(parse_cell_kind_name)
+                    .expect("cell kind");
+                assert!(parts.next().is_none(), "expected trigger,cellx,celly,kind");
+                Self::TriggerNumberOnlyWithCellIs(number, x, y, kind)
+            }
+            "triggeronlycellnot" | "triggerstrictcellnot" => {
+                let mut parts = arg.split(',');
+                let number = parts
+                    .next()
+                    .expect("trigger number")
+                    .trim()
+                    .parse()
+                    .expect("trigger number");
+                let x = parts
+                    .next()
+                    .expect("cell x")
+                    .trim()
+                    .parse()
+                    .expect("cell x");
+                let y = parts
+                    .next()
+                    .expect("cell y")
+                    .trim()
+                    .parse()
+                    .expect("cell y");
+                let kind = parts
+                    .next()
+                    .map(str::trim)
+                    .map(parse_cell_kind_name)
+                    .expect("cell kind");
+                assert!(parts.next().is_none(), "expected trigger,cellx,celly,kind");
+                Self::TriggerNumberOnlyWithCellNot(number, x, y, kind)
+            }
             other => panic!("unknown lookup goal {other}"),
         }
     }
@@ -1016,6 +1102,9 @@ fn lookup_goal_reached(
         }
         LookupGoal::CellIs(x, y, kind) => current.cell_kind_at(x as usize, y as usize) == kind,
         LookupGoal::CellNot(x, y, kind) => current.cell_kind_at(x as usize, y as usize) != kind,
+        LookupGoal::CellNotAndRatAt(x, y, kind, rat_x, rat_y) => {
+            current.cell_kind_at(x as usize, y as usize) != kind && rat_at(current, (rat_x, rat_y))
+        }
         LookupGoal::CellReachable(x, y) => distance_from_player(current, (x, y)) < 1_000,
         LookupGoal::PlayerAt(x, y) => {
             positions_matching(current, |cell| cell == CellKind::Player).contains(&(x, y))
@@ -1042,6 +1131,14 @@ fn lookup_goal_reached(
         LookupGoal::ExplosivesAtMost(count) => Features::from_grid(current).explosives <= count,
         LookupGoal::WebsAtMost(count) => Features::from_grid(current).webs <= count,
         LookupGoal::RatDrop => count_rats(current) < count_rats(initial),
+        LookupGoal::TriggerNumberOnlyWithCellIs(number, x, y, kind) => {
+            only_trigger_changed(initial, current, number)
+                && current.cell_kind_at(x as usize, y as usize) == kind
+        }
+        LookupGoal::TriggerNumberOnlyWithCellNot(number, x, y, kind) => {
+            only_trigger_changed(initial, current, number)
+                && current.cell_kind_at(x as usize, y as usize) != kind
+        }
     }
 }
 
@@ -1103,6 +1200,17 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         LookupGoal::CellIs(x, y, _) | LookupGoal::CellNot(x, y, _) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::CellNotAndRatAt(x, y, kind, rat_x, rat_y) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let rats = rat_positions(current);
+            let cell_penalty = if current.cell_kind_at(x as usize, y as usize) != kind {
+                0
+            } else {
+                nearest_target_distance(&players, &[(x, y)]) * 50 + 100_000
+            };
+            let rat_penalty = nearest_target_distance(&rats, &[(rat_x, rat_y)]) * 1_000;
+            cell_penalty + rat_penalty + heuristic(current) / 1_000
         }
         LookupGoal::CellReachable(x, y) => {
             distance_from_player(current, (x, y)) * 10_000 + heuristic(current) / 1_000
@@ -1176,6 +1284,26 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
                 + heuristic(current) / 1_000
         }
         LookupGoal::RatDrop => heuristic(current),
+        LookupGoal::TriggerNumberOnlyWithCellIs(number, x, y, kind) => {
+            let trigger_h =
+                lookup_goal_heuristic(LookupGoal::TriggerNumberOnly(number), initial, current);
+            let cell_penalty = if current.cell_kind_at(x as usize, y as usize) == kind {
+                0
+            } else {
+                500_000
+            };
+            trigger_h + cell_penalty
+        }
+        LookupGoal::TriggerNumberOnlyWithCellNot(number, x, y, kind) => {
+            let trigger_h =
+                lookup_goal_heuristic(LookupGoal::TriggerNumberOnly(number), initial, current);
+            let cell_penalty = if current.cell_kind_at(x as usize, y as usize) != kind {
+                0
+            } else {
+                500_000
+            };
+            trigger_h + cell_penalty
+        }
     }
 }
 
@@ -1225,6 +1353,11 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
         LookupGoal::CellNot(x, y, kind) => {
             (current.cell_kind_at(x as usize, y as usize) == kind) as i64
         }
+        LookupGoal::CellNotAndRatAt(x, y, kind, rat_x, rat_y) => {
+            let cell_missing = (current.cell_kind_at(x as usize, y as usize) == kind) as i64;
+            let rat_missing = !rat_at(current, (rat_x, rat_y)) as i64;
+            cell_missing + rat_missing
+        }
         LookupGoal::CellReachable(x, y) => distance_from_player(current, (x, y)),
         LookupGoal::PlayerAt(x, y) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
@@ -1268,6 +1401,14 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
             Features::from_grid(current).webs.saturating_sub(count) as i64
         }
         LookupGoal::RatDrop => count_rats(current) as i64,
+        LookupGoal::TriggerNumberOnlyWithCellIs(number, x, y, kind) => {
+            trigger_count(current, number) as i64 * 1_000_000
+                + (current.cell_kind_at(x as usize, y as usize) != kind) as i64
+        }
+        LookupGoal::TriggerNumberOnlyWithCellNot(number, x, y, kind) => {
+            trigger_count(current, number) as i64 * 1_000_000
+                + (current.cell_kind_at(x as usize, y as usize) == kind) as i64
+        }
     }
 }
 
@@ -1877,6 +2018,7 @@ fn solve_lookup(
     weight: i64,
     canonical: bool,
     goal: LookupGoal,
+    min_rats: Option<usize>,
     progress_every: u64,
 ) -> Option<(Vec<Vec<Action>>, PlayState)> {
     let nplayers = count_players(grid);
@@ -1893,6 +2035,9 @@ fn solve_lookup(
 
     if goal == LookupGoal::Win && count_rats(grid) == 0 {
         return Some((Vec::new(), PlayState::Won));
+    }
+    if min_rats.is_some_and(|minimum| count_rats(grid) < minimum) {
+        return None;
     }
     if lookup_goal_reached(goal, grid, grid, PlayState::Playing) {
         return Some((Vec::new(), PlayState::Playing));
@@ -1956,6 +2101,11 @@ fn solve_lookup(
             for actions in &tuples {
                 let (next_grid, play_state) = step(&cur_grid, actions);
                 if play_state == PlayState::GameOver {
+                    continue;
+                }
+                if play_state != PlayState::Won
+                    && min_rats.is_some_and(|minimum| count_rats(&next_grid) < minimum)
+                {
                     continue;
                 }
                 if prune_dead
@@ -2040,6 +2190,11 @@ fn solve_lookup(
         for actions in &tuples {
             let (next_grid, play_state) = step(&cur_grid, actions);
             if play_state == PlayState::GameOver {
+                continue;
+            }
+            if play_state != PlayState::Won
+                && min_rats.is_some_and(|minimum| count_rats(&next_grid) < minimum)
+            {
                 continue;
             }
             if prune_dead
@@ -7478,7 +7633,7 @@ fn main() {
     if mode == "lookup" {
         // solver lookup <csv> [--prefix MOVES] [--order bfs|gbfs|astar]
         //                     [--depth N] [--secs S] [--maxnodes N]
-        //                     [--weight W] [--progress N] [--no-canonical]
+        //                     [--weight W] [--min-rats N] [--progress N] [--no-canonical]
         let mut prefix_str = String::new();
         let mut order = LookupOrder::Bfs;
         let mut depth = 400usize;
@@ -7487,6 +7642,7 @@ fn main() {
         let mut weight = 5i64;
         let mut canonical = true;
         let mut goal = LookupGoal::Win;
+        let mut min_rats: Option<usize> = None;
         let mut progress_every = 100_000u64;
         let mut i = 3;
         while i < args.len() {
@@ -7519,6 +7675,10 @@ fn main() {
                     goal = LookupGoal::parse(&args[i + 1]);
                     i += 2;
                 }
+                "--min-rats" => {
+                    min_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
                 "--progress" => {
                     progress_every = args[i + 1].parse().unwrap();
                     i += 2;
@@ -7543,7 +7703,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "lookup solve: players={} prefix={} order={} depth={} secs={} maxnodes={} canonical={} weight={} goal={:?}",
+            "lookup solve: players={} prefix={} order={} depth={} secs={} maxnodes={} canonical={} weight={} goal={:?} min_rats={:?}",
             nplayers,
             prefix.len(),
             match order {
@@ -7556,7 +7716,8 @@ fn main() {
             max_nodes,
             canonical,
             weight,
-            goal
+            goal,
+            min_rats
         );
         let t0 = Instant::now();
         match solve_lookup(
@@ -7568,6 +7729,7 @@ fn main() {
             weight,
             canonical,
             goal,
+            min_rats,
             progress_every,
         ) {
             Some((suffix, play_state)) => {
