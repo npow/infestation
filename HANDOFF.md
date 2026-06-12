@@ -792,11 +792,13 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   - `solver`: `branchdump` / `lookup` now support `--goal rectsep`
     (`rectangle-lower-separated`). This is diagnostic-only. It accepts only
     states where a lower rat is in the proven row-6 winning band `(2..6,6)` and
-    the player already has an eight-column timing lead on rows 3-8. It rejects
-    the old contact line where the rat reaches `(6,6)` with the player at
-    `(7,6)`. The rectangle lower-safe target set was also corrected to the
-    verified safe cells `(14,6)`, `(14,7)`, and `(14,8)`; previous heuristic
-    lists included unsafe `(15,7)` / `(15,8)`.
+    the player is on a right-side one-move-winning staging cell. It rejects the
+    old contact line where the rat reaches `(6,6)` with the player at `(7,6)`.
+    The rectangle lower target set represents one-move-winning staging
+    cells, not only cells safe for stalling: virtual ignition checks include
+    `(13,8)`, `(15,7)`, and `(15,8)` because the player can move into column 14
+    as the ignition happens. Treat `(14,6)`, `(14,7)`, and `(14,8)` as the true
+    stall-safe cells.
   - `tinderrectangle`: `rectsep` returned no branches from the initial board
     at depth 150 / 120s, from the 84-turn safe-side staging branch at depth 95,
     or from the 113-turn left-wall pump at depth 80. That is stronger evidence
@@ -820,6 +822,12 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
     dynamically misleading. `wp` to `(16,9)` from the opener returned
     `UNREACHABLE`, and a preserved-rat `trigger:7` branchdump returned no
     branch. Treat trigger 7 as a timing/pressure blocker, not a simple waypoint.
+    A trigger-order beam found a slightly different 14-turn first branch,
+    `v<vv^^<vv>>><^`, with 23 rats, 9 explosives, 32 webs, 12 triggers, and
+    22/23 reachable rats. It is not a solution lead by itself: preserved
+    branchdumps from that state for `trigger:7` and `ratgone:18,4` returned no
+    branches, so it appears to be another version of the same dynamic-pressure
+    blocker rather than a bypass.
   - `cooperation/blocked_v2`: from both strong 3-/4-rat frontiers, bounded
     checks still could not consume trigger 2, mutate either trigger-2 cell
     `(3,14)` / `(5,11)`, open `(1,15)`, or detonate/remove `(2,15)`. A directed

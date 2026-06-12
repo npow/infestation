@@ -4672,8 +4672,8 @@ fn rectangle_lower_rat_targets() -> [(i32, i32); 5] {
     [(2, 6), (3, 6), (4, 6), (5, 6), (6, 6)]
 }
 
-fn rectangle_lower_safe_targets() -> [(i32, i32); 3] {
-    [(14, 6), (14, 7), (14, 8)]
+fn rectangle_lower_safe_targets() -> [(i32, i32); 6] {
+    [(14, 6), (14, 7), (15, 7), (13, 8), (14, 8), (15, 8)]
 }
 
 fn rectangle_lower_ready(grid: &Grid) -> bool {
@@ -4697,12 +4697,12 @@ fn rectangle_lower_separated(grid: &Grid) -> bool {
             && (2..=6).contains(&rat.0)
             && players
                 .iter()
-                .any(|&player| rectangle_lower_has_timing_lead(rat, player))
+                .any(|&player| rectangle_lower_has_escape_staging(player))
     })
 }
 
-fn rectangle_lower_has_timing_lead(rat: (i32, i32), player: (i32, i32)) -> bool {
-    player.0 - rat.0 >= 8 && (3..=8).contains(&player.1)
+fn rectangle_lower_has_escape_staging(player: (i32, i32)) -> bool {
+    rectangle_lower_safe_targets().contains(&player)
 }
 
 fn rectangle_lower_separated_heuristic(
@@ -4718,6 +4718,7 @@ fn rectangle_lower_separated_heuristic(
     }
 
     let rat_targets = rectangle_lower_rat_targets();
+    let safe_targets = rectangle_lower_safe_targets();
     let rats = tinder_lure_rat_positions(grid);
     let all_rats = rat_positions(grid);
     let players = positions_matching(grid, |cell| cell == CellKind::Player);
@@ -4734,13 +4735,7 @@ fn rectangle_lower_separated_heuristic(
                 } else {
                     nearest_target_distance(&[rat], &rat_targets) * 45_000
                 };
-                let timing_deficit = (rat.0 + 8 - player.0).max(0) as i64;
-                let row_cost = if (3..=8).contains(&player.1) {
-                    0
-                } else {
-                    (player.1 - 6).abs() as i64 * 5_000
-                };
-                target_cost + timing_deficit * 70_000 + row_cost
+                target_cost + nearest_target_distance(&[player], &safe_targets) * 70_000
             })
         })
         .min()
