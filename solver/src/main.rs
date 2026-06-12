@@ -679,6 +679,7 @@ enum LookupGoal {
     RectangleLowerReady,
     RectangleLowerSeparated,
     TriggerNumber(u8),
+    TriggerNumberOnly(u8),
     CellChanged(i32, i32),
     CellIs(i32, i32, CellKind),
     CellNot(i32, i32, CellKind),
@@ -715,6 +716,9 @@ impl LookupGoal {
         };
         match kind {
             "trigger" => Self::TriggerNumber(arg.parse().expect("trigger number")),
+            "triggeronly" | "triggerstrict" | "triggerexact" => {
+                Self::TriggerNumberOnly(arg.parse().expect("trigger number"))
+            }
             "cell" | "cellchanged" => {
                 let (x, y) = parse_required_point(arg);
                 Self::CellChanged(x, y)
@@ -916,6 +920,38 @@ fn trigger_count(grid: &Grid, number: u8) -> usize {
     count
 }
 
+fn trigger_counts(grid: &Grid) -> HashMap<u8, usize> {
+    let mut counts = HashMap::new();
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if let CellKind::Trigger(number) = grid.cell_kind_at(x, y) {
+                *counts.entry(number).or_insert(0) += 1;
+            }
+        }
+    }
+    counts
+}
+
+fn only_trigger_changed(initial: &Grid, current: &Grid, number: u8) -> bool {
+    let initial_counts = trigger_counts(initial);
+    let current_counts = trigger_counts(current);
+    if current_counts.get(&number).copied().unwrap_or(0)
+        >= initial_counts.get(&number).copied().unwrap_or(0)
+    {
+        return false;
+    }
+
+    initial_counts
+        .keys()
+        .chain(current_counts.keys())
+        .copied()
+        .filter(|&candidate| candidate != number)
+        .all(|candidate| {
+            initial_counts.get(&candidate).copied().unwrap_or(0)
+                == current_counts.get(&candidate).copied().unwrap_or(0)
+        })
+}
+
 fn win_ready(grid: &Grid) -> bool {
     let nplayers = count_players(grid);
     let Ok(tuples) = std::panic::catch_unwind(|| all_action_tuples(nplayers)) else {
@@ -943,6 +979,7 @@ fn lookup_goal_reached(
         LookupGoal::TriggerNumber(number) => {
             trigger_count(current, number) < trigger_count(initial, number)
         }
+        LookupGoal::TriggerNumberOnly(number) => only_trigger_changed(initial, current, number),
         LookupGoal::CellChanged(x, y) => {
             current.cell_kind_at(x as usize, y as usize)
                 != initial.cell_kind_at(x as usize, y as usize)
@@ -1003,7 +1040,7 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             count_rats(initial),
             count_explosives(initial),
         ),
-        LookupGoal::TriggerNumber(number) => {
+        LookupGoal::TriggerNumber(number) | LookupGoal::TriggerNumberOnly(number) => {
             let dist = player_dist_map(current);
             let nearest = trigger_positions(current, number)
                 .iter()
@@ -1125,7 +1162,7 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
             count_rats(initial),
             count_explosives(initial),
         ),
-        LookupGoal::TriggerNumber(number) => {
+        LookupGoal::TriggerNumber(number) | LookupGoal::TriggerNumberOnly(number) => {
             trigger_count(current, number) as i64 * 1_000_000 + count_rats(current) as i64 * 1_000
         }
         LookupGoal::CellChanged(x, y) => {
@@ -3799,6 +3836,7 @@ fn solve_trigger_order_lookup(
     mop_strategy: &str,
     mop_weight: i64,
     depth: usize,
+    strict_trigger_order: bool,
 ) -> Option<Vec<Vec<Action>>> {
     let mut branches = vec![Branch {
         grid: grid.clone(),
@@ -3828,12 +3866,17 @@ fn solve_trigger_order_lookup(
         let mut next_branches = Vec::new();
         for branch in branches.iter().take(beam.min(branches.len())) {
             let before = Features::from_grid(&branch.grid);
+            let goal = if strict_trigger_order {
+                LookupGoal::TriggerNumberOnly(number)
+            } else {
+                LookupGoal::TriggerNumber(number)
+            };
             let results = solve_lookup_goal_branches(
                 &branch.grid,
                 segment_depth,
                 segment_secs,
                 segment_nodes,
-                LookupGoal::TriggerNumber(number),
+                goal,
                 segment_results,
                 None,
             );
@@ -6670,7 +6713,7 @@ fn main() {
     if mode == "triglookup" {
         // solver triglookup <csv> [--order "1,2,3"] [--segdepth N]
         //                         [--segsecs S] [--segnodes N] [--results N]
-        //                         [--beam N] [--mopsecs S]
+        //                         [--beam N] [--mopsecs S] [--strict]
         let mut prefix_str = String::new();
         let mut order: Option<Vec<u8>> = None;
         let mut segment_depth = 120usize;
@@ -6682,6 +6725,7 @@ fn main() {
         let mut mop_strategy = "gbfs".to_string();
         let mut mop_weight = 5i64;
         let mut depth = 400usize;
+        let mut strict_trigger_order = false;
         let mut i = 3;
         while i < args.len() {
             match args[i].as_str() {
@@ -6729,6 +6773,10 @@ fn main() {
                     depth = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--strict" => {
+                    strict_trigger_order = true;
+                    i += 1;
+                }
                 _ => i += 1,
             }
         }
@@ -6744,7 +6792,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "trigger-lookup solve: order={:?}, players={}, prefix={}, segdepth={}, segsecs={}, segnodes={}, results={}, beam={}",
+            "trigger-lookup solve: order={:?}, players={}, prefix={}, segdepth={}, segsecs={}, segnodes={}, results={}, beam={}, strict={}",
             order,
             nplayers,
             prefix.len(),
@@ -6752,7 +6800,8 @@ fn main() {
             segment_secs,
             segment_nodes,
             segment_results,
-            beam
+            beam,
+            strict_trigger_order
         );
         let t0 = Instant::now();
         match solve_trigger_order_lookup(
@@ -6767,6 +6816,7 @@ fn main() {
             &mop_strategy,
             mop_weight,
             depth,
+            strict_trigger_order,
         ) {
             Some(suffix) => {
                 let mut path = prefix;

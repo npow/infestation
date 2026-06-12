@@ -903,6 +903,20 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   - `cyborg_rats/ai_takeover`: cyborg movement did not create a bypass in the
     tested budgets. Relaxed probes still found no route to trigger 7/8 or
     right-side `(18,5)` staging from the standard opener.
+  - `cyborg_rats/ai_takeover`: added strict trigger diagnostics:
+    `branchdump --goal triggeronly:N` and `triglookup --strict`, where a trigger
+    goal only succeeds if trigger `N` changes and every other trigger number is
+    unchanged. This exposed a false assumption in earlier `triglookup` output:
+    the loose trigger goal can accept branches that spent another trigger first.
+    Strict checks show the clean top-release families still cannot reach trigger
+    7, while the known right-side family
+    `^^^^^^v^vvvvvvv>>>vv<<<<v<<^^^^^^^^<^<<<>>>>vvvvvvvvv>>>>>>>>^^^>>>vvv>>>vvvvv<<<<<<<<<<<<<<<<^^^<<<`
+    opens `(18,4)` only after spending trigger 4 and leaving the top band sealed.
+    Inserting trigger 3 at the turn-60 or turn-67 checkpoints consumes trigger 3
+    but does not release the top row; it leaves 21 rats, 38-39 explosives, and
+    zero reachable rats. Do not repeat simple trigger-order permutations here;
+    the remaining blocker is physical herd separation/access to trigger 7 after
+    top release.
   - `cooperation/handoff`: the reachable trigger-2 family is confirmed dead:
     after consuming it, the board can reach `rats=2`, `explosives=0`,
     `triggers=0`, `reachable_rats=0`, with rats at `(10,6)` and `(1,7)`. Checks
