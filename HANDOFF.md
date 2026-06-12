@@ -1881,6 +1881,34 @@ real new mechanism frontier.
   the two remaining explosives at `(14,12)` / `(15,12)` before the local rat
   becomes a contact trap.
 
+### Status check - 2026-06-12 22:45Z
+
+- Re-fetched remotes and re-ran the current `final_solutions.json` through this
+  checkout's `target/release/solver`; all 28 recorded solutions still verify
+  as `result=Won`. An earlier failed sweep in `/tmp/infestation-runs` used the
+  wrong JSON key and only replayed empty strings; ignore it.
+- No new `Won` candidate was found in this pass.
+- `release`: the latest post-trigger-5 branch
+  `v<vv^^>>vv><<v<<<^<^^<<>>>vvv>>>>>>>><<^^vv>` verifies as `Playing` at
+  44 turns with the lower actor at `(12,17)`, but bounded preserved-rat
+  branchdumps found no branch to `ratat:14,17`, exact
+  `ratplayer:14,17,16,14`, `triggeronly:6`, or `cellnot:18,5,web`. This makes
+  the trigger-5/row-17 actor family look like a staging loop rather than the
+  intended route. Next `release` work should back up before trigger 5 and find
+  a mechanism for `(18,4)` / `(18,5)`, not keep pushing trigger 6 from this
+  family.
+- `cyborg_rats/ai_takeover`: from the 113-turn all-reachable 3-rat post-trigger
+  state, appending `>` is live and shifts the local cyborg `(2,16)->(2,17)` and
+  the far cyborg `(18,4)->(18,5)`. Follow-up branchdumps from that shifted state
+  found no `ratsle:2` cleanup and no detonation of `(14,12)` or `(15,12)`.
+  The only `ratgone:2,17` branch is suffix `<`, which just moves the local
+  cyborg back to `(2,16)` while keeping 3 rats, so it is not progress.
+- `reload_v3`: from the verified 48-turn `2 -> 1` state
+  `^>>>>>>>^vvvvvv<<<^^^<<^^<<<<<<<<<^vvvvv<<<^^<^>`, bounded branchdumps found
+  no preserved-rat branch to change `(2,21)` explosive, change `(1,21)` web, or
+  station the player at `(3,21)`. From the 19-turn trigger-2 state, preserving
+  all 3 rats while changing `(3,21)` web also returned empty.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
