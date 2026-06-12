@@ -571,13 +571,22 @@ impl LookupOrder {
 enum LookupGoal {
     Win,
     WinReady,
+    RectangleReady,
+    RectangleLowerReady,
     TriggerNumber(u8),
     CellChanged(i32, i32),
     CellIs(i32, i32, CellKind),
     CellNot(i32, i32, CellKind),
+    CellReachable(i32, i32),
     PlayerAt(i32, i32),
     RatAt(i32, i32),
     RatGone(i32, i32),
+    RatsAtMost(usize),
+    ReachableRatsAtLeast(usize),
+    AllRatsReachable,
+    TriggersAtMost(usize),
+    ExplosivesAtMost(usize),
+    WebsAtMost(usize),
     RatDrop,
 }
 
@@ -587,6 +596,9 @@ impl LookupGoal {
             return match input {
                 "win" => Self::Win,
                 "readywin" | "winready" => Self::WinReady,
+                "rectready" | "rectangle-ready" => Self::RectangleReady,
+                "rectlower" | "rectangle-lower" => Self::RectangleLowerReady,
+                "allreachable" | "all-rats-reachable" => Self::AllRatsReachable,
                 "ratdrop" => Self::RatDrop,
                 other => panic!("unknown lookup goal {other}"),
             };
@@ -605,6 +617,10 @@ impl LookupGoal {
                 let (point, kind) = parse_point_and_cell_kind(arg);
                 Self::CellNot(point.0, point.1, kind)
             }
+            "reachable" | "cellreachable" => {
+                let (x, y) = parse_required_point(arg);
+                Self::CellReachable(x, y)
+            }
             "playerat" => {
                 let (x, y) = parse_required_point(arg);
                 Self::PlayerAt(x, y)
@@ -617,6 +633,17 @@ impl LookupGoal {
                 let (x, y) = parse_required_point(arg);
                 Self::RatGone(x, y)
             }
+            "ratsle" | "ratsatmost" => Self::RatsAtMost(arg.parse().expect("rat count")),
+            "reachablege" | "reachableratsge" => {
+                Self::ReachableRatsAtLeast(arg.parse().expect("reachable rat count"))
+            }
+            "triggersle" | "triggersatmost" => {
+                Self::TriggersAtMost(arg.parse().expect("trigger count"))
+            }
+            "explosivesle" | "explosivesatmost" => {
+                Self::ExplosivesAtMost(arg.parse().expect("explosive count"))
+            }
+            "websle" | "websatmost" => Self::WebsAtMost(arg.parse().expect("web count")),
             other => panic!("unknown lookup goal {other}"),
         }
     }
@@ -691,6 +718,10 @@ fn lookup_goal_reached(
     match goal {
         LookupGoal::Win => play_state == PlayState::Won,
         LookupGoal::WinReady => play_state == PlayState::Won || win_ready(current),
+        LookupGoal::RectangleReady => play_state == PlayState::Won || win_ready(current),
+        LookupGoal::RectangleLowerReady => {
+            play_state == PlayState::Won || rectangle_lower_ready(current)
+        }
         LookupGoal::TriggerNumber(number) => {
             trigger_count(current, number) < trigger_count(initial, number)
         }
@@ -700,11 +731,18 @@ fn lookup_goal_reached(
         }
         LookupGoal::CellIs(x, y, kind) => current.cell_kind_at(x as usize, y as usize) == kind,
         LookupGoal::CellNot(x, y, kind) => current.cell_kind_at(x as usize, y as usize) != kind,
+        LookupGoal::CellReachable(x, y) => distance_from_player(current, (x, y)) < 1_000,
         LookupGoal::PlayerAt(x, y) => {
             positions_matching(current, |cell| cell == CellKind::Player).contains(&(x, y))
         }
         LookupGoal::RatAt(x, y) => rat_at(current, (x, y)),
         LookupGoal::RatGone(x, y) => !rat_at(current, (x, y)),
+        LookupGoal::RatsAtMost(count) => count_rats(current) <= count,
+        LookupGoal::ReachableRatsAtLeast(count) => reachable_rat_count(current) >= count,
+        LookupGoal::AllRatsReachable => reachable_rat_count(current) == count_rats(current),
+        LookupGoal::TriggersAtMost(count) => Features::from_grid(current).triggers <= count,
+        LookupGoal::ExplosivesAtMost(count) => Features::from_grid(current).explosives <= count,
+        LookupGoal::WebsAtMost(count) => Features::from_grid(current).webs <= count,
         LookupGoal::RatDrop => count_rats(current) < count_rats(initial),
     }
 }
@@ -722,6 +760,12 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             } else {
                 heuristic(current)
             }
+        }
+        LookupGoal::RectangleReady => {
+            rectangle_winready_heuristic(current, count_rats(initial), count_explosives(initial))
+        }
+        LookupGoal::RectangleLowerReady => {
+            rectangle_lower_ready_heuristic(current, count_rats(initial), count_explosives(initial))
         }
         LookupGoal::TriggerNumber(number) => {
             let dist = player_dist_map(current);
@@ -743,6 +787,9 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
         }
+        LookupGoal::CellReachable(x, y) => {
+            distance_from_player(current, (x, y)) * 10_000 + heuristic(current) / 1_000
+        }
         LookupGoal::PlayerAt(x, y) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
@@ -754,6 +801,33 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         LookupGoal::RatGone(x, y) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::RatsAtMost(count) => {
+            count_rats(current).saturating_sub(count) as i64 * 1_000_000
+                + heuristic(current) / 1_000
+        }
+        LookupGoal::ReachableRatsAtLeast(count) => {
+            count.saturating_sub(reachable_rat_count(current)) as i64 * 1_000_000
+                + count_rats(current) as i64 * 1_000
+        }
+        LookupGoal::AllRatsReachable => {
+            count_rats(current).saturating_sub(reachable_rat_count(current)) as i64 * 1_000_000
+                + count_rats(current) as i64 * 1_000
+        }
+        LookupGoal::TriggersAtMost(count) => {
+            Features::from_grid(current).triggers.saturating_sub(count) as i64 * 1_000_000
+                + heuristic(current) / 1_000
+        }
+        LookupGoal::ExplosivesAtMost(count) => {
+            Features::from_grid(current)
+                .explosives
+                .saturating_sub(count) as i64
+                * 1_000_000
+                + heuristic(current) / 1_000
+        }
+        LookupGoal::WebsAtMost(count) => {
+            Features::from_grid(current).webs.saturating_sub(count) as i64 * 100_000
+                + heuristic(current) / 1_000
         }
         LookupGoal::RatDrop => heuristic(current),
     }
@@ -775,6 +849,12 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
                 + Features::from_grid(current).explosives as i64 * 100
                 + Features::from_grid(current).webs as i64
         }
+        LookupGoal::RectangleReady => {
+            rectangle_winready_heuristic(current, count_rats(initial), count_explosives(initial))
+        }
+        LookupGoal::RectangleLowerReady => {
+            rectangle_lower_ready_heuristic(current, count_rats(initial), count_explosives(initial))
+        }
         LookupGoal::TriggerNumber(number) => {
             trigger_count(current, number) as i64 * 1_000_000 + count_rats(current) as i64 * 1_000
         }
@@ -788,12 +868,29 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
         LookupGoal::CellNot(x, y, kind) => {
             (current.cell_kind_at(x as usize, y as usize) == kind) as i64
         }
+        LookupGoal::CellReachable(x, y) => distance_from_player(current, (x, y)),
         LookupGoal::PlayerAt(x, y) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)])
         }
         LookupGoal::RatAt(x, y) => !rat_at(current, (x, y)) as i64,
         LookupGoal::RatGone(x, y) => rat_at(current, (x, y)) as i64,
+        LookupGoal::RatsAtMost(count) => count_rats(current).saturating_sub(count) as i64,
+        LookupGoal::ReachableRatsAtLeast(count) => {
+            count.saturating_sub(reachable_rat_count(current)) as i64
+        }
+        LookupGoal::AllRatsReachable => {
+            count_rats(current).saturating_sub(reachable_rat_count(current)) as i64
+        }
+        LookupGoal::TriggersAtMost(count) => {
+            Features::from_grid(current).triggers.saturating_sub(count) as i64
+        }
+        LookupGoal::ExplosivesAtMost(count) => Features::from_grid(current)
+            .explosives
+            .saturating_sub(count) as i64,
+        LookupGoal::WebsAtMost(count) => {
+            Features::from_grid(current).webs.saturating_sub(count) as i64
+        }
         LookupGoal::RatDrop => count_rats(current) as i64,
     }
 }
@@ -1756,7 +1853,7 @@ fn solve_lookup_goal_branches(
 
     while let Some(idx) = q.pop_front() {
         expansions += 1;
-        if expansions % 5_000 == 0
+        if expansions % 256 == 0
             && (start.elapsed().as_secs_f64() > time_limit_secs || nodes.len() >= max_nodes)
         {
             break;
@@ -4446,6 +4543,294 @@ fn rectangle_trap_heuristic(grid: &Grid, initial_rats: usize, initial_explosives
     pre_ignition_kill_penalty + contact_penalty + best_plan_score
 }
 
+fn rectangle_winready_heuristic(
+    grid: &Grid,
+    initial_rats: usize,
+    initial_explosives: usize,
+) -> i64 {
+    if win_ready(grid) {
+        return 0;
+    }
+    if count_explosives(grid) < initial_explosives {
+        return 1_000_000_000 + count_rats(grid) as i64 * 1_000_000;
+    }
+
+    let all_rats = rat_positions(grid);
+    let lure_rats = tinder_lure_rat_positions(grid);
+    let players = positions_matching(grid, |cell| cell == CellKind::Player);
+    let player_dist = player_dist_map(grid);
+    let lost_rats = initial_rats.saturating_sub(count_rats(grid)) as i64;
+    let nearest_rat_to_player = players
+        .iter()
+        .flat_map(|&player| all_rats.iter().map(move |&rat| manhattan(player, rat)))
+        .min()
+        .unwrap_or(1_000);
+    let contact_penalty = if nearest_rat_to_player <= 1 {
+        100_000
+    } else if nearest_rat_to_player == 2 {
+        10_000
+    } else {
+        0
+    };
+
+    let row_three_safe: Vec<_> = (1..=15).map(|x| (x, 3)).collect();
+    let lower_safe = [(14, 6), (14, 7), (15, 7), (13, 8), (14, 8), (15, 8)];
+    let lower_targets = [(2, 6), (3, 6), (4, 6), (5, 6), (6, 6)];
+    let corner_targets = [(0, 0), (16, 0), (13, 8)];
+
+    let lower_overrun = lure_rats
+        .iter()
+        .filter(|&&(_, y)| y == 6)
+        .filter_map(|&(x, _)| (x > 6).then_some((x - 6) as i64))
+        .min()
+        .unwrap_or(0);
+
+    let lower_score = rectangle_lower_plan_score(
+        grid,
+        &lure_rats,
+        &lower_targets,
+        &lower_safe,
+        &player_dist,
+        80_000 * lower_overrun,
+    );
+    let corner_score = rectangle_plan_score(
+        grid,
+        &all_rats,
+        &corner_targets,
+        &row_three_safe,
+        &player_dist,
+        0,
+    );
+
+    lost_rats * 250_000 + contact_penalty + lower_score.min(corner_score)
+}
+
+fn rectangle_lower_rat_targets() -> [(i32, i32); 5] {
+    [(2, 6), (3, 6), (4, 6), (5, 6), (6, 6)]
+}
+
+fn rectangle_lower_safe_targets() -> [(i32, i32); 6] {
+    [(14, 6), (14, 7), (15, 7), (13, 8), (14, 8), (15, 8)]
+}
+
+fn rectangle_lower_ready(grid: &Grid) -> bool {
+    if win_ready(grid) {
+        return true;
+    }
+
+    let targets = rectangle_lower_rat_targets();
+    let safe_targets = rectangle_lower_safe_targets();
+    rat_at_any(grid, &targets) && player_at_any(grid, &safe_targets)
+}
+
+fn rectangle_lower_ready_heuristic(
+    grid: &Grid,
+    initial_rats: usize,
+    initial_explosives: usize,
+) -> i64 {
+    if rectangle_lower_ready(grid) {
+        return 0;
+    }
+    if count_explosives(grid) < initial_explosives {
+        return 1_000_000_000 + count_rats(grid) as i64 * 1_000_000;
+    }
+
+    let rat_targets = rectangle_lower_rat_targets();
+    let safe_targets = rectangle_lower_safe_targets();
+    let rats = tinder_lure_rat_positions(grid);
+    let all_rats = rat_positions(grid);
+    let players = positions_matching(grid, |cell| cell == CellKind::Player);
+    let player_dist = player_dist_map(grid);
+    let rat_on_target = rat_at_any(grid, &rat_targets);
+    let player_safe = player_at_any(grid, &safe_targets);
+    let lost_rats = initial_rats.saturating_sub(count_rats(grid)) as i64;
+
+    let rat_score = rats
+        .iter()
+        .map(|&(x, y)| {
+            if y == 6 && (2..=6).contains(&x) {
+                return 0;
+            }
+            if y == 6 && x > 6 {
+                return 500_000 + (x - 6) as i64 * 150_000;
+            }
+            nearest_target_distance(&[(x, y)], &rat_targets) * 45_000
+        })
+        .min()
+        .unwrap_or(1_000_000);
+
+    let target_clearance = rat_targets
+        .iter()
+        .map(|&(x, y)| match grid.cell_kind_at(x as usize, y as usize) {
+            CellKind::Wall | CellKind::BlackHole => 1_000_000,
+            CellKind::Spiderweb => {
+                let distance = player_dist[y as usize][x as usize];
+                70_000
+                    + if distance == i32::MAX {
+                        70_000
+                    } else {
+                        distance as i64 * 700
+                    }
+            }
+            _ => 0,
+        })
+        .min()
+        .unwrap_or(1_000_000);
+
+    let safe_distance = safe_targets
+        .iter()
+        .filter_map(|&(x, y)| {
+            let distance = player_dist[y as usize][x as usize];
+            (distance != i32::MAX).then_some(distance as i64)
+        })
+        .min()
+        .unwrap_or(1_000);
+
+    let lower_overrun = rats
+        .iter()
+        .filter(|&&(_, y)| y == 6)
+        .filter_map(|&(x, _)| (x > 6).then_some((x - 6) as i64))
+        .min()
+        .unwrap_or(0);
+    let nearest_rat_to_player = players
+        .iter()
+        .flat_map(|&player| all_rats.iter().map(move |&rat| manhattan(player, rat)))
+        .min()
+        .unwrap_or(1_000);
+    let contact_penalty = if nearest_rat_to_player <= 1 {
+        100_000
+    } else if nearest_rat_to_player == 2 {
+        20_000
+    } else {
+        0
+    };
+
+    let staged_safe_score = if rat_on_target {
+        safe_distance * 6_000
+    } else if player_safe {
+        120_000
+    } else {
+        safe_distance.min(40) * 250
+    };
+
+    lost_rats * 500_000
+        + lower_overrun * 200_000
+        + contact_penalty
+        + rat_score
+        + target_clearance
+        + staged_safe_score
+        + if player_safe && !rat_on_target {
+            250_000
+        } else {
+            0
+        }
+}
+
+fn rectangle_plan_score(
+    grid: &Grid,
+    rats: &[(i32, i32)],
+    rat_targets: &[(i32, i32)],
+    safe_targets: &[(i32, i32)],
+    player_dist: &[Vec<i32>],
+    extra_penalty: i64,
+) -> i64 {
+    let rat_distance = nearest_target_distance(rats, rat_targets);
+    let safe_distance = safe_targets
+        .iter()
+        .filter_map(|&(x, y)| {
+            if x < 0 || y < 0 || x as usize >= grid.width() || y as usize >= grid.height() {
+                return None;
+            }
+            let distance = player_dist[y as usize][x as usize];
+            (distance != i32::MAX).then_some(distance as i64)
+        })
+        .min()
+        .unwrap_or(1_000);
+    let target_clearance = rat_targets
+        .iter()
+        .map(|&(x, y)| {
+            if x < 0 || y < 0 || x as usize >= grid.width() || y as usize >= grid.height() {
+                return 1_000_000;
+            }
+            match grid.cell_kind_at(x as usize, y as usize) {
+                CellKind::Wall | CellKind::BlackHole => 1_000_000,
+                CellKind::Spiderweb => {
+                    let distance = player_dist[y as usize][x as usize];
+                    50_000
+                        + if distance == i32::MAX {
+                            50_000
+                        } else {
+                            distance as i64 * 500
+                        }
+                }
+                _ => 0,
+            }
+        })
+        .min()
+        .unwrap_or(1_000_000);
+
+    rat_distance * 20_000 + safe_distance * 1_500 + target_clearance + extra_penalty
+}
+
+fn rectangle_lower_plan_score(
+    grid: &Grid,
+    rats: &[(i32, i32)],
+    rat_targets: &[(i32, i32)],
+    safe_targets: &[(i32, i32)],
+    player_dist: &[Vec<i32>],
+    extra_penalty: i64,
+) -> i64 {
+    let safe_distance = safe_targets
+        .iter()
+        .filter_map(|&(x, y)| {
+            if x < 0 || y < 0 || x as usize >= grid.width() || y as usize >= grid.height() {
+                return None;
+            }
+            let distance = player_dist[y as usize][x as usize];
+            (distance != i32::MAX).then_some(distance as i64)
+        })
+        .min()
+        .unwrap_or(1_000);
+
+    let best_target_score = rat_targets
+        .iter()
+        .map(|&(target_x, target_y)| {
+            let rat_distance = rats
+                .iter()
+                .map(|&rat| manhattan(rat, (target_x, target_y)))
+                .min()
+                .unwrap_or(1_000);
+            let target_clearance = match grid.cell_kind_at(target_x as usize, target_y as usize) {
+                CellKind::Wall | CellKind::BlackHole => 1_000_000,
+                CellKind::Spiderweb => {
+                    let distance = player_dist[target_y as usize][target_x as usize];
+                    50_000
+                        + if distance == i32::MAX {
+                            50_000
+                        } else {
+                            distance as i64 * 500
+                        }
+                }
+                _ => 0,
+            };
+            let blocker_x = target_x + 1;
+            let blocker_penalty = if blocker_x as usize >= grid.width() {
+                1_000_000
+            } else {
+                match grid.cell_kind_at(blocker_x as usize, target_y as usize) {
+                    CellKind::Spiderweb => 0,
+                    CellKind::Wall => 10_000,
+                    _ => 200_000,
+                }
+            };
+            rat_distance * 20_000 + target_clearance + blocker_penalty
+        })
+        .min()
+        .unwrap_or(1_000_000);
+
+    best_target_score + safe_distance * 1_500 + extra_penalty
+}
+
 fn tinderbox_heuristic(
     grid: &Grid,
     initial_rats: usize,
@@ -4453,6 +4838,10 @@ fn tinderbox_heuristic(
     rat_target: (i32, i32),
     safe_target: (i32, i32),
 ) -> i64 {
+    if std::env::var("RECTLOWER_H").is_ok() && grid.width() >= 16 {
+        return rectangle_lower_ready_heuristic(grid, initial_rats, initial_explosives);
+    }
+
     if std::env::var("TRAP_H").is_ok() && grid.width() >= 16 {
         return rectangle_trap_heuristic(grid, initial_rats, initial_explosives);
     }

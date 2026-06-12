@@ -267,6 +267,16 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   rat prefers the black hole north unless the player can stand due west on
   `(0,16)`, which is the inaccessible trigger cell. Treat this as a dead
   diagnostic lead, not progress.
+- `release`: explicit trigger order `5,6,2` from opener `v<vv^^>>v` reaches
+  trigger 5 with suffix `v<>>>^`, but all trigger-6 attempts fall into the
+  bottom-right basin. Verifying one representative branch plus the final down
+  move onto `(19,18)` shows `result=Playing`, rats=1 at `(18,4)`, triggers=2
+  (both trigger-2 cells), and `reachable_rats=0`; the right explosive column
+  `(18,6..8)` is still intact. From the clean post-trigger-5 prefix
+  `v<vv^^>>vv<>>>^`, `ratat:19,18`, `playerat:1,16`, and `trigger:6` all
+  returned no branch in tested budgets. This rules out the current
+  player-trigger-6 line; a solution needs trigger 6 fired while the player is
+  positioned differently, or a different opener.
 - `reload_v3`: the direct trigger-7 opener `^^^^^<<<<<<^^^` consumes the only
   reachable triggers and leaves zero reachable trigger continuations. A better
   non-trigger branch,
@@ -283,6 +293,19 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   `7,6`, `7,5,6`, and `7,4,5,6` repeatedly produced zero continuations after
   trigger 7; trigger 7 first is still the wrong objective unless a setup event
   changes access to the top trigger cage.
+- `reload_v3`: rechecking the 32-move non-trigger branch on 2026-06-12
+  reproduced the same blocker. `trigger:7` branches consume the upper trigger
+  pair and can wall off parts of the 7-cage, but they still leave `(0,21)`
+  sealed. Follow-up `playerat:9,4`, `trigger:6`, `cellnot:1,21,web`, and an
+  explicit `triglookup` order `7,6` did not produce a route to the remote
+  trigger-6 chain. The bottom-left rat still appears to require a setup event
+  before the middle-rat kill, not after it.
+- `reload_v3`: the plausible top reload-station hypothesis also failed in
+  targeted checks. Preserving all 3 rats, probes for `trigger:5`,
+  `cellnot:10,5,web`, and `ratat:9,5` from the initial state returned no
+  branches. `events` again only listed the 32-move middle-rat kill family. Do
+  not assume bottom trigger 5 can safely open access to top trigger 6; if bottom
+  trigger 5 fires, the top trigger-5 cell becomes a wall.
 - `tinderrectangle`: the ignition table confirms either rat corner `(0,0)` or
   `(16,0)` plus a player on row 3 can win in one move. A new useful partial,
   `<<<<<>^>>^>^>>v>vv>>^^^>>vvvv`, puts the lower rat at `(2,3)` and the player
@@ -301,6 +324,20 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   that prefix, with and without `--preserve-rats`. The missing mechanism is
   holding the lower rat in `(2..6,6)` while crossing right; simply reaching the
   safe side is not enough.
+- `tinderrectangle`: a hybrid timing test using the old exit-opening route plus
+  the newer right-side crossing,
+  `<<<^<^<>^>>>>>v>vv>>^^^>>vvvv`, is valid but not winning. It puts the player
+  at `(14,7)` with the lower rat already overrun to `(8,6)`. The earlier typo
+  variant `<<<^<^<>^>>>>v>vv>>^^^>>vvvv` dies on turn 21 and should be ignored.
+  This narrows the lower-row hypothesis: opening `(3,4)` early lets the rat
+  start too soon; opening it from the safe-side settled state spends the rat.
+- `tinderrectangle`: targeted readiness probes on 2026-06-12 found no branch for
+  `rectready` or `rectlower` from the initial state at depth 80. Narrow `tinder`
+  probes for rat `(6,6)` / player `(14,7)` and rat `(4,6)` / player `(14,7)`
+  both timed out in the same near-miss basin with a lure rat at `(2,3)` and the
+  player near `(4,4)`. A preserved-rat corner lure for rat `(0,0)` plus safe
+  row-3 cells also timed out, best state `rat=(2,3)` / player `(5,3)`. These are
+  not one-step ignition states.
 - `chase`: continuing from `>>>.^v<<<>>>vv<^` with `dropchain` repeats the known
   family and never changes `(11,16)` from web. Focused probes for
   `cellnot:11,16,web` and `cellnot:11,15,plank` from the 16-move prefix found no
@@ -318,12 +355,30 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   branch. `dropchain` and a 120s BFS both re-enter the same one-rat sealed basin
   around `(10,6)`. The next attempt should handle `(10,6)` before the P2 sweep,
   not after it.
+- `cooperation/handoff`: the initial left rat at `(0,5)` is not a permanent-wall
+  proof by itself; the `(1,2)` web boundary can be cleared. However,
+  `cellnot:1,2,web` branches all converge to the same dead two-rat state:
+  explosives=0, triggers=0, reachable_rats=0, rats at the left pocket and
+  `(10,6)`. A direct `cellnot:10,5,web` probe from the initial state found no
+  branch. The useful conclusion is narrower: clearing the left web after the
+  common trigger/explosion line is too late, and `(10,6)` must be handled before
+  that family spends the board.
+- `cooperation/handoff`: from the trigger-1 branch
+  `v^ >^ >^ >^ >^ >^ ^^ v^ ^^ ^^ v^ v^ vv <v`, trigger 2 at `(2,2)` is
+  reachable and `wp2` can consume it, but doing so removes the remaining
+  explosives/triggers and leaves two unreachable rats. This proves the
+  trigger-1-then-trigger-2 family is also a dead mechanism, not a missing mop-up.
 - `cooperation/blocked_v2`: `ratgone:x,y` is misleading here because rats move
   out of their starting cells. The branch
   `v< v^ v^ v^ <^ <^ <<` does not prove the `(14,19)` rat is solved; diagnostics
   show a lower rat still alive at `(15,18)`. Direct BFS and `dropchain` from this
   lead stall with separated lower-left / mid-bottom rats. Use rat count plus
   diagnostics, not just `ratgone`, when evaluating this level.
+- `cooperation/blocked_v2`: the first useful event
+  `v< v^ v^ << <^ <^ ^^ ^v ^^` leaves 7 rats and preserves structure, but the
+  next structural event is trigger 1 and it cuts reachable rats from 6 to 4.
+  From that 7-rat prefix, `allreachable` returned no branch and `events` only
+  found trigger-1 walling variants. This is not a mop-up line.
 - `cooperation/tug_of_war`: the trigger-1 prefix
   `^< ^^ ^^ ^^ ^^ ^^ ^^ ^^ <^ ^v >v` still looks like the best first event, but
   immediate ratdrop continuations reduce to three rats with only one reachable.
@@ -335,6 +390,65 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
   `cellnot:7,1,web`, and `wp2` to `.|8,0` all returned no branch. Since zaps do
   not clear webs, this rat needs a concrete explosion/web-clear mechanism before
   trigger choreography can solve the level.
+- `cooperation/tug_of_war`: the plausible central-rat plank-break mechanism was
+  probed directly. Preserving all 7 rats, `ratat:7,3`, `cellnot:7,2,plank`, and
+  `cellnot:7,1,web` all returned no branch. The known trigger-1 trace spends the
+  center without moving the central rat up to the top planks, so trigger
+  choreography still lacks a release mechanism for the top rat.
+- `cooperation/blocked_v2`: stale broad trigger-order runs were stopped, then
+  the promising staged line was checked structurally. From the correct
+  16-turn `5 -> 1` prefix
+  `v< v^ v^ << <^ <^ ^^ ^v ^^ ^v ^> <v <> ^^ ^^ ^^`, direct probes for
+  `trigger:2`, `trigger:4`, `cellnot:1,15,web`, `cellnot:2,15,explosive`, and
+  `reachable:0,15` all returned no branches. Backing up to the post-trigger-5
+  prefix and firing trigger 3 before trigger 1 is only reachable after collapsing
+  to 3 rats; follow-up `trigger:2` / lower-web probes from that state also
+  return empty. Treat both `5 -> 1 -> 3` and `5 -> 3 -> 1` as dead mechanisms
+  for the lower-left rat unless an earlier event changes the trigger-2 pocket.
+- `tinderrectangle`: the lower ignition route now has a sharper timing failure.
+  The old lower route reaches rat `(6,6)` / player `(10,6)`, but every legal
+  next move or pivot pulls the rat to `(7,6)`, outside the synthetic winning
+  band. The safe-side branch from that prefix crosses through row 3 but leaves
+  the rat at `(8,6)`. Exact `geomlure` checks from the earlier `(5,5)` timing
+  states for rat `(6,6)` plus safe cells `(14,6)`, `(14,7)`, `(15,7)`,
+  `(13,8)`, `(14,8)`, `(15,8)` returned no solution. The route must synchronize
+  the rat's final step to `(6,6)` with the player already on the safe side, or
+  use a different earlier setup.
+- `release`: the left trigger-2 mechanism was checked directly from the strong
+  opener `v<vv^^>>v`. Preserving at least 20 rats, probes for `ratat:0,16`,
+  `cellnot:1,16,explosive`, `cellnot:19,7,2`, and `cellnot:18,5,web` returned
+  empty. A true trigger-5-first prefix
+  `^^^^^^v^vvvvvvv>>>v` preserves all 24 rats but leaves zero reachable rats;
+  from it, the same trigger-2 structural probes fail, and trigger 3 or 4 simply
+  re-enters the familiar 23-rat / 5-explosive family. Do not repeat
+  trigger-5-first as a release mechanism without a new reason.
+- `cooperation/handoff`: direct trigger-2 access from the initial state only
+  reproduces the known 18-turn dead basin
+  `v^ >^ >^ >^ >^ >^ ^^ v^ ^^ ^^ v^ v^ vv <v ^^ ^^ ^^ ^<`, with 2 rats,
+  no explosives, no triggers, and `reachable_rats=0`. Direct initial probes for
+  `cellnot:10,5,web` and `ratgone:10,6` returned empty. The `(10,6)` rat still
+  has to be handled before the common right-side sweep/trigger-2 family.
+- `cooperation/tug_of_war`: after the first useful ratdrop prefix
+  `^< ^^ ^^ ^^ ^^ ^^ ^^ ^^`, the top-rat release mechanism was checked
+  directly. Preserving 5 rats, `cellnot:7,2,plank`, `cellnot:8,2,plank`,
+  `ratat:7,3`, and `playerat:7,0` all returned empty. The central rat is not
+  breaking the top planks from this staging line, so the top rat remains the
+  structural blocker.
+- `reload_v3`: from the all-rats-preserved trigger-7 prefix
+  `^>>>>>>>^^vvvvvv<<<^^<<^^<<<<<<^^^^^^<<^^^`, direct probes for
+  `cellnot:1,21,web`, `cellnot:2,21,explosive`, `trigger:6`, and even the
+  statically reachable `trigger:2` all returned empty with all 3 rats preserved.
+  The preserved trigger-7 route is dynamically dead unless another setup event
+  changes the middle-rat pressure or opens the bottom-left reload lane first.
+- `chase`: from the initial state, preserving at least 6 rats, exact structural
+  probes for `cellnot:11,16,web`, `cellnot:11,15,plank`,
+  `cellnot:12,15,plank`, and `reachable:11,17` returned empty. This confirms
+  the `(11,17)` rat blocker is the web itself, not merely a late mop-up pathing
+  issue.
+- `cyborg_rats/ai_takeover`: quick diagnostics confirm it is still the
+  `release` skeleton with additional trigger-7/8 and cyborg behavior. No deeper
+  search was run this pass; solve or invalidate the `release` trigger-2
+  mechanism first.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
