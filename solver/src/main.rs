@@ -573,6 +573,7 @@ enum LookupGoal {
     WinReady,
     RectangleReady,
     RectangleLowerReady,
+    RectangleLowerSeparated,
     TriggerNumber(u8),
     CellChanged(i32, i32),
     CellIs(i32, i32, CellKind),
@@ -599,6 +600,7 @@ impl LookupGoal {
                 "readywin" | "winready" => Self::WinReady,
                 "rectready" | "rectangle-ready" => Self::RectangleReady,
                 "rectlower" | "rectangle-lower" => Self::RectangleLowerReady,
+                "rectsep" | "rectangle-lower-separated" => Self::RectangleLowerSeparated,
                 "allreachable" | "all-rats-reachable" => Self::AllRatsReachable,
                 "ratdrop" => Self::RatDrop,
                 other => panic!("unknown lookup goal {other}"),
@@ -634,14 +636,27 @@ impl LookupGoal {
                 let mut parts = arg.split(',');
                 let rat_x = parts.next().expect("rat x").trim().parse().expect("rat x");
                 let rat_y = parts.next().expect("rat y").trim().parse().expect("rat y");
-                let cell_x = parts.next().expect("cell x").trim().parse().expect("cell x");
-                let cell_y = parts.next().expect("cell y").trim().parse().expect("cell y");
+                let cell_x = parts
+                    .next()
+                    .expect("cell x")
+                    .trim()
+                    .parse()
+                    .expect("cell x");
+                let cell_y = parts
+                    .next()
+                    .expect("cell y")
+                    .trim()
+                    .parse()
+                    .expect("cell y");
                 let kind = parts
                     .next()
                     .map(str::trim)
                     .map(parse_cell_kind_name)
                     .expect("cell kind");
-                assert!(parts.next().is_none(), "expected ratx,raty,cellx,celly,kind");
+                assert!(
+                    parts.next().is_none(),
+                    "expected ratx,raty,cellx,celly,kind"
+                );
                 Self::RatAtWithCell(rat_x, rat_y, cell_x, cell_y, kind)
             }
             "ratgone" => {
@@ -737,6 +752,9 @@ fn lookup_goal_reached(
         LookupGoal::RectangleLowerReady => {
             play_state == PlayState::Won || rectangle_lower_ready(current)
         }
+        LookupGoal::RectangleLowerSeparated => {
+            play_state == PlayState::Won || rectangle_lower_separated(current)
+        }
         LookupGoal::TriggerNumber(number) => {
             trigger_count(current, number) < trigger_count(initial, number)
         }
@@ -786,6 +804,11 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         LookupGoal::RectangleLowerReady => {
             rectangle_lower_ready_heuristic(current, count_rats(initial), count_explosives(initial))
         }
+        LookupGoal::RectangleLowerSeparated => rectangle_lower_separated_heuristic(
+            current,
+            count_rats(initial),
+            count_explosives(initial),
+        ),
         LookupGoal::TriggerNumber(number) => {
             let dist = player_dist_map(current);
             let nearest = trigger_positions(current, number)
@@ -819,12 +842,11 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         }
         LookupGoal::RatAtWithCell(rat_x, rat_y, cell_x, cell_y, kind) => {
             let rats = rat_positions(current);
-            let cell_penalty =
-                if current.cell_kind_at(cell_x as usize, cell_y as usize) == kind {
-                    0
-                } else {
-                    200_000
-                };
+            let cell_penalty = if current.cell_kind_at(cell_x as usize, cell_y as usize) == kind {
+                0
+            } else {
+                200_000
+            };
             nearest_target_distance(&rats, &[(rat_x, rat_y)])
                 + cell_penalty
                 + heuristic(current) / 1_000
@@ -886,6 +908,11 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
         LookupGoal::RectangleLowerReady => {
             rectangle_lower_ready_heuristic(current, count_rats(initial), count_explosives(initial))
         }
+        LookupGoal::RectangleLowerSeparated => rectangle_lower_separated_heuristic(
+            current,
+            count_rats(initial),
+            count_explosives(initial),
+        ),
         LookupGoal::TriggerNumber(number) => {
             trigger_count(current, number) as i64 * 1_000_000 + count_rats(current) as i64 * 1_000
         }
@@ -4496,8 +4523,8 @@ fn rectangle_trap_heuristic(grid: &Grid, initial_rats: usize, initial_explosives
     } else {
         &loose_traps
     };
-    let loose_safe_positions = [(13, 8), (14, 7), (15, 7), (14, 8), (15, 8)];
-    let strict_safe_positions = [(14, 7), (15, 7), (14, 8), (15, 8)];
+    let loose_safe_positions = rectangle_lower_safe_targets();
+    let strict_safe_positions = rectangle_lower_safe_targets();
     let safe_positions: &[(i32, i32)] = if strict_rectangle {
         &strict_safe_positions
     } else {
@@ -4610,7 +4637,7 @@ fn rectangle_winready_heuristic(
     };
 
     let row_three_safe: Vec<_> = (1..=15).map(|x| (x, 3)).collect();
-    let lower_safe = [(14, 6), (14, 7), (15, 7), (13, 8), (14, 8), (15, 8)];
+    let lower_safe = rectangle_lower_safe_targets();
     let lower_targets = [(2, 6), (3, 6), (4, 6), (5, 6), (6, 6)];
     let corner_targets = [(0, 0), (16, 0), (13, 8)];
 
@@ -4645,8 +4672,8 @@ fn rectangle_lower_rat_targets() -> [(i32, i32); 5] {
     [(2, 6), (3, 6), (4, 6), (5, 6), (6, 6)]
 }
 
-fn rectangle_lower_safe_targets() -> [(i32, i32); 6] {
-    [(14, 6), (14, 7), (15, 7), (13, 8), (14, 8), (15, 8)]
+fn rectangle_lower_safe_targets() -> [(i32, i32); 3] {
+    [(14, 6), (14, 7), (14, 8)]
 }
 
 fn rectangle_lower_ready(grid: &Grid) -> bool {
@@ -4657,6 +4684,101 @@ fn rectangle_lower_ready(grid: &Grid) -> bool {
     let targets = rectangle_lower_rat_targets();
     let safe_targets = rectangle_lower_safe_targets();
     rat_at_any(grid, &targets) && player_at_any(grid, &safe_targets)
+}
+
+fn rectangle_lower_separated(grid: &Grid) -> bool {
+    if win_ready(grid) {
+        return true;
+    }
+
+    let players = positions_matching(grid, |cell| cell == CellKind::Player);
+    rat_positions(grid).into_iter().any(|rat| {
+        rat.1 == 6
+            && (2..=6).contains(&rat.0)
+            && players
+                .iter()
+                .any(|&player| rectangle_lower_has_timing_lead(rat, player))
+    })
+}
+
+fn rectangle_lower_has_timing_lead(rat: (i32, i32), player: (i32, i32)) -> bool {
+    player.0 - rat.0 >= 8 && (3..=8).contains(&player.1)
+}
+
+fn rectangle_lower_separated_heuristic(
+    grid: &Grid,
+    initial_rats: usize,
+    initial_explosives: usize,
+) -> i64 {
+    if rectangle_lower_separated(grid) {
+        return 0;
+    }
+    if count_explosives(grid) < initial_explosives {
+        return 1_000_000_000 + count_rats(grid) as i64 * 1_000_000;
+    }
+
+    let rat_targets = rectangle_lower_rat_targets();
+    let rats = tinder_lure_rat_positions(grid);
+    let all_rats = rat_positions(grid);
+    let players = positions_matching(grid, |cell| cell == CellKind::Player);
+    let lost_rats = initial_rats.saturating_sub(count_rats(grid)) as i64;
+
+    let best_pair_score = rats
+        .iter()
+        .flat_map(|&rat| {
+            players.iter().map(move |&player| {
+                let target_cost = if rat.1 == 6 && (2..=6).contains(&rat.0) {
+                    0
+                } else if rat.1 == 6 && rat.0 > 6 {
+                    500_000 + (rat.0 - 6) as i64 * 150_000
+                } else {
+                    nearest_target_distance(&[rat], &rat_targets) * 45_000
+                };
+                let timing_deficit = (rat.0 + 8 - player.0).max(0) as i64;
+                let row_cost = if (3..=8).contains(&player.1) {
+                    0
+                } else {
+                    (player.1 - 6).abs() as i64 * 5_000
+                };
+                target_cost + timing_deficit * 70_000 + row_cost
+            })
+        })
+        .min()
+        .unwrap_or(1_000_000);
+
+    let player_dist = player_dist_map(grid);
+    let target_clearance = rat_targets
+        .iter()
+        .map(|&(x, y)| match grid.cell_kind_at(x as usize, y as usize) {
+            CellKind::Wall | CellKind::BlackHole => 1_000_000,
+            CellKind::Spiderweb => {
+                let distance = player_dist[y as usize][x as usize];
+                70_000
+                    + if distance == i32::MAX {
+                        70_000
+                    } else {
+                        distance as i64 * 700
+                    }
+            }
+            _ => 0,
+        })
+        .min()
+        .unwrap_or(1_000_000);
+
+    let nearest_rat_to_player = players
+        .iter()
+        .flat_map(|&player| all_rats.iter().map(move |&rat| manhattan(player, rat)))
+        .min()
+        .unwrap_or(1_000);
+    let contact_penalty = if nearest_rat_to_player <= 1 {
+        100_000
+    } else if nearest_rat_to_player == 2 {
+        20_000
+    } else {
+        0
+    };
+
+    lost_rats * 500_000 + contact_penalty + target_clearance + best_pair_score
 }
 
 fn rectangle_lower_ready_heuristic(

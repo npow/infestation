@@ -787,6 +787,48 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
     `reachable:6,11`, and `playerat:6,12` returned no branches in the tested
     budgets. Treat trigger-2 access as the current blocker, not the later mop-up.
 
+- Follow-up targeted pass on 2026-06-12 found **no new verified wins**, but
+  tightened the current search map:
+  - `solver`: `branchdump` / `lookup` now support `--goal rectsep`
+    (`rectangle-lower-separated`). This is diagnostic-only. It accepts only
+    states where a lower rat is in the proven row-6 winning band `(2..6,6)` and
+    the player already has an eight-column timing lead on rows 3-8. It rejects
+    the old contact line where the rat reaches `(6,6)` with the player at
+    `(7,6)`. The rectangle lower-safe target set was also corrected to the
+    verified safe cells `(14,6)`, `(14,7)`, and `(14,8)`; previous heuristic
+    lists included unsafe `(15,7)` / `(15,8)`.
+  - `tinderrectangle`: `rectsep` returned no branches from the initial board
+    at depth 150 / 120s, from the 84-turn safe-side staging branch at depth 95,
+    or from the 113-turn left-wall pump at depth 80. That is stronger evidence
+    than the older `rectlower` checks: the known lower-row route can place the
+    rat in the winning band, but not with enough timing separation. Opening
+    `(2,5)` / `(2,6)` while the rat remains parked at `(2,3)` is possible, but
+    opening `(2,4)` starts the rat immediately and every direct escape tested
+    is a diagonal-kill/contact trap. The top/corner alternative was also checked
+    again: after killing the lower rat, row-2 entry still dies immediately and
+    branchdumps did not open `(1,2)` / `(2,2)`, place a rat at `(0,0)` /
+    `(16,0)`, or drop a right-pack rat to `(13,8)` in the tested budgets.
+  - `reload_v3`: the lower-left staging prefix `vvv<<<<<<vv<<<<` is verified
+    and clears `(3,21)`, putting the player at `(3,21)` with all 3 rats alive.
+    It still leaves `(1,21)=web`, `(2,21)=explosive`, and the `(0,21)` rat in a
+    size-1 component. Waypoints to `(2,22)` and trigger 6 `(9,4)` were
+    unreachable; bounded branchdumps could not change `(1,21)`, detonate/remove
+    `(2,21)`, reach trigger 6, or remove `(0,21)`, even when rat preservation
+    was relaxed.
+  - `cyborg_rats/ai_takeover`: after the standard opener `v<vv^^>>v`, static
+    diagnostics report trigger 7 cells as distance-reachable, but this is
+    dynamically misleading. `wp` to `(16,9)` from the opener returned
+    `UNREACHABLE`, and a preserved-rat `trigger:7` branchdump returned no
+    branch. Treat trigger 7 as a timing/pressure blocker, not a simple waypoint.
+  - `cooperation/blocked_v2`: from both strong 3-/4-rat frontiers, bounded
+    checks still could not consume trigger 2, mutate either trigger-2 cell
+    `(3,14)` / `(5,11)`, open `(1,15)`, or detonate/remove `(2,15)`. A directed
+    `5 -> 2` trigger lookup from the 19-turn B frontier can consume trigger 5
+    with suffix `^< ^< ^^ ^^ ^^ ^^ ^<`, leaving 3 rats, but both trigger-2 cells
+    remain unreachable and `(0,15)` is still sealed. Do not continue the
+    trigger-5-then-trigger-2 family unless an earlier prefix changes the
+    lower-left pocket first.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 8.
@@ -808,11 +850,11 @@ the stale broad `triganylookup` runs for `reload_v3`, `tug_of_war`, and
    a single `(18,4)` rat, but that mechanism strands it behind `(18,5)`. The next
    useful attack must handle `(18,4)` before the top sweep or open its web
    without spending the adjacent explosive chain.
-3. **Solve `tinderrectangle` as an ignition lure.** The new 99-turn pump proves
-   real separation on the left wall, but not a safe ignition. Next test the
-   row-2/top-pack opening problem directly: find a way to clear a row-2 web or
-   force a top-left rat into `(0,0)` without the player standing under a
-   diagonal attacker. Do not just extend the old row-6 contact line.
+3. **Solve `tinderrectangle` as a separation problem, not an ignition problem.**
+   The ignition geometry is proven; use `--goal rectsep` to reject the known
+   contact trap. The next useful hypothesis must create a side loop or delayed
+   release before `(2,4)` opens, because opening `(2,4)` starts the lower rat
+   immediately and the current row-6 route loses the timing race.
 4. **Do not treat `ai_takeover` as a solved-by-`release` clone.** It has the
    right-side `(18,5)` opening that `release` lacks, but the standard opener
    still cannot reach or safely use triggers 7/8. Use `release` for trigger
