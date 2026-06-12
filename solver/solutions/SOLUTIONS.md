@@ -5,11 +5,12 @@ All move-strings below were **verified against the real game engine** (`solver v
 Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-separated `P1P2` pairs.
 
 
-## Original levels (27 solved)
+## Original levels (28 solved)
 
 | Level | Players | Moves | Solution |
 |---|---|---|---|
 | `blackhole_v2.csv` | 1 | 77 | `vvv>>>>>><<<<<<^^^^^^^^vvvvvvvv>>>>>>><<<<<<<^^^^^^^^^^^^^^^^^>>>><<vv>>>>vv>` |
+| `chase.csv` | 1 | 199 | `^>>>v^^^>^^>>>>>v>>vvvvv^^^^^^<<<<v<<<v^<^<^<<>>>>v>>>>>vvvv^^^^<<<^<^<<^^^^^^^^<<<<<^^vvvvvvvvvvvvv>>>>>>>>vv^^<<vvvvv<>>>>>>>>>>>>>>^^v<>^^^^^^^^^^^^^^^^^^<<<<>>vvvv<vvvvvvvvvvvv<vvv<<<<<<<<<<<<<<<` |
 | `cooperation/coop_world_v3.csv` | 2 | 26 | `^^ ^> ^^ ^^ ^^ ^^ ^^ ^> ^^ v> <> ^> ^> ^> ^> ^> ^> >v <. ^v >< v< .> .^ ^^ ^^` |
 | `cooperation/cooperation.csv` | 2 | 28 | `^^ ^> ^^ ^^ ^< <^ ^> ^> ^> <> <v <> <> <> <> ^> >> >> <> << .< <v vv vv v< v< vv vv` |
 | `cyborg_rats/cyborg_rats.csv` | 1 | 32 | `^>>^^<<<>>>^^<<<>>>^^<<<>>>^^<<<` |

@@ -1,7 +1,7 @@
 # Infestation solving campaign — HANDOFF
 
-Resume doc for continuing the effort on another machine. **Goal: solve the 8
-remaining hard levels.** 27/35 non-Claude playable CSV levels + 5 new puzzles
+Resume doc for continuing the effort on another machine. **Goal: solve the 7
+remaining hard levels.** 28/35 non-Claude playable CSV levels + 5 new puzzles
 are already solved & shipped.
 
 ---
@@ -70,26 +70,25 @@ so every result is exactly what the shipped game does. Binary: `target/release/s
 
 ## 3. Status
 
-### Solved - 27/35 non-Claude levels + 5 new (all oracle-verified `result=Won`)
+### Solved - 28/35 non-Claude levels + 5 new (all oracle-verified `result=Won`)
 Move strings: **`solver/solutions/SOLUTIONS.md`** (machine-readable: `final_solutions.json`).
 Browser auto-player: `solver/solutions/autoplay.js`. New puzzles: `levels/claude/`.
 
 `HANDOFF.md` used to say 11 remained, but `solver/solutions/SOLUTIONS.md`
 now includes verified wins for `tinderbox`, `no_retreat`, `lock_in`, and
-`limited2`.
+`limited2`; the latest pass also adds `chase`.
 
-### UNSOLVED - the 8 (this is the job)
+### UNSOLVED - the 7 (this is the job)
 
 | # | Level | Players | Name-hint / trick | Best lead / recommended attack |
 |---|---|---|---|---|
 | 1 | `tinderrectangle` | 1 | pure ignition geometry | `ignitions` says a top-pack rat at `(0,0)` or `(16,0)` can detonate the rectangle and win. Directly cutting the left web from `(1,3)`/`(2,3)` kills the player. Treat this as a lure/facing puzzle: shape a top rat into the explosive corner, then make the one safe nudge. |
 | 2 | `release` | 1 | release the caged rats, then mop | Strong human prefix: `v<vv^^>>v` consumes trigger 3 then 4, drops rats from 24 to 23, explosives from 35 to 5, webs from 47 to 27, and makes 21 rats reachable. Follow-up trigger 5 is reachable with suffix `v<>>>^`; next work is choosing between trigger 2 and 6, then mop-up. |
 | 3 | `reload_v3` | 1 | fire/reload cycles; triggers 1-7 | Work bottom trigger row as reload stations, not as a global search. Likely order starts around trigger 1, then 2/3/4/5/6/7 as each detonation opens the next chamber. Use `triglookup` with explicit orders and inspect each irreversible change. |
-| 4 | `chase` | 1 | kite rats into holes/X | All triggers are player-reachable, but only 4/8 rats are initially reachable. Solve as a route plan: trigger/kite the chasers through holes and the explosive lane, then mop. Do not let A* chase all rats directly. |
-| 5 | `cyborg_rats/ai_takeover` | 1 | `release` skeleton plus cyborgs/triggers 7-8 | Solve `release` first, then transfer the trigger skeleton. Extra triggers 7/8 and cyborg Dijkstra behavior are probably the intended differences. |
-| 6 | `cooperation/tug_of_war` | 2 | mirror-symmetric tug | Needs paired role choreography with `wp2`: mirrored trigger pairs 1/2/3, side rats, then central rat. Avoid generic 2p search until the waypoint pairs encode the intended symmetry. |
-| 7 | `cooperation/handoff` | 2 | baton pass | Small enough to hand-reason. P1 cannot simply reach trigger 1 first. P1 can reach trigger 2 first, but then trigger 1 is no longer useful/reachable; likely P1 opens the handoff and P2 finishes on the remote side. |
-| 8 | `cooperation/blocked_v2` | 2 | one player blocked | Keep the previous warning: one rat may be permanently unreachable behind effectively indestructible structure. Before spending human-solving time, prove or disprove winnability with targeted reachability/exhaustive checks. |
+| 4 | `cyborg_rats/ai_takeover` | 1 | `release` skeleton plus cyborgs/triggers 7-8 | Solve `release` first, then transfer the trigger skeleton. Extra triggers 7/8 and cyborg Dijkstra behavior are probably the intended differences. |
+| 5 | `cooperation/tug_of_war` | 2 | mirror-symmetric tug | Needs paired role choreography with `wp2`: mirrored trigger pairs 1/2/3, side rats, then central rat. Avoid generic 2p search until the waypoint pairs encode the intended symmetry. |
+| 6 | `cooperation/handoff` | 2 | baton pass | Small enough to hand-reason. P1 cannot simply reach trigger 1 first. P1 can reach trigger 2 first, but then trigger 1 is no longer useful/reachable; likely P1 opens the handoff and P2 finishes on the remote side. |
+| 7 | `cooperation/blocked_v2` | 2 | one player blocked | Keep the previous warning: one rat may be permanently unreachable behind effectively indestructible structure. Before spending human-solving time, prove or disprove winnability with targeted reachability/exhaustive checks. |
 
 ### Approach update - 2026-06-11
 
@@ -1676,9 +1675,27 @@ real new mechanism frontier.
   `triggeronly:2`, `cellnot:1,15,web`, and `ratgone:0,15` returned no
   branches. Back up before B31 only if the hypothesis changes lower-left access.
 
+### Continuation pass - 2026-06-12 chase solved
+
+- `chase.csv` is now solved and recorded in `solver/solutions/final_solutions.json`,
+  `solver/solutions/SOLUTIONS.md`, and the autoplay maps. The verified 199-move
+  ASCII solution is:
+  `^>>>v^^^>^^>>>>>v>>vvvvv^^^^^^<<<<v<<<v^<^<^<<>>>>v>>>>>vvvv^^^^<<<^<^<<^^^^^^^^<<<<<^^vvvvvvvvvvvvv>>>>>>>>vv^^<<vvvvv<>>>>>>>>>>>>>>^^v<>^^^^^^^^^^^^^^^^^^<<<<>>vvvv<vvvvvvvvvvvv<vvv<<<<<<<<<<<<<<<`.
+- The useful human decomposition was not "chase every rat". It was:
+  first use the early helper-rat/plank structure, then fire trigger 3 remotely
+  from the top-left route before consuming trigger 4, then drop the reachable
+  rats in sequence, and only then path to `(1,19)` facing west for the final
+  rat. The critical intermediate after 161 turns has one rat left at `(0,19)`,
+  no explosives, one web at `(1,19)`, and all remaining rat contact reachable.
+  `solver wp levels/chase.csv --prefix <P161> --waypoints '1,19'` found the
+  final mop-up suffix and `solver verify` returned `result=Won turns_applied=199`.
+- All stale broad `chase` dropchain jobs were stopped after the verified win.
+  Do not spend more search budget on `chase` unless upstream changes invalidate
+  the recorded solution.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
-  400-500, long budgets) solved several levels but stalled on the current 8.
+  400-500, long budgets) solved several levels but stalled on the current 7.
 - PDDL and LLM-play agents produced no verified final wins on the current hard
   set. Their useful output was mechanism hints, not move strings.
 - The current productive path is mechanism-first decomposition plus short
@@ -1724,7 +1741,7 @@ solver/                             Rust oracle crate
   src/main.rs                         all modes: solve / verify / trace / wp
   Cargo.toml
 solver/solutions/
-  SOLUTIONS.md                       27 verified solutions (table)
+  SOLUTIONS.md                       28 verified original solutions + 5 Claude puzzles
   final_solutions.json               machine-readable verified set
   autoplay.js                        browser console auto-player (1p + 2p)
   results/                           raw search outputs (results*.json, autoplay_data.json)
@@ -1736,7 +1753,7 @@ solver/solutions/
 
 ## 6. Session context
 - A session Stop-hook with goal **"solve all the puzzles"** may be active in
-  some environments. The current remaining hard set is the 8 listed in §3.
+  some environments. The current remaining hard set is the 7 listed in §3.
   Resume by working §4.
 - Fork created with `gh repo fork`; push with `gh auth setup-git --hostname github.com` then
   `git push fork claude/new-puzzles`. No PR was opened to upstream (`davidspies/infestation`).
