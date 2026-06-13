@@ -3407,6 +3407,60 @@ encoding was attempted in this pass.
   returned empty. The next useful idea must diverge before or at P23 to delay
   the top trigger-9 rat or pre-stage the lower-right rat earlier.
 
+### OOM-safe continuation - 2026-06-13 follow-up
+
+No new verified win. This pass used serial solver probes with
+`ulimit -v 800000` and short `timeout` wrappers after the previous machine OOM;
+parallelism was limited to read-only mechanism audits. Process checks found no
+leftover `target/release/solver`, `timeout`, or `clingo` jobs after the probes.
+
+- Inventory check: `solver/solutions/final_solutions.json` still contains 35
+  stored solutions. The current missing CSV inventory is 11 files, but
+  `claude/gauntlet.csv` has zero rats. The remaining rat-bearing set is the 10
+  hard CSVs: `cooperation/blocked_v2.csv`, `cooperation/handoff.csv`,
+  `cooperation/tug_of_war.csv`, `cyborg_rats/ai_takeover.csv`,
+  `old_levels/on_the_clock.csv`, `old_levels/order_of_operations.csv`,
+  `old_levels/overstep.csv`, `release.csv`, `reload_v3.csv`, and
+  `tinderrectangle.csv`.
+- `old_levels/on_the_clock`: the P23/P25 trigger-6 rescue is now closed more
+  tightly. From `P20=v>>><^^v>^^>>>vvv><v`, exact pre-stage checks returned no
+  branches for the lower-right rat at `(16,18)` with the player already near
+  left trigger 6 (`ratplayer:16,18,5,7`, `ratplayer:16,18,5,8`, and
+  `ratplayer:16,18,4,7`) while trigger 6 was reachable and at least 13 triggers
+  remained. The delayed-upper-rat variants also returned empty:
+  `ratcell:16,18,15,8,rat` and `ratcell:16,18,16,7,rat`. A rat-trigger-6
+  bypass target `triggeronlycellnot:6,12,19,explosive` returned empty, as did
+  relaxed direct staging `ratcell:13,18,12,19,explosive` from P20 and P21. This
+  rules out the obvious "same bridge, better tempo" fixes; continue before the
+  P20/P23 bridge or find a different bridge route entirely.
+- `release`: the "handle `(18,4)` before the top sweep" hypothesis was checked
+  directly from the initial board. `cellnotratat:18,5,web,18,4` returned empty
+  with all 24 rats preserved, and also empty when allowing one unrelated rat
+  loss. The stronger adjacent target `cellnotratat:18,6,explosive,18,4` also
+  returned empty. This closes the simple pre-sweep right-door variant; do not
+  retry it without a new mover or trigger-order reason.
+- `cyborg_rats/ai_takeover`: the Q64 wider-offset idea is real but still
+  finite. From
+  `Q64=^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<`,
+  `triggeronlycellis:2,3,17,cyborg` found reachable branches, best:
+  `Q64+<<<<<>>>><<<<<<<<<<<<<<^^^<<<`. It verifies `Playing` at 93 turns with
+  11 enemies, 2 explosives, 0 triggers, all 11 enemies reachable, player
+  `(0,16)`, and enemies at `(18,4)`, `(11,9)`, and `(2..7,16..19)` along the
+  lower-left lanes. Unlike the older Q64 4-rat branch, this is not immediate
+  `GameOver`; however, bounded `ratsle:10` checks from that exact state returned
+  empty even relaxed to depth 60 / 120k nodes. Treat it as an improved diagnostic
+  frontier, not a cleanup path.
+- `tinderrectangle`: quick one-step `ratdeathgeom` checks for the top-corner
+  ignition idea found no candidate synthetic stances from adjacent top rats
+  `(1,1)->(0,0)` or `(15,1)->(16,0)`, nor for lower rat `(1,6)->(0,6)`.
+  This does not disprove a multi-step top lure, but it confirms there is no
+  simple local corner-ignition stance to replace the known row-6 separation
+  problem.
+- `overstep`: a fresh look at the clean first lever `>>>` and a short `events`
+  scan reconfirmed the documented dead pattern. The best immediate event
+  `>>>^^` leaves six rats, three explosives, three webs, 15 triggers, and still
+  zero reachable rats. Do not continue the `>>> -> ^^` line as a cleanup route.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
