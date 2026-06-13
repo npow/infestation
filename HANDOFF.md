@@ -5105,7 +5105,11 @@ after the run found no leftover solver/cargo/clingo/timeout jobs.
   initial state: `cellnot:7,1,web`, `cellnot:8,1,web`, `cellnot:7,2,plank`,
   `cellnot:8,2,plank` while preserving all 7 rats, and
   `noratsrect:7,0,8,0` while preserving 6 rats. The top two-cell pocket still
-  looks structurally unreachable as authored.
+  looks structurally unreachable as authored. The known trigger-1 staging prefix
+  `^< ^^ ^^ ^^ ^^ ^^ ^^ ^^ <^ ^v >v` leaves 4 rats, but it does not change the
+  conclusion: post-trigger-1 checks for `cellnot:7,1,web`,
+  `cellnot:7,2,plank`, and `noratsrect:7,0,8,0` preserving the remaining rats
+  also returned empty.
 - `cooperation/blocked_v2`: from the 22-turn frontier
   `^< ^^ <^ <^ <v <^ v> .> <> vv ^v .v <v ^v v^ vv >v ^> ^> v< v> ^<`,
   strict `triggeronlycellnot:2,1,15,web` and `playerat:6,12` both returned
