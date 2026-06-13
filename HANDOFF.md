@@ -4312,6 +4312,59 @@ solver processes at a time, under `ulimit -v 800000` and short external
   `ratrectplayerrect:14,2,15,3,16,4,19,6` returned empty. The upper pocket still
   looks structurally sealed unless an earlier route changes its topology.
 
+### OOM-safe continuation - 2026-06-13 fifth Codex pass
+
+No new verified win. This pass kept local solver concurrency to one capped
+process at a time under `ulimit -v 800000` and short external `timeout`
+wrappers. Two side agents were used only for read-only geometry audits. Process
+checks after the probes found no leftover `target/release/solver`, `cargo`,
+`clingo`, or `timeout` jobs, and the saved solution set still verifies 36/36.
+
+- `old_levels/on_the_clock`: the P31 route
+  `v>>><^^v>><^^>>>vvv>>^v<<vvvvvv` is now better understood as a diagnostic
+  frontier, not a cleanup frontier. From P31, strict `triggeronly:6`,
+  `triggeronly:8`, and `reachablege:5` returned empty with all 8 rats preserved.
+  The next event is effectively trigger 9 in one move; after `P31^`, direct
+  trigger 6 and trigger 8 checks returned empty even without the 4-reachable-rat
+  floor, while trigger 5 was reachable but led to no preserved trigger 6/8
+  continuation under the caps.
+- `old_levels/on_the_clock`: backing up to P22
+  `v>>><^^v>><^^>>>vvv>>^`, trigger-2-before-trigger-4 produced a sibling
+  35-turn branch
+  `v>>><^^v>><^^>>>vvv>>^^^vvv<<vvvvvv`. It has the same coarse feature shape
+  as P31 but parks the lower-right trapped rat at `(12,14)` instead of
+  `(13,14)`. From that sibling, strict trigger 6 and trigger 8 returned empty,
+  and trigger 9 is still forced in one move.
+- `old_levels/on_the_clock`: P31's specific blockers were checked directly.
+  `ratgone:1,19` is a false-positive target: branches exist, but they only move
+  the shaft rat to `(1,18)` after other rat losses. The meaningful live-bomb
+  staging predicate `ratcell:1,18,1,17,explosive` returned empty with all
+  8 rats preserved. The lower-right access predicates `reachable:14,16` with
+  all rats preserved and evacuation `noratsrect:12,14,17,15` also returned
+  empty. Continue `on_the_clock` by backing up before P31 and requiring either
+  live-bomb staging for `(1,19)` or lower-chamber reachability before committing
+  to the right-column pre-trap route.
+- `tinderrectangle`: the compact pre-open prefix
+  `<<>^^^>>v>vv>>^^^>>vvv` was rechecked with sharper separation predicates.
+  `rectsep` returned empty from both the 22-turn pre-open and the 45-turn
+  staging state. The more exact shaft-clear opener
+  `cellnotnoratsrect:2,4,web,2,3,2,5` and the top body-block target
+  `cellnotratrect:2,2,web,2,2,2,2` both returned empty with all 16 rats
+  reachable. This closes the compact pre-open family unless a different earlier
+  side loop changes the lower-rat release timing.
+- `release`: two fresh structural checks from the side audit returned empty:
+  from `v<vv^^`, `cellnotnoratsrect:1,16,explosive,0,13,2,17` with 22 rats,
+  7 triggers, and 5 explosives preserved; and from the right-6 relay prefix
+  `v<vv^^>>vv><<v<<<^<^^<<>>>vvv>>>>>>>>`,
+  `triggeronlycellnot:6,0,17,explosive` with 20 rats and 6 triggers preserved.
+  These did not produce a new way around the isolated `(18,4)` rat.
+- `reload_v3`: the last distinct top-trigger-6 station hypothesis returned
+  empty. Initial-board `ratcell:9,5,9,4,trigger6` with 3 rats, 10 triggers, and
+  1 reachable rat preserved found no branch. Together with the earlier empty
+  player-station and gate-opening checks, treat top trigger 6 as effectively
+  inaccessible unless a new authoring/invariant argument identifies a different
+  route to `(0,21)`.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
