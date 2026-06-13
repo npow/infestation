@@ -2697,6 +2697,24 @@ short `timeout`/`ulimit` caps after the previous OOM.
   `old_levels/overstep.csv`: quick capped direct A* probes timed out without
   wins. They remain in the unsolved rat inventory, but are lower priority than
   the active hard set.
+- `tinderrectangle`: `geomlure` against the actual ignition targets
+  `(0,0)` / `(16,0)` found a new left-edge latch:
+  `<^^<<<^vv<v>>^>v<<<<>^>^^>>v<<v<<>>^>>>^>>v>vv>>^^^>>vvv>vv<<>^^^^^<<vvv<<^^<^<<v<<<^<`
+  verifies `Playing` at 86 turns with player `(3,3)`, lower rat `(2,3)`, all
+  16 rats alive, and 21 webs left. Stepping left kills the lower rat safely;
+  stepping left again detonates the left border and kills all rats, but it is
+  `GameOver` because the player triggers the blast. From this latch, capped
+  checks found no playable branch clearing top-left webs `(1,2)` or `(2,2)`
+  while preserving either 16 rats or the post-lower-rat 15-rat state. This is
+  the same underlying failure as the upper-door latch: the border blast is
+  sufficient, but only if a rat triggers it.
+- `cyborg_rats/ai_takeover`: from Q64, capped `cellnot:18,6,explosive` and
+  `ratat:18,5` probes with `--min-triggers 2` returned no branch. That weakens
+  the idea that the remote cyborg can be lured into the `(18,6..8)` explosive
+  column before trigger 2 fires.
+- `old_levels/overstep.csv` and `old_levels/order_of_operations.csv`:
+  capped `dropchain` probes found partial rat drops but timed out without a
+  verified win. No solver/timeout processes were left running afterward.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
