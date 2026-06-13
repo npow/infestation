@@ -1990,6 +1990,57 @@ real new mechanism frontier.
   It leaves trigger 2 nearby but still only one reachable rat; strict trigger-2
   and compound lower-left cleanup checks from that state returned no branches.
 
+### Continuation pass - 2026-06-13 bounded mechanism wave
+
+No new verified wins. Solution artifacts were intentionally left unchanged.
+All live solver processes from the earlier high-memory wave were stopped first;
+the long bounded wave ran under `/tmp/infestation-runs/20260613T005515Z_longbounded2`
+with per-process virtual-memory caps and left no solver process running.
+
+- Current artifact inventory still shows 7 non-hub hard unsolved levels:
+  `tinderrectangle.csv`, `release.csv`, `reload_v3.csv`,
+  `cyborg_rats/ai_takeover.csv`, `cooperation/tug_of_war.csv`,
+  `cooperation/handoff.csv`, and `cooperation/blocked_v2.csv`. `chase.csv`,
+  `old_levels/old_levels.csv`, and `tinderbox_v2.csv` all still verify as
+  `result=Won` in this checkout.
+- `release`: the corrected dependency is left trigger 2 `(0,16)`, not right
+  trigger 2 `(19,7)`. Triggering left 2 leaves right 2 as the sibling zap
+  source for the `(18,6..8)` explosive stack that can clear `(18,5)`. A
+  900-second capped lookup from `v<vv^^>>v` for the concrete carrier setup
+  `ratplayer:18,17,17,0` returned `NO_SOLUTION`; the best state got the player
+  to `(17,0)` but did not stage a carrier near `(18,17)`.
+- `blocked_v2`: terrain reasoning says the useful sequence is upper trigger 3
+  at `(13,4)` followed by trigger 2 at `(5,11)`, but an oracle lookup from B9
+  for `triggeronlycellnot:3,6,11,explosive` with at least 7 rats returned
+  `NO_SOLUTION`. The accessible upper-3 route appears to require trigger 5 and
+  upper-pocket rat loss, then still strands access to useful trigger 2.
+- `handoff`: H15 is a useful timing frontier, but the 900-second
+  resource-preserving branchdump for `playerat:14,7` returned no branch. The
+  local `(10,6)->(11,7)` rat geometry needs a far-right lure before trigger 2
+  turns `(11,7)` into a wall; no trigger-preserving route to that lure was
+  found.
+- `tug_of_war`: the pre-trigger frontier
+  `.< v^ <^ >^ <^ <^ >^ <^` still leaves the top rat sealed. A long
+  resource-preserving branchdump for `cellnot:7,2,plank` returned no branch,
+  reinforcing that the top pocket is a structural blocker, not a trigger-order
+  cleanup issue.
+- `tinderrectangle`: P135/P160-style release remains a spacing problem. A
+  long branchdump for `ratplayer:3,6,4,6` from P135 returned no branch. The
+  only local pre-release move found by `ratgeom` is `(2,3)->(1,4)` with the
+  player at `(1,5)/(1,6)`; moving toward the useful row-6 side loop requires
+  the player to already have spacing that current routes cannot realize.
+- `reload_v3`: a low-beam macro from the 41-turn trigger-2 prefix found a
+  shorter one-rat diagnostic state,
+  `vvv<<<<<<vvv><^^^>>>>>>>>>>>>>^^^^^v<<v<^` +
+  `^<<^^^<<<<<<<<^^<^^^^^vvvvvvv>>>>>>`, verified `Playing` at 76 turns.
+  It is the known dead basin in smaller form: only rat `(0,21)` remains,
+  `(1,21)` is still web, `(2,21)` is still explosive, and only trigger 7 is
+  reachable.
+- `cyborg_rats/ai_takeover`: from the safe trigger-7 frontier at 45 turns,
+  longer `triggeropen:8,50` and low-beam macro checks produced no branches or
+  solution. Continue from a new structural event before safe-7, not from direct
+  trigger-6/8 ordering.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
