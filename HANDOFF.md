@@ -2191,6 +2191,71 @@ After this pass, the raw missing non-old CSVs are the seven hard levels plus
 zero-move path, but `verify` does not print `result=Won`; keep it out of the
 oracle-verified solution artifacts unless the hub semantics are clarified.
 
+### Continuation pass - 2026-06-13 post-world sidecar audit
+
+No additional hard-level `result=Won` was found. The branch was already pushed
+with the verified `world.csv` solution as commit `c5e59a8`. This pass kept
+solver concurrency low, used bounded sidecar probes, and ended with no
+`solver`, `timeout`, or `clingo` processes running.
+
+- `tinderrectangle`: the P113 `ratplayerfacing` lead is now a false positive.
+  From the 113-turn cut point, the suffix `^` reaches
+  `ratplayerfacing:1,4,1,5,north`, but it is only a sword-pin trap: `<` and
+  `>` are immediate `GameOver`, `^` kills the lower rat, `v` returns to
+  adjacent contact, and `.` loops. Follow-up `ratfar:1,5,3`,
+  `ratfar:2,6,3`, `ratfar:6,6,3`, and `rectsep` from that cut point all
+  returned `NO_SOLUTION` in capped checks.
+- `tinderrectangle`: P135/PBUF right-side release is also a suicide release.
+  At `PBUF = P135^^^^<<vvv<<^^^<<<v<<`, diagnostics show player `(5,4)`,
+  lower rat `(2,3)`, and all 16 rats alive. `ratgeom` still only finds the
+  local `(2,3)->(1,4)` geometry with player `(1,5)/(1,6)`, and no safe
+  `(2,3)->(3,4)`, `(2,4)`, or row-5 release. The actual `PBUF <<` opens
+  `(3,4)`, moves the lower rat to `(3,4)`, and is `GameOver`. Do not extend the
+  P113/P135/PBUF family without a different pre-release geometry.
+- `release`: the local right-side trigger-6 carrier nudge is real but not
+  reachable from the standard opener. `ratgeom` confirms a synthetic rat at
+  `(18,17)` can step onto right trigger 6 `(19,18)` with player `(19,19)`, but
+  bounded checks from `v<vv^^>>v` found no route to `ratplayer:18,17,19,19`,
+  no waypoint route to any trigger-6 cell, and no `triggeronlycellnot:2,18,5,web`
+  branch with at least 20 rats. The missing mechanism is staging the carrier
+  before the top sweep, not pushing trigger 5/6 after the opener.
+- `reload_v3`: direct trigger-2 progress remains a trap. From
+  `vvv<<<<<<vv<<<<`, appending `<` detonates `(2,21)` and opens the lower-left
+  pocket, but the oracle reports `GameOver`. From the 42-turn all-rat
+  trigger-2 staging prefix
+  `^>>>>>>>^^vvvvvv<<<^^<<^^<<<<<<^^^^^^<<^^^`, `wp` can reach trigger 2, but
+  follow-up search again falls into the dead `(0,21)` basin. A gated
+  `triggeronly:2` branch requiring trigger 1 to remain reachable found no
+  accepted branch. Trigger 2 being reachable is insufficient; the route must
+  remote-open the lower-left gate or preserve a next trigger station during the
+  trigger-2 event.
+- `cyborg_rats/ai_takeover`: the 113-turn all-reachable 3-rat post-trigger
+  state is a dead cleanup basin. Direct `cont` from that prefix returns
+  `NO_SOLUTION` immediately, bounded branchdumps found no `ratsle:2` branch and
+  no way to change explosives `(14,12)` or `(15,12)`, and the only local
+  geometry around rat `(2,16)` does not become a mop-up. Do not spend down to
+  the no-trigger 3-rat state; the solution needs an earlier structural event
+  before trigger 2 is consumed, likely before or during the safe trigger-7/8
+  chain.
+- `cooperation/handoff`: a survivable trigger-1 route
+  `v^ >^ >^ >^ >^ >^ ^^ v^ ^^ ^^ v^ v^ vv <v` followed by trigger 2 via
+  `^^ ^^ ^^ ^<` spends both trigger systems but leaves rats `(10,6)` and
+  `(1,7)`, zero explosives, zero triggers, and `reachable_rats=0`. This is a
+  sharper blocker: the level can consume both trigger systems, but that route
+  has no remaining mechanism to affect either rat.
+- `cooperation/tug_of_war`: trigger 1 remains the only promising first lever.
+  Prefix `^< ^^ ^^ ^^ ^^ ^^ ^^ ^^ <^ ^v >v` leaves 4 rats, 3 explosives,
+  10 triggers, and `reachable_rats=2`. Early trigger 3 is poison, and bounded
+  trigger-2 follow-up from the trigger-1 scaffold found no survivable
+  continuation. Work the two reachable rats before any trigger-2/trigger-3
+  attempt.
+- `cooperation/blocked_v2`: early trigger 5 is poison. The useful branch is
+  trigger 1 then trigger 3:
+  `^< ^^ v^ ^^ v> v> v> vv vv ^v ^v ^< ^v`, which reaches 8 rats with
+  `reachable_rats=6` and removes the plank. Triggering 5 after that drops to a
+  4-rat state with `reachable_rats=0`, so trigger 5 must be delayed or avoided
+  until the lower/remote rats are already controlled.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
