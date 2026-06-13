@@ -5718,6 +5718,66 @@ The useful progress was narrowing `cyborg_rats/ai_takeover` and finding a new
   relaxed to seven rats. Treat P31/P32 as new staging evidence, not a solved
   trigger sequence.
 
+### OOM-safe continuation - 2026-06-13 thirtieth Codex pass
+
+No new verified win. Work stayed serial and capped after the prior machine OOM:
+each solver probe used `ulimit -v 800000` with an external `timeout`, and
+process checks before solver calls found no leftover `solver`, `cargo`,
+`clingo`, or `timeout` processes. Read-only side agents were used only for
+mechanism triage.
+
+- `cyborg_rats/ai_takeover`: P93/A107 was probed around the suspected
+  right-column blast timing. From P93, `ratcell:18,5,0,16,trigger2` returned
+  empty even when rat-count preservation was relaxed, while keeping five
+  explosives and both trigger-2 cells. From Q106/A107
+  `^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>v>vv>>vvvv<v<`,
+  `ratslecellnot:2,18,6,explosive` only rediscovered the known two-enemy
+  trigger-2 cuts: the right column detonates, the `(18,4)` cyborg survives,
+  and the remaining rats are `(18,4)` plus `(11,9)`. Clearing the bottom-right
+  web with Q106+`<` gives player `(17,19)` and `(17,19)` open, but the
+  `(18,4)` cyborg is still player-unreachable. The useful rule conclusion is
+  sharper now: because cyborg Dijkstra excludes explosives, `(18,5)` is not
+  attractive until the right trigger-2 side is already connected; stepping on
+  the left trigger-2 detonates too early. Do not keep trying left-trigger-2
+  cuts unless a preceding event changes right-side connectivity.
+- `old_levels/overstep`: O53
+  `vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^vvvvvvvvv<<<<>>^>^>^` has a new
+  rat-drop chain, but it currently proves a trap rather than a solution. From
+  O53, `ratsle:5` produced five-rat branches; the useful one backs up into the
+  upper-left corridor. From the four-rat prefix
+  `vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^vvvvvvvvv<<<<>>^>^>^^^^^^^^^^^^<<<<<<<<<<<<^^>>>`,
+  `ratsle:3 --min-reachable-rats 2` reaches
+  `...v<<<<<vv><v<<<vvv>v^<^<><>` with three rats, two reachable rats, six
+  triggers, but zero explosives. Diagnostics show the remaining upper rat
+  `(14,2)` is sealed; direct cleanup then strands it. A stricter discriminator
+  requiring both two reachable rats and at least one explosive returned empty.
+  Treat this O53 chain as evidence that rat-count-only decomposition is
+  misleading unless an explosive is preserved for the upper pocket.
+- `overstep`: Newton's proposed pre-trigger-4 staging
+  `ratrectplayerrectcellis:13,14,14,15,14,12,15,14,13,13,trigger4` from O53
+  returned empty with six rats, one reachable rat, ten triggers, and five
+  explosives preserved. The companion
+  `ratslecellnot:4,14,11,rat` only rediscovered the same four-rat family above,
+  so avoiding the `(14,11)` blocker alone does not fix the access/resource
+  issue.
+- `old_levels/on_the_clock`: Euler's P31/P32 forced-trigger-9 conversion checks
+  returned empty:
+  `triggeronlycellis:9,10,14,trigger3` from both
+  `P31=v>>><^^v>><^^>>>vvv^^^vvvvvvvvv` and
+  `P32=v>>><^^v>><^^>>>vvv^^^^vvvvvvvvv`. Backing up to P19 with
+  `ratrectplayerrectcellis:11,14,13,15,9,13,11,15,10,14,trigger3` also returned
+  empty. A shallow P31 frontier did find the local event `P31+^^^`, which
+  preserves all eight rats, reduces to three explosives/eight triggers, and
+  raises reachable rats to six, but it is a contact trap: `<`, `v`, and `.`
+  immediately die, only `>` survives, and `ratsle:7` from the event returned
+  empty even relaxed to four reachable rats. Do not treat P31/P32 as an
+  endgame unless a new escape tempo is found before the adjacent-rat contact.
+- `cooperation/blocked_v2`: the broadened initial-board carrier-lane probe
+  `cellnotratrect:6,11,explosive,0,6,1,8` returned empty with all nine rats,
+  six reachable rats, and nine triggers preserved. This closes the nearby
+  `(0,6)..(1,8)` carrier variant on top of the earlier exact `(0,7)` carrier
+  failure.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
