@@ -3510,6 +3510,73 @@ leftover `target/release/solver`, `timeout`, or `clingo` jobs after the probes.
   16 rats, returned empty. The P135 route cannot even create the first safe-side
   lower-rat intermediate, so do not extend it with broader `rectsep` searches.
 
+### OOM-safe continuation - 2026-06-13 Codex pass
+
+No new verified win. This pass kept local solver probes serial, used
+`ulimit -v 800000` plus short `timeout` wrappers for search, and used two
+read-only side agents for independent hypothesis generation. Process checks
+before and after probes found no leftover `target/release/solver`, `timeout`, or
+`clingo` jobs.
+
+- Inventory/status: `solver/solutions/final_solutions.json` still has 35
+  verified entries. The old-level hub metadata explicitly says the three child
+  levels are "irreparably broken in one way or another"; continue tracking them
+  as rat-bearing unsolved CSVs, but report them separately from the seven active
+  authored hard levels.
+- `cooperation/blocked_v2`: diagnostics at the current 20-turn three-rat
+  frontier
+  `^< ^^ v^ ^^ v> v> v> vv vv ^v ^v ^< ^v ^v v< ^> v> ^< v< ^^`
+  still show rats `(9,13)`, `(9,14)`, and `(0,15)`, with trigger-2 cells
+  `(5,11)` / `(3,14)` unreachable to players. A bounded `frontier` from this
+  state with all 3 rats preserved enumerated only local player movement and the
+  familiar trigger-5 walling trap; it did not change `(1,15)`,
+  `(2,15)/(3,15)`, or provide trigger-2 access. Treat B20 as finite unless a
+  new earlier actor changes the lower-left gate.
+- `old_levels/on_the_clock`: from the 44-turn timing prefix
+  `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvvvvvv`, the immediate one-move
+  frontier confirms only `v` fires trigger 4 and reaches the all-rats-reachable
+  P45 state; every other legal move lets the top/right rat consume trigger 9 and
+  seal the board. From the 35-turn timing point
+  `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^`, a capped
+  `triggeronlycellnot:4,14,9,rat` branchdump with all 8 rats, at least one
+  reachable rat, and at least 8 triggers returned empty. This supports backing
+  up before the P35/P44 timing family.
+- `old_levels/order_of_operations`: the top-rat brokenness evidence is stronger.
+  Initial-board checks for `cellnot:9,2,web` returned empty with all 6 rats and
+  also with one rat relaxed (`--min-rats 5 --min-reachable-rats 4`). From
+  `P15=<<<<<<^v^^^^>^^`, the exact north-gate target
+  `cellnotratat:9,2,web,9,3` also returned empty. Combined with prior south-gate
+  and `ratdeathgeom` failures, the visible `(9,3)` rat appears dynamically
+  unreleasable under current rules unless a much earlier unknown event changes
+  the enclosure.
+- `cooperation/tug_of_war`: source inspection confirms explosions clear only a
+  3x3 neighborhood and zaps only wall empty cells / trigger explosives; zaps do
+  not clear webs or planks. Since the top rat is sealed in `{(7,0),(8,0)}` by
+  webs `(7,1)/(8,1)` and planks `(7,2)/(8,2)`, the level still needs a concrete
+  central-rat plank-break or adjacent explosion mechanism. Previous capped
+  checks found none, so do not spend on trigger choreography until one of those
+  boundary cells can actually change.
+- `tinderrectangle`: the pre-opened safe-side state
+  `T106+PREOPEN+RET`
+  (`<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv^^^>v^<vvvv^^^^<<vvv<<^^^<<<vvv<^^<<v<<>>>>>^^>>>vvv>>^^^>>vvv`)
+  verifies at 168 turns with player `(14,6)`, lower rat `(2,3)`, all 16 rats
+  alive, and `(2,5)` open. `ignitions` still says rat `(0,0)` plus row-3 player
+  stances win synthetically, but a capped preserved-rat check for
+  `ratplayerfacing:1,4,1,6,north` from the pre-opened state returned empty. The
+  pre-opened side loop does not by itself realize the left-column latch.
+- `release`: the side-agent "direct adjacent-blast kill before top sweep"
+  hypothesis was checked. `ratdeathgeom` for source `(15,5)` to explosive target
+  `(17,5)` printed no synthetic stance. A real initial-board branchdump for
+  `noratsrect:18,4,18,4` preserving at least 23 rats, 7 triggers, 4 explosives,
+  and one reachable rat returned empty. This closes the direct pre-sweep
+  adjacent-blast removal of the isolated `(18,4)` rat under the checked bounds.
+- `cyborg_rats/ai_takeover`: Q64 diagnostics still show only left trigger 2
+  reachable, with remote cyborg `(18,4)` unable to enter the explosive column
+  before trigger 2 fires. A short preserved-rat `frontier` from Q64 only
+  enumerated the known bottom-left drain family toward the 7-/3-rat cleanup
+  basins. Do not deepen that family without a compound structural target such
+  as changing `(14,12)` / `(15,12)` or moving the remote cyborg before trigger 2.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
