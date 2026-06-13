@@ -3214,6 +3214,26 @@ No new verified win. This pass kept one capped solver process active at a time
   under resource gates. `ratgeom` also found no one-step geometry from
   `(3,17)` to `(1,16)`, `(0,16)`, or `(0,17)`. Treat this as a useful finite
   diagnostic, not the missing carrier route.
+- `old_levels/order_of_operations`: resumed the interrupted P35 top-rat stance
+  checks from `<<<<<<^v^^^^>^^^vvvv^vv^^vvvv>>>>>^`. Both
+  `playerfacing:9,4,north` and sibling `playerfacing:9,2,south` returned no
+  branches with 4 rats / 4 reachable rats preserved. Strict trigger 8 is
+  reachable from P35, but it leaves `(9,4)` as web and the top rat `(9,3)`
+  isolated; strict trigger 2 and strict trigger 5 returned empty under the same
+  gates. Treat the P35/P56 route as exhausted unless a new earlier interrupt
+  changes the top enclosure before this state.
+- `old_levels/overstep`: an event scan from the clean first lever `>>>` found
+  `>>>^^` as the best immediate structural continuation, but diagnostics at
+  that state still have zero reachable rats. The event removes resources without
+  opening actual rat access; do not continue `>>> -> ^^` as a cleanup route.
+- `cooperation/blocked_v2`: from the 20-turn three-rat frontier, the attractive
+  human idea "lure lower-left rat `(0,15)` into the adjacent black holes" was
+  checked by asking for reachable south lure cells. `playerat:0,17`,
+  `playerat:1,17`, and `playerat:2,17` all returned empty with all 3 rats
+  preserved. Note that `ratgeom` is the wrong tool for this specific check
+  because it expects a rat to remain at the target, while black holes remove it.
+  The lower-left pocket still requires trigger/explosion access, not a
+  south-side player lure from this frontier.
 - `cyborg_rats/ai_takeover`: Q41
   `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>` has the upper trigger-7 cluster
   live and high player reachability. The intended alternate "enemy upper-7"
