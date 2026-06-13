@@ -4365,6 +4365,48 @@ checks after the probes found no leftover `target/release/solver`, `cargo`,
   inaccessible unless a new authoring/invariant argument identifies a different
   route to `(0,21)`.
 
+### OOM-safe continuation - 2026-06-13 sixth Codex pass
+
+No new verified win. Local solver probes were capped with `ulimit -v 800000`
+and short `timeout` wrappers except for quick geometry diagnostics; process
+checks found no leftover solver, cargo, clingo, or timeout jobs afterward.
+
+- `cooperation/blocked_v2`: Python `clingo` is available at
+  `/tmp/infestation-clingo-venv/bin/python`, but only use ASP for bounded
+  invariant checks. The existing resource-preserving over-approximation in
+  `/tmp/infestation_asp` reports `UNSATISFIABLE` for reaching/clearing the
+  lower-left blocker on the initial board, saved frontiers `b17.csv`,
+  `upper3.csv`, `after5.csv`, and a freshly generated B20 state. This is not a
+  full unwinnability proof, but it strengthens the conclusion that B20 cannot
+  solve `(0,15)` without an earlier structural trigger/rat event.
+- `cyborg_rats/ai_takeover`: Q54's `(18,4)` cyborg can move to `(18,5)` in
+  synthetic `ratgeom` placements, so the local movement rule is not the
+  blocker. Actual capped branch targets from Q54 still returned empty:
+  `ratrectplayerrect:18,5,19,7,16,13,19,16`,
+  `ratcell:18,5,18,6,explosive`, and concrete lure stations
+  `ratplayer:18,5,16,5` / `ratplayer:18,5,15,5`. Even `playerat:15,5` was
+  empty with all 16 enemies and 15 reachable enemies preserved. Back up before
+  Q54 if pursuing the right-cyborg lure; Q54 cannot reach the needed player
+  station intact.
+- `old_levels/overstep`: from P62, strict `triggeronly:6` returned empty with
+  4 rats and 2 reachable rats preserved. Loose `trigger:6` branches exist, but
+  the representative 85-turn branch spends all explosives and leaves the upper
+  rat `(14,2)` isolated in a size-4 pocket with no remaining mechanism. This
+  confirms the loose trigger-6 event is the known dead basin, not a new lever.
+- `cooperation/tug_of_war`: quick `ratgeom` checks for the top rat at `(7,0)`
+  moving into `(7,1)` or `(8,1)` printed no target placements. A synthetic
+  `ratdeathgeom` can kill other rats through explosive cascades, but every
+  printed example leaves the top rat at `(7,0)`. This supports the static
+  invariant that the top pocket is sealed by webs/planks and is not affected by
+  the existing explosion routes.
+- `tinderrectangle`: the sharper separation targets were also applied to the
+  long delayed-loop P135 frontier
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^^^^^<<<vvv<<^^^<<<vv<<v<<<^>>^^>>>>>v>vv>>^^^>>vvvv`.
+  Both `cellnotnoratsrect:2,4,web,2,3,2,5` and
+  `cellnotratrect:2,2,web,2,2,2,2` returned empty with all 16 rats reachable.
+  The compact P22/P45 family and delayed P135 family are both closed for these
+  exact shaft-clear/body-block hypotheses.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
