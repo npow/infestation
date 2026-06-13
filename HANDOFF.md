@@ -3204,6 +3204,16 @@ No new verified win. This pass kept one capped solver process active at a time
   `cellnotratat:1,16,explosive,3,17` and relaxed
   `cellnot:1,16,explosive` both returned empty while preserving the right-side
   explosive column and useful rat/resource counts.
+- `release`: a relaxed actor-staging probe from the same post-5 prefix did find
+  a concrete branch:
+  `v<vv^^>>vv<>>>^vv<<<<.<<^^^<<<>` leaves a rat at `(3,17)` with 21 rats,
+  5 explosives, and 5 triggers. Appending `<` reaches `(2,16)` while keeping
+  `(1,16)` explosive, but every local continuation drops that actor without
+  detonating the explosive. From the `(3,17)` staged state, `cellnot:1,16`,
+  `triggeronly:2`, `triggeronly:6`, and `cellnot:18,5,web` all returned empty
+  under resource gates. `ratgeom` also found no one-step geometry from
+  `(3,17)` to `(1,16)`, `(0,16)`, or `(0,17)`. Treat this as a useful finite
+  diagnostic, not the missing carrier route.
 - `cyborg_rats/ai_takeover`: Q41
   `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>` has the upper trigger-7 cluster
   live and high player reachability. The intended alternate "enemy upper-7"
