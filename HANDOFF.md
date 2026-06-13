@@ -3887,6 +3887,30 @@ New verified win:
   `norats2:7,0,8,0`. For `handoff`, the blocker remains `(10,6)` before left
   trigger 2 collapses the mechanism. For `ai_takeover`, the freshest Q64 target
   is staging the normal rat near `(13,11)` before trigger 2, not Q93 cleanup.
+- Immediate follow-up probes after the commit were all empty under short
+  `ulimit -v 800000` caps:
+  - `cyborg_rats/ai_takeover` Q64 prefix
+    `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<`:
+    `ratrectplayerrect:13,11,13,11,18,18,19,19` and
+    `ratcell:18,5,18,6,explosive` both returned empty with 15 enemies, 12
+    reachable enemies, 2 triggers, and 5 explosives preserved.
+  - `release`: initial
+    `cellnotplayerrect:18,5,web,14,6,19,12` returned empty under
+    22-rat / 20-reachable / 5-trigger / 2-explosive gates. From
+    `v<vv^^>>vv>^<<v<<<^^`,
+    `cellnotplayerrect:18,5,web,5,12,10,14` also returned empty under
+    22-rat / 19-reachable / 7-trigger / 2-explosive gates.
+  - `cooperation/tug_of_war`: all top-pocket boundary checks returned empty
+    with all 7 rats and 6 reachable rats preserved:
+    `cellnot:7,1,web`, `cellnot:8,1,web`,
+    `cellnot:7,2,plank`, `cellnot:8,2,plank`, and
+    `norats2:7,0,8,0`.
+  - `cooperation/handoff`: from the trigger-timing prefix
+    `v^ >^ >^ >^ >^ >^ ^^ v^ ^^ ^^ v^ v^ vv <v`, both
+    `ratat:11,7` and `ratgone:10,6` returned empty. From the 7-turn blast
+    `v^ >^ >^ >^ >^ >^ ^^`, both
+    `ratrectplayerrect:10,6,11,7,14,7,14,8` and
+    `cellnotratat:12,6,explosive,10,6` returned empty.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
