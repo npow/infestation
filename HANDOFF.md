@@ -5686,6 +5686,38 @@ The useful progress was narrowing `cyborg_rats/ai_takeover` and finding a new
   Use ASP first for event skeletons and bounded impossibility checks; verify
   every candidate move string back through the Rust oracle.
 
+#### Twenty-ninth pass addendum
+
+- `ai_takeover`: Banach's read-only endgame audit confirmed the one-cyborg
+  stances are dead. For the P218/P222-style boards, immediate source-cell
+  timings either die (`GameOver`) or retreat up-left; depth-12 frontier checks
+  found no zero-rat/win state. This reinforces the rule-based conclusion above:
+  a lone cyborg with no triggers is not a cleanup target.
+- `ai_takeover`: corrected parity for the pre-cut lure is
+  `A158=A140+v^v^v^v^v^v^v^v^v^`, giving player `(0,16)`, normal rat `(11,9)`,
+  cyborg `(15,11)`. From A158,
+  `ratsleratrectplayerrect:1,14,10,16,12,13,9,15,10` found one relevant branch
+  with player `(13,9)` and cyborg `(15,11)`, but local `win`, `ratsle:0`, and
+  frontier checks from that posture were empty/dead. The tighter lane predicate
+  `ratsleratrectplayerrect:1,15,11,16,12,14,9,15,10` returned empty. Do not
+  keep trying final `^/v/>/.` moves from these one-cyborg states.
+- `blocked_v2`: the earlier-carrier probe from the read-only audit returned
+  empty under cap:
+  `cellnotratat:6,11,explosive,0,7` with nine rats, six reachable rats, and
+  nine triggers preserved. This does not close the carrier idea completely, but
+  opening `(6,11)` while preserving the `(0,7)` carrier is not easy from the
+  initial board under the tested depth.
+- `old_levels/on_the_clock`: the P25 trigger-9 avoidance predicate
+  `cellnotcellis:14,9,rat,13,9,trigger9` returned empty. The alternate
+  trigger-3 zap-ring staging was positive: from prefix `v>>><^^v>><^^>>>vvv`,
+  `ratrectcellis:11,14,13,15,10,14,trigger3` returned
+  `v>>><^^v>><^^>>>vvv^^^vvvvvvvvv` (P31) and
+  `v>>><^^v>><^^>>>vvv^^^^vvvvvvvvv` (P32). P31/P32 place the lower-right rat
+  into the row-14 ring while trigger 3 remains intact. However, direct
+  `triggeronly:3` follow-ups from both P31 and P32 returned empty even when
+  relaxed to seven rats. Treat P31/P32 as new staging evidence, not a solved
+  trigger sequence.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
