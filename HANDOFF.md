@@ -2732,6 +2732,41 @@ short `timeout`/`ulimit` caps after the previous OOM.
   `tinderrectangle`, and `cyborg_rats/ai_takeover` found no verified wins.
   `tinderrectangle` hit its per-process `ulimit` and aborted safely; the
   process table and system memory were clean afterward.
+- `tinderrectangle`: added bounded multi-target lookup goals
+  `ratrectplayerrect` and `cellnotplayerrect` to avoid launching one process
+  per exact coordinate. These are search-oracle helpers only; they do not
+  change game rules.
+- `tinderrectangle`: a better human-style precursor was verified. Let
+  `T106=<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv`,
+  `PREOPEN=^^^>v^<vvvv^^^^<<vvv<<^^^<<<vvv<^^<<v<<>`, and
+  `RET=>>>>^^>>>vvv>>^^^>>vvv`. `T106+PREOPEN+RET` verifies `Playing` at
+  168 turns with player `(14,6)`, the lower rat still parked at `(2,3)`, all
+  16 rats alive, and `(2,5)` open. This proves the intended direction is
+  delayed release/separation, not simply dragging the lower rat across row 6.
+- `tinderrectangle`: from `T106+PREOPEN+RET`, opening `(2,4)` while preserving
+  all 16 rats is reachable; the best branch found returns to
+  `player=(2,4), rat=(2,3)` with `(2,4)` open. However, that branch is still a
+  contact trap: `v` / `vv` keeps the rat adjacent, horizontal escape is
+  immediate `GameOver`, and `cellnotplayerrect:2,4,web,13,6,15,8` found no
+  branch that opens `(2,4)` and returns the player to the right/bottom safe
+  pocket under the cap. Do not repeat the adjacent-open branch unless a new
+  separation idea is added.
+- `old_levels/order_of_operations`: found a much shorter productive trigger
+  family than the previous 2-rat dead basin. Prefix
+  `<<<<<<^v^^^^>^^^vvvv^vv^^vvvv>>>>>^` verifies `Playing` at 35 turns with
+  4 rats, 1 explosive, and all remaining rats reachable. A shorter trigger-8
+  sibling
+  `<<<<<<^v^^^^>^^^vvvv^vv^^vvvv>>>>>^^>>>>^^^^vvvv<<<<^<<<`
+  reaches a 4-rat state at 56 turns. Appending `v>>>>>>>^>>^` reaches a
+  2-rat state at 68 turns with rats `(9,3)` and `(17,18)`, all remaining rats
+  reachable, 1 explosive, and 7 triggers.
+- `old_levels/order_of_operations`: the 68-turn 2-rat state is not solved.
+  Bounded checks found no direct `ratsle:1` with `max_trapped_rats=0`, no
+  `ratgone:9,3`, and no `cellnot:9,4,web`. Trigger 5 from this family walls
+  off the top rat; trigger 2 from the related 60-turn branch also strands
+  rats. The next useful hypothesis must handle top rat `(9,3)` before the
+  trigger-8/trigger-5 cleanup family, or use a different trigger-8 sibling that
+  changes the top enclosure.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
