@@ -3346,6 +3346,67 @@ No new verified win. This pass kept one capped solver process active at a time
   viability gate, so the top rat is not removable from this frontier in the
   tested bounds. Continue before P35; do not spend more time on late cleanup.
 
+### OOM-safe continuation - 2026-06-13 current pass
+
+No new verified win. This pass kept main-thread solver probes serial, wrapped
+with short `timeout` and `ulimit -v 800000` caps where search was involved, and
+checked the process table between probes. `clingo` is not installed in this
+workspace (`clingo` binary absent and Python `import clingo` fails), so no ASP
+encoding was attempted in this pass.
+
+- `cyborg_rats/ai_takeover`: re-expanded the Q64
+  `triggeronlycellnot:2,18,4,cyborg` family with a bounded raw branchdump. It
+  found all-reachable 4-rat triggerless branches, but these are still contact
+  traps. Representative branch A
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<<<<<<<<<<<<<>>>>>>>>>>><<<<<<<<<<<<<<^^^<<<v`
+  has player `(0,17)` and rats/cyborgs `(18,5)`, `(11,9)`, `(1,16)`,
+  `(2,16)`; every immediate action is `GameOver`. Sibling branch B
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<<<<<<<<<<<<<>>>>>>>>>>><<<<<<<<<<<<<<^^^<<<<`
+  allows `v`, `<`, and `.` tempos, but capped `ratsle:3` and `win` lookups
+  returned empty. A side audit also confirms the Q3/Q6 cleanup basin is blocked
+  by a fixed two-cell local-cyborg shadow: the player can enter row-16 webs, but
+  the cyborg moves into the newly cut web cell on the next westward progress
+  step. Continue before Q64/Q6 if pursuing this level; look for a wider local
+  cyborg offset or lower-pocket redirection before stepping on trigger 2.
+- `release`: current-rule replay sharpened the lower-carrier failure. With
+  `BASE=v<vv^^>>vv<>>>^vv<<<<.<<^^^<<<`, `BASE+><` verifies `Playing` at
+  32 turns with the lower actor at `(2,16)`, explosive `(1,16)` still intact,
+  right explosive stack `(18,6..8)` intact, and triggers 2/6 still present.
+  Immediate moves delete the actor without detonating `(1,16)`, and a capped
+  `cellnot:1,16,explosive` branchdump from that state returned empty. `BASE+>`
+  gives the documented `(3,17)` actor, but that branch also remains finite. The
+  actor can be carried right only to about `(5,17)` before the player hits the
+  row-11 wall at x=6. Side checks from `BASE+>` for
+  `ratplayer:18,17,19,19` and even `ratat:14,17` returned empty. The current
+  carrier family can stage an actor beside the explosive but cannot convert it
+  into the left-trigger-2/right-stack mechanism.
+- `reload_v3`: the pre-trigger-1 helper station is real but finite. From
+  `P41=>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v`, `^` safely chews plank
+  `(4,17)` and `v` safely chews `(4,19)` before trigger 1 fires. A bounded
+  frontier from `P41+^` exhausted after 21 nodes / 15 states: the helper can
+  move through `(3,17)`, `(3,18)`, `(3,19)`, `(2,16..18)`, and `(1,16..18)`,
+  but attempts to push farther toward the bottom-left explosive become contact
+  deaths. Capped `cellnot:2,21,explosive` from `P41+^` returned empty. Treat
+  this as a real local mechanism that still needs a different earlier setup,
+  not as a reload-order continuation.
+- `tinderrectangle`: a side audit found a new local latch but ruled it out. At
+  P115 from the known P135 family, suffix `<>` safely opens `(3,3)` and moves
+  the lower rat to `(3,3)` while the player returns to `(4,3)`. However,
+  `P115<> >v` dies on diagonal contact, and bounded checks found no branch to
+  `rectsep` or even to a live `ratat:4,4` state. This closes the tempting
+  east-door variant; the level still needs an earlier release-spacing change.
+- `old_levels/on_the_clock`: a side audit sharpened the P23/P25 tempo blocker.
+  `P23=v>>><^^v>^^>>>vvv><vvvv`; `P23+v` lets the central rat fire trigger 2,
+  and `P23+vv` puts the lower-right component rat at `(16,18)` while trigger 6
+  is player-reachable. The intended-looking plan is to use trigger 6 to detonate
+  the `(12,19)` explosive before the trigger-9/trigger-8 cleanup, but at P25 the
+  top rat is already at `(14,9)`, one move from trigger 9 at `(13,9)`. Ordinary
+  movement toward trigger 6 lets trigger 9 fire first. `ratdeathgeom` from P25
+  found no one-step explosive/black-hole self-delete for `(16,18)`, and a
+  bounded P23 check for `ratcell:13,18,12,19,explosive` with trigger 6 reachable
+  returned empty. The next useful idea must diverge before or at P23 to delay
+  the top trigger-9 rat or pre-stage the lower-right rat earlier.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
