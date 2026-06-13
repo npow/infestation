@@ -4132,6 +4132,65 @@ before/after probes showed no leftover `target/release/solver`, `cargo`,
   because `(18,5)` is already open in that level; the blocker is moving/killing
   the `(18,4)` cyborg safely, not clearing a web as in `release`.
 
+### OOM-safe continuation - 2026-06-13 second Codex pass
+
+No new verified wins. This pass kept all solver runs under `ulimit -v 800000`.
+Parallelism was limited to short capped probes and read-only side agents; process
+checks after the queue found no leftover `target/release/solver`, `cargo`,
+`clingo`, or `timeout` jobs.
+
+- Committed and pushed `61d8831 Add no-rats rectangle lookup goal`; the saved
+  36 solutions still verify 36/36 after the solver change.
+- `claude/gauntlet.csv` has 0 rats and no resources. It is not part of the
+  9 rat-bearing unsolved set; `lookup --goal win` reports no solution because
+  it is a portal/hub board, not a rat puzzle.
+- `cyborg_rats/ai_takeover`: three targeted Q54/P68 checks from side-agent
+  hypotheses returned empty:
+  `triggeronlycellnot:2,18,6,explosive` from P68 with 13 rats / 12 reachable /
+  trigger 8 required, `ratrectplayerrect:18,5,18,6,19,14,19,18` from P68 with
+  trigger 2 required, and
+  `cellnotnoratsrect:18,4,cyborg,0,16,3,19` from Q54 with reachable trigger 2.
+  This weakens both "fire trigger 2 for the lower blast lane" and "move the
+  isolated cyborg into the doorway" as currently staged.
+- `cyborg_rats/ai_takeover`: a 60s capped beam from Q54 did not solve; its best
+  state was a 3-enemy/no-trigger trap with the left/lower cleanup spent. Treat
+  this as another confirmation that marching to low-count cleanup before
+  handling `(18,4)` is the wrong order.
+- `old_levels/on_the_clock`: the early-trigger-9 route produced a new
+  constructive near miss. From the 4-rat prefix
+  `>>>v>vv^^^<^^>>>vvvvvvvvv^^>>>>><>v>v<v>>>>>>>>vv^^<<<<<<<^^^^<vvvv>>>>>>>>vv<<<<<<<<<vv`,
+  strict trigger 6 reaches
+  `...^^>>>>>>>>>^^<<<<<<<^^^<<<<<<<^<<<<v` with 4 rats, 2 explosives,
+  13 webs, 4 triggers, and 1 reachable rat. From there,
+  `reachablege:2` reaches
+  `...^^^^^^^^^^^^^v>>vv` with 4 rats, 1 explosive, 10 webs, 2 triggers, and
+  2 reachable rats.
+- `old_levels/on_the_clock`: firing trigger 8 from that 142-turn state is a
+  near miss, not a solve. `reachablege:3` reaches
+  `...^^^^^^^^^^^^^v>>vv^^^^^^` with 4 rats and 3 reachable rats, but it has
+  0 explosives and 0 triggers; the remaining `(17,5)` rat is still isolated.
+  Broader `reachablege:4` checks from both the 124-turn and 142-turn states
+  returned empty. The route must change the top-right pocket before the 4-rat
+  trigger-6/8 sequence, not after.
+- `old_levels/overstep`: side-agent P52 checks closed the most concrete upper
+  mechanism gap. `ratcell:12,4,13,5,trigger6` was trivial because the rat/cell
+  already match at P52. The meaningful strict checks
+  `triggeronlycellnot:6,13,5,trigger6` and
+  `triggeronlycellnot:6,9,6,explosive` returned empty, as did contact-facing
+  targets `ratplayerfacing:15,3,13,4,east` and
+  `ratplayerfacing:14,2,13,4,east`. A capped beam from P62 only reproduced the
+  isolated upper-rat basin.
+- `cooperation/blocked_v2`: strict useful-trigger-2 checks from the initial
+  board and from the all-9-rat staging prefix `^< ^^ v^ ^^ vv ^v` returned
+  empty under preservation gates: `triggeronlycellnot:2,5,11,trigger2` and
+  `triggeronlycellnot:2,1,15,web`. This weakens the last concrete "fire useful
+  trigger 2 while the lower-left pocket is alive" hypothesis. Earlier
+  `cellnotnoratsrect:1,15,web,0,15,0,15` probes from B9/pre-B20 also returned
+  empty.
+- `old_levels/on_the_clock` and `old_levels/overstep`: capped `dropchain` runs
+  were stopped after repeatedly reproducing known dead basins. Do not repeat
+  those modes from P25/P62 unless the prefix changes the isolated pocket first.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
