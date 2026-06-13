@@ -2843,6 +2843,13 @@ processes before and after batches.
   P132 returned empty. From the lower-rat-killed branch `P132+^`, bounded
   `winready`, `ratat:0,0`, and `ratat:16,0` checks also returned empty. Treat
   P132/P137 as exhausted unless an earlier route changes the release spacing.
+- `reload_v3`: the short rat-triggered trigger-2 prefix
+  `>>>^>>>>.>>.<.<<<<` was rechecked as a possible reload station. Diagnostics
+  at the prefix show 3 rats, 5 explosives, 12 triggers, but `reachable_rats=0`
+  and only 2 reachable triggers. Local frontier can make the adjacent middle
+  rat reachable, but capped continuations for `trigger:1`, `trigger:6`,
+  `reachablege:2`, `cellnot:1,21,web`, and `ratat:1,21` all returned empty.
+  Treat this as a one-actor local basin, not a path to the bottom-left rat.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
