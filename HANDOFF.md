@@ -2287,6 +2287,34 @@ and ended with no `solver`, `timeout`, or `clingo` processes running.
   `^< ^^ ^^ ^^ ^^ ^^ ^^ ^^ <^ ^v >v` reconfirmed the known side-rat cleanup
   suffix `^^ <^ <^ <^ v^ v^`, but then remained in the 3-rat/1-reachable top
   pocket basin. No new top-pocket release mechanism was found.
+- `cooperation/handoff`: the `(10,6)` sealed rat is now the hard invariant to
+  preserve against. The common trigger-2 finish spends the remote `(11,7)`
+  trigger and leaves `(10,6)` behind web `(10,5)` with no triggers/explosives
+  remaining. Capped checks from the 8-turn setup found no branch for
+  `ratat:11,7`, `ratgone:10,6`, or `playerat:12,8`; trigger-1 branches all
+  re-enter the same sealed-rat family. The best alternate family is the courier
+  prefix `v^ >^ >^ >^ >^ >^ ^^ .v .> v> v>`, which preserves all triggers and
+  leaves central rats at `(7,5)` and `(8,7)`. The next useful test is whether a
+  central rat can detonate the bottom-right explosive chain before trigger 2,
+  opening southeast lure cells for `(10,6)`.
+- `reload_v3`: a stronger trigger-2-first prefix is
+  `>>>^>>>>.>>.<.<<<<`. It safely fires trigger 2 with 3 rats, 5 explosives,
+  16 webs, and 12 triggers; `(12,22)` is no longer explosive, while `(2,21)`
+  still blocks the lower-left rat. From that prefix, capped branchdumps for
+  trigger 1, 3, or 4 returned no branch, even without reachable-rat constraints;
+  the only found trigger continuation is trigger 7, which again leaves two
+  unreachable rats. The next hypothesis should focus on reaching/rat-activating
+  top trigger 6 before bottom trigger 5; synthetic checks show bottom 5 first
+  seals top 6 and leaves the lower-left rat closed.
+- `tinderrectangle`: the lower-row ignition geometry is real but still lacks
+  separation. A useful near-miss is the family ending at `P101`, where the
+  lower rat reaches `(2,6)` and synthetic ignition from a separated right-side
+  player wins, but actual `P101 "."` is `GameOver` and `P101 ">"` starts the
+  known overrun. A shorter staged state `<^^^` puts the lower rat at `(2,3)`;
+  walking left to `(1,3)` sacrifices that rat and leaves 15 top rats, but capped
+  checks from that state found no `ratat:0,0` or immediate ignition. Do not
+  extend the P113/P135/PBUF family unless a new gate gives the player right-side
+  separation before the lower rat enters `(2,6)`.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
