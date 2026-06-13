@@ -3495,6 +3495,20 @@ leftover `target/release/solver`, `timeout`, or `clingo` jobs after the probes.
   both from `P15=<<<<<<^v^^^^>^^` and from the initial board under 45-depth /
   120k-node caps with at least 5 rats and 4 reachable rats. This closes the
   simplest "enter from above instead of reopening below" version.
+- `reload_v3`: a read-only audit suggested turning the P41 helper into a
+  detonator for `(2,21)`: use
+  `P43=>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v^v`, which verifies with the
+  helper moving near `(3,18)`, then stage `ratcell:3,21,2,21,explosive`. Exact
+  checks from P43 returned empty both with resource preservation
+  (`--min-triggers 10`) and relaxed to 45 depth / 120k nodes. The helper still
+  cannot be carried down to the lower-left fuse lane in this station family.
+- `tinderrectangle`: the P135 safe-side intermediate was tested before asking
+  for full `rectsep`. With
+  `P135=<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^^^^^<<<vvv<<^^^<<<vv<<v<<<^>>^^>>>>>v>vv>>^^^>>vvvv`,
+  the player is safely at `(14,7)` and the lower rat remains at `(2,3)`.
+  Branchdumps for `ratplayer:2,4,14,7` and `ratplayer:3,5,14,7`, preserving all
+  16 rats, returned empty. The P135 route cannot even create the first safe-side
+  lower-rat intermediate, so do not extend it with broader `rectsep` searches.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
