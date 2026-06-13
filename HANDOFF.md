@@ -2767,6 +2767,22 @@ short `timeout`/`ulimit` caps after the previous OOM.
   rats. The next useful hypothesis must handle top rat `(9,3)` before the
   trigger-8/trigger-5 cleanup family, or use a different trigger-8 sibling that
   changes the top enclosure.
+- `old_levels/order_of_operations`: after the commit above, a trigger-3-first
+  alternative was also checked. Prefix
+  `<<<<<<^v^^^^>^^^vvvv^vv^^^vvvv` reaches a clean 5-rat / 1-explosive state
+  at 30 turns with all 5 rats reachable. From there, trigger 8 can drop to
+  4 rats at 44 turns via
+  `<<<<<<^v^^^^>^^^vvvv^vv^^^vvvv^^^^^^^^^^^>>>`, still with all rats and
+  triggers reachable. Continuing to
+  `<<<<<<^v^^^^>^^^vvvv^vv^^^vvvv^^^^^^^^^^^>>>^^^^<<<vvvvvvvvvvvvvvvv>>>>>^^>>>>^^>>v`
+  reaches a 2-rat state at 83 turns, but it is the same obstruction: residual
+  rats `(9,3)` and `(17,18)`. Bounded `ratsle:1` / `ratgone:9,3` /
+  `cellnot:9,4,web` checks still fail. This weakens the idea that merely
+  choosing a different trigger-8 sibling fixes the top rat.
+- `reload_v3`: a bounded trigger-any pass found only a trigger-7 opening
+  `^^^^^<<<<<<^^^` at 14 turns. It verifies `Playing`, but diagnostics show
+  only 1 of 3 rats reachable and 0 of 12 remaining triggers reachable, so this
+  is a dead macro family, not a continuation frontier.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
