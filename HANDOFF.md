@@ -3641,6 +3641,31 @@ probes found no leftover `target/release/solver`, `timeout`, or `clingo` jobs.
   `playerat:1,17` and `noratsrect:0,15,1,16` returned empty while preserving
   the 8-/7-rat structure. This does not solve trigger-2 access; it just rules
   out the obvious south-lure bypass from that frontier.
+- OOM-safe serial tmux queue `/tmp/infestation_safe_bg_codex_rectignite.log`
+  completed and the tmux session exited. It ran one solver child at a time with
+  `ulimit -v 800000`. Results:
+  - `tinderrectangle` initial `lookup --goal rectignite` with depth 220 / 180s
+    / 900k nodes stopped at 866,072 expansions with no hit. Best state remained
+    the compact staging `<<>^^^>>v>vv>>^^^>>vvv`.
+  - `cyborg_rats/ai_takeover` from the 13-rat Q13 frontier for strict
+    `triggeronly:2` with `--min-rats 13 --min-reachable-rats 10` returned
+    `NO_SOLUTION` immediately. The static left-trigger distance from Q13 is a
+    mirage under dynamic cyborg pressure.
+  - `reload_v3` from
+    `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v>><` for strict `triggeronly:2`
+    while preserving all 3 rats and requiring reachable trigger 3 returned no
+    branches.
+- `tinderrectangle`: exact `winready` from the compact staging
+  `<<>^^^>>v>vv>>^^^>>vvv` also returned `NO_SOLUTION` at 297,905 expansions /
+  60s / 350k nodes. Its best continuation was
+  `^^^<<vvv<<^^^<<<<<<<<`, just returning to row 3 with the top pack still
+  sealed. This confirms the compact safe-side staging is not missing a short
+  one-move-ready continuation.
+- `release`: an initial `events` scan at depth 70 / 25s / max 8 showed only
+  familiar first structural families: long top sweeps
+  `^^^^^^v^vvvvvvv>>>v` / `...>>><`, the short central trigger family
+  `v<v` / `vv<v`, and `v>>>v` variants. No new first event appeared outside the
+  documented dead trigger-3/4/5 basins.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
