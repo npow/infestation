@@ -3286,6 +3286,12 @@ No new verified win. This pass kept one capped solver process active at a time
   `(2,6,14,8)`, and `(3,6,14,7)` all returned empty. The missing trick is now
   very narrow: create that right-pocket separation while the lower rat stays on
   row 6.
+- `tinderrectangle`: tightened the separation target further with
+  `ratrectplayerrect:2,6,7,6,14,7,14,8` (lower rat anywhere on the viable
+  row-6 strip, player in the exact safe pocket). From both T106 and earlier
+  T58, capped branchdumps preserving all 16 rats returned empty. This rules out
+  "same route, better end choreography"; the route needs a different door timing
+  before T58 or a different lower-rat release geometry.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
