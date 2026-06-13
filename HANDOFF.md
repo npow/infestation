@@ -3450,6 +3450,16 @@ leftover `target/release/solver`, `timeout`, or `clingo` jobs after the probes.
   `GameOver`; however, bounded `ratsle:10` checks from that exact state returned
   empty even relaxed to depth 60 / 120k nodes. Treat it as an improved diagnostic
   frontier, not a cleanup path.
+- `cyborg_rats/ai_takeover`: the safe-trigger-7 family was checked as a shaping
+  route rather than a trigger-order continuation. The live prefix
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>^>^^` verifies with 14 enemies,
+  6 explosives, 7 triggers, and 13 reachable enemies. Some old collar targets
+  such as `(16,12)` and `(14,12)` are already changed by this prefix, so they
+  are not meaningful follow-ups. The remaining right-side stack targets
+  `cellnot:18,6,explosive` and `cellnot:18,8,explosive` both returned empty
+  under 35-depth / 120k-node caps while preserving at least 12 enemies, 10
+  reachable enemies, and 5 triggers. Safe-7 still needs a different concrete
+  target before it is worth revisiting.
 - `tinderrectangle`: quick one-step `ratdeathgeom` checks for the top-corner
   ignition idea found no candidate synthetic stances from adjacent top rats
   `(1,1)->(0,0)` or `(15,1)->(16,0)`, nor for lower rat `(1,6)->(0,6)`.
