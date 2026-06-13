@@ -3942,6 +3942,44 @@ New verified win:
   supports the existing map: reload's tempting 2-rat states still strand the
   lower-left rat, and no bounded all-rats route has made a second rat reachable
   without a sharper mechanism around `(1,21)` / `(2,21)`.
+- `old_levels/on_the_clock`: the alternate P25 line
+  `v>>><^^v>^^>>>vvv><v^^^vv` is still useful, but the P36 continuation
+  `v>>><^^v>^^>>>vvv><v^^^vvvvvv^^>>>>v` is a dead rat-count branch:
+  relaxed `ratsle:5` with `--min-reachable-rats 2` returned empty. A more
+  human trigger-order check found that `6 -> 8` is the better skeleton, not
+  `8 -> 6`. From P36, trigger 6 can be fired with
+  `^^^vv<<<<<<^<<<<v`, then trigger 8 with `^^^vv>v>>>vvvv<vvv`,
+  producing
+  `v>>><^^v>^^>>>vvv><v^^^vvvvvv^^>>>>v^^^vv<<<<<<^<<<<v^^^vv>v>>>vvvv<vvv`.
+  That state has 6 rats, 0 explosives, 0 triggers, and 4 reachable rats; after
+  `^^^^^` it has 5 reachable rats. However, every tested cleanup strands the
+  same bottom-right rat: `reachablege:6` with all 6 rats preserved returned
+  empty, and `ratsle:5` with all 5 remaining rats reachable returned empty.
+  A bounded mop search reduced to two rats `(19,12)` and `(17,14)`, with
+  `(17,14)` sealed. Backing up to P29 (`...vvvvvv`) did not help: direct
+  trigger 6 or trigger 8 from P29 still takes long enough for the lower-right
+  rat to settle into the same `(12,14)` blocker. Do not repeat this trigger
+  family unless the route changes the lower-right rat before P29.
+- `tinderrectangle`: the separation hypothesis gained one positive lead but no
+  win. The shaft can be pre-opened while all 16 rats survive: from the initial
+  board, `cellnotratrect:2,4,web,2,3,2,3` gives
+  `<^^^<vv<<<<^`, and then allowing the lower rat inside the shaft,
+  `cellnotratrect:2,6,web,2,3,2,5` gives `<^^^<vv<<<<^.vv`
+  (player `(2,6)`, lower rat `(2,5)`). But from there,
+  `ratrectplayerrect:2,6,6,6,13,6,15,8` and
+  `ratrectplayerrect:2,3,2,6,13,6,15,8` both returned empty: once the shaft is
+  open, the player cannot get back to the far-right safe side while preserving
+  the rat. A separate pre-opened latch lead is real:
+  from the long prefix
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv^^^>v^<vvvv^^^^<<vvv<<^^^<<<vvv<^^<<v<<>>>>>^^>>>vvv>>^^^>>vvv`,
+  target `ratplayerfacing:1,4,1,5,north` reaches a 200-turn state with all
+  16 rats, player `(1,5)` facing north, lower rat `(1,4)`, and 19 webs.
+  Immediate `^` only kills that rat, `v` moves it to `(1,5)`, side moves die,
+  and `rectlower` / `rectready` / local `lookup --goal win` from the contact
+  state returned empty. Follow-up `ratrectplayerrect:1,4,2,5,14,7,14,8` also
+  returned empty. Top-corner ignition probes
+  `ratrectplayerrect:0,0,0,0,1,3,6,3` and
+  `ratrectplayerrect:16,0,16,0,10,3,15,3` returned empty.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
