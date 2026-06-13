@@ -2021,10 +2021,6 @@ fn solve_with_context(
     let tuples = all_action_tuples(nplayers);
     let start = Instant::now();
 
-    if count_rats(grid) == 0 {
-        return Some(vec![]);
-    }
-
     let mut nodes: Vec<Node> = vec![Node {
         grid: grid.clone(),
         parent: usize::MAX,
@@ -2312,9 +2308,6 @@ fn solve_lookup(
         }
     };
 
-    if goal == LookupGoal::Win && count_rats(grid) == 0 {
-        return Some((Vec::new(), PlayState::Won));
-    }
     if min_rats.is_some_and(|minimum| count_rats(grid) < minimum) {
         return None;
     }

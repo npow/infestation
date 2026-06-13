@@ -2187,9 +2187,9 @@ Mechanism notes:
   instead of accepting that dead seven-rat state.
 
 After this pass, the raw missing non-old CSVs are the seven hard levels plus
-`claude/gauntlet.csv`. `claude/gauntlet.csv` has no rats and `solve` reports a
-zero-move path, but `verify` does not print `result=Won`; keep it out of the
-oracle-verified solution artifacts unless the hub semantics are clarified.
+`claude/gauntlet.csv`. `claude/gauntlet.csv` is a zero-rat portal hub, and the
+game rule intentionally reports zero-rat levels as `Won` only if the level
+started with rats. Keep it out of the oracle-verified solution artifacts.
 
 ### Continuation pass - 2026-06-13 post-world sidecar audit
 
@@ -2331,7 +2331,7 @@ and ended with no `solver`, `timeout`, or `clingo` processes running.
 
 ```
 HANDOFF.md                          ← this file
-levels/claude/                      5 new puzzles + gauntlet hub + README (all verified)
+levels/claude/                      5 verified puzzles + gauntlet portal hub + README
 solver/                             Rust oracle crate
   src/main.rs                         all modes: solve / verify / trace / wp
   Cargo.toml
