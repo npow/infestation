@@ -2164,6 +2164,33 @@ ended with no `solver`/`timeout`/`clingo` processes running.
   gate. A strict `2,1,3,4,5,6` check was also attempted under a 120s wrapper and
   stopped without a usable branch; process cleanup was verified afterward.
 
+### Continuation pass - 2026-06-13 `world.csv` solved
+
+`world.csv` now has an oracle-verified win and has been added to the solution
+artifacts. The final replay is:
+
+```sh
+target/release/solver verify levels/world.csv '^^ ^< ^> ^< ^< ^< ^v ^< ^> <^ <^ v^ v^ v^ v^ v^ v^ <> <v v^ v^ v^ ^^ ^v ^< >> ^< ^< ^^ ^< ^< ^v >^ >< ^< ^< <v ^< ^^ v^ v^ >^ v^ v^ >^ v^ v^ v^ v^ v^ v^ v^ v^ v^ ^^ ^^ ^< >> >< >^ >v v< v< v^ <^ >< ^^ ^> ^v << << << <v ^> ^> ^< ^v ^> ^> ^^ ^< >> >< ^< ^^ v< v^ v^ v^ >^ >^ <v << ^< ^> >v >v ^^ ^^ vv vv <^ <v <^ <^ <> << << <^ ^> ^^ v^ v> >> >^ >> >> ^^ ^< ^< ^< << << << <^ >v ^^ ^^ ^v ^v ^^ ^v ^^ ^^ ^^ ^^ ^^ ^^ ^^ ^^ ^^ ^^ v< v> v^ >v >v ^< ^< ^^ v< v> >^ >< ^< ^^ v< v> >^ >< ^^ ^^ v< v> << v^ v< v< v< v< v< >v >. v> v^ ^v ^v <^ <^ v^ v^ v^ v^ <^ v^ ^^ vv ^> <^ << v< v^'
+# result=Won turns_applied=192
+```
+
+Mechanism notes:
+
+- The direct `world.csv` solve repeatedly converged to a two-rat residue:
+  top-left `(1,0)` plus one bottom rat. The missing human step was to clear the
+  bottom-left and bottom-right rats before letting the solver run north.
+- A 22-turn prefix moved/removes the initially isolated `(2,30)` rat. A later
+  staged prefix at 65 turns removes bottom-right `(6,30)/(6,31)`, leaving all
+  remaining rats reachable.
+- Greedy count descent then exposed a dead trigger-1 lockout at seven rats, so
+  the final solution backs up and uses explicit top-web and final-pair cleanup
+  instead of accepting that dead seven-rat state.
+
+After this pass, the raw missing non-old CSVs are the seven hard levels plus
+`claude/gauntlet.csv`. `claude/gauntlet.csv` has no rats and `solve` reports a
+zero-move path, but `verify` does not print `result=Won`; keep it out of the
+oracle-verified solution artifacts unless the hub semantics are clarified.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.

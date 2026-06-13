@@ -5,7 +5,7 @@ All move-strings below were **verified against the real game engine** (`solver v
 Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-separated `P1P2` pairs.
 
 
-## Original levels (29 solved)
+## Original levels (30 solved)
 
 | Level | Players | Moves | Solution |
 |---|---|---|---|
@@ -38,6 +38,7 @@ Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-s
 | `triggers.csv` | 1 | 71 | `vvv>>^^>>vv>>>>^>^^<^<<<^^>>>>^^<<<>>^^<^^<<vvv<v<vvvv<<<<<^^^^^^^>>>vv` |
 | `triggers2.csv` | 1 | 104 | `^^>^>^^^vvv<v<<<<<^^^^><><vvvv>>>>>^>^^^^^vvvvv>>^^^^>>v>v>vvvvv><^^^^^<^<^^><<<><vvvvv<<<v<vvvvv>>v>>>>` |
 | `webs.csv` | 1 | 39 | `<<^^>>>^>^^<<^>>>>>>>>>vvvvv<><><><<<^^` |
+| `world.csv` | 2 | 192 | `^^ ^< ^> ^< ^< ^< ^v ^< ^> <^ <^ v^ v^ v^ v^ v^ v^ <> <v v^ v^ v^ ^^ ^v ^< >> ^< ^< ^^ ^< ^< ^v >^ >< ^< ^< <v ^< ^^ v^ v^ >^ v^ v^ >^ v^ v^ v^ v^ v^ v^ v^ v^ v^ ^^ ^^ ^< >> >< >^ >v v< v< v^ <^ >< ^^ ^> ^v << << << <v ^> ^> ^< ^v ^> ^> ^^ ^< >> >< ^< ^^ v< v^ v^ v^ >^ >^ <v << ^< ^> >v >v ^^ ^^ vv vv <^ <v <^ <^ <> << << <^ ^> ^^ v^ v> >> >^ >> >> ^^ ^< ^< ^< << << << <^ >v ^^ ^^ ^v ^v ^^ ^v ^^ ^^ ^^ ^^ ^^ ^^ ^^ ^^ ^^ ^^ v< v> v^ >v >v ^< ^< ^^ v< v> >^ >< ^< ^^ v< v> >^ >< ^^ ^^ v< v> << v^ v< v< v< v< v< >v >. v> v^ ^v ^v <^ <^ v^ v^ v^ v^ <^ v^ ^^ vv ^> <^ << v< v^` |
 
 ## New puzzles (Claude's Gauntlet)
 
