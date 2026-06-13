@@ -72,6 +72,10 @@
     "p": 1,
     "s": "vvvv<<<<<"
   },
+  "order_of_operations": {
+    "p": 1,
+    "s": "<^v^^<^^^>^^<vv^vv^^^^^^^^^^>^v>vv<vvvvvvvv>>>>>^^^^^^^^^^^^^^^>>>>>vvvvvvv>vvvvvvv>>vv"
+  },
   "order_of_operations_new_v2": {
     "p": 1,
     "s": "v>>>>^>^^^>>v>.....>>>v<vvvvvvvvvvvv"

@@ -114,6 +114,11 @@
     "players": 1,
     "moves": 9
   },
+  "old_levels/order_of_operations.csv": {
+    "sol": "<^v^^<^^^>^^<vv^vv^^^^^^^^^^>^v>vv<vvvvvvvv>>>>>^^^^^^^^^^^^^^^>>>>>vvvvvvv>vvvvvvv>>vv",
+    "players": 1,
+    "moves": 87
+  },
   "order_of_operations_new_v2.csv": {
     "sol": "↓→→→→↑→↑↑↑→→↓→.....→→→↓←↓↓↓↓↓↓↓↓↓↓↓↓",
     "players": 1,

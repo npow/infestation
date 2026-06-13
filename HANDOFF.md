@@ -3862,10 +3862,36 @@ the normal solver objective.
   the lower-left rat requires a qualitatively different pre-B20 actor/trigger
   route, not a wider cleanup or local barrier search.
 
+### OOM-safe continuation - 2026-06-13 order solve
+
+New verified win:
+
+- `old_levels/order_of_operations.csv` solved in 87 turns:
+  `<^v^^<^^^>^^<vv^vv^^^^^^^^^^>^v>vv<vvvvvvvv>>>>>^^^^^^^^^^^^^^^>>>>>vvvvvvv>vvvvvvv>>vv`
+  (`target/release/solver verify` prints `result=Won`). The useful human
+  inversion was to open the lower latch `(9,5)` early while the top rat at
+  `(9,3)` was still alive, then route back up and sword-kill that top rat
+  before handling the bottom-right one-cell rat. Killing the bottom-right rat
+  first strands the top rat with zero reachable rats.
+- Added the solution to `solver/solutions/final_solutions.json`,
+  `solver/solutions/SOLUTIONS.md`,
+  `solver/solutions/results/autoplay_data.json`, and
+  `solver/solutions/autoplay.js`.
+- Remaining rat-bearing unsolved CSVs are now 9:
+  `cooperation/blocked_v2.csv`, `cooperation/handoff.csv`,
+  `cooperation/tug_of_war.csv`, `cyborg_rats/ai_takeover.csv`,
+  `old_levels/on_the_clock.csv`, `old_levels/overstep.csv`, `release.csv`,
+  `reload_v3.csv`, and `tinderrectangle.csv`.
+- Three read-only side audits produced next targets. For `tug_of_war`, focus
+  only on changes to `(7,1)/(8,1)` webs or `(7,2)/(8,2)` planks, or true
+  `norats2:7,0,8,0`. For `handoff`, the blocker remains `(10,6)` before left
+  trigger 2 collapses the mechanism. For `ai_takeover`, the freshest Q64 target
+  is staging the normal rat near `(13,11)` before trigger 2, not Q93 cleanup.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
-  10-level inventory.
+  9-level inventory.
 - PDDL and LLM-play agents produced no verified final wins on the current hard
   set. Their useful output was mechanism hints, not move strings.
 - The current productive path is mechanism-first decomposition plus short
@@ -3912,7 +3938,7 @@ solver/                             Rust oracle crate
   src/main.rs                         all modes: solve / verify / trace / wp
   Cargo.toml
 solver/solutions/
-  SOLUTIONS.md                       28 verified original solutions + 5 Claude puzzles
+  SOLUTIONS.md                       31 verified original solutions + 5 Claude puzzles
   final_solutions.json               machine-readable verified set
   autoplay.js                        browser console auto-player (1p + 2p)
   results/                           raw search outputs (results*.json, autoplay_data.json)
@@ -3924,7 +3950,7 @@ solver/solutions/
 
 ## 6. Session context
 - A session Stop-hook with goal **"solve all the puzzles"** may be active in
-  some environments. The current remaining hard set is the 10 rat-bearing CSVs
-  listed in §3 plus the additional old-level CSVs there. Resume by working §4.
+  some environments. The current remaining hard set is the 9 rat-bearing CSVs
+  listed in the 2026-06-13 order solve note above. Resume by working §4.
 - Fork created with `gh repo fork`; push with `gh auth setup-git --hostname github.com` then
   `git push fork claude/new-puzzles`. No PR was opened to upstream (`davidspies/infestation`).
