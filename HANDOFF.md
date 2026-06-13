@@ -5532,6 +5532,41 @@ jobs.
   but direct continuation from P77 returned no solve. Treat P77 like P81/P83:
   useful separation evidence, not a solved route.
 
+### OOM-safe continuation - 2026-06-13 twenty-seventh Codex pass
+
+No new verified win. Work stayed serial and capped (`ulimit -v 800000` plus
+external `timeout`); no background solver jobs were left running.
+
+- `reload_v3`: Feynman's east-helper station idea produced the best new
+  constructive state this pass. Initial-board
+  `ratrectplayerrectcellis:5,18,8,20,2,17,5,19,4,18,trigger1` reaches
+  `R41=^>>>>>>>^^vvvvvv<<<^^<<^^<<<<^<<<<<<<<v<v`: player `(2,18)`, helper
+  rat `(5,18)`, bottom rat `(0,21)`, top rat `(14,5)`, trigger 1 at `(4,18)`
+  intact. Unlike the old P43 row-19 station, one move `>` from R41 makes the
+  helper rat fire trigger 1:
+  `R42=^>>>>>>>^^vvvvvv<<<^^<<^^<<<<^<<<<<<<<v<v>`. R42 keeps all three rats,
+  leaves five explosives, sixteen webs, twelve triggers, and opens the bottom
+  trigger-1 side. This is a real reload event and supersedes treating the
+  trigger-1 family as completely closed.
+- `reload_v3`: R42 is not solved yet. Direct continuation from R42 timed out
+  and drifted to a one-rat bottom-left basin. Targeted bottom-pocket checks from
+  R42 returned empty for `cellnot:1,21,web` and `cellnot:2,21,explosive` while
+  preserving at least two rats and useful relay resources. The top-rat
+  trigger-6 carrier alternative `ratcell:10,5,9,4,trigger6` from the initial
+  board also returned empty. Continue reload from R42 by finding the next relay
+  event after trigger 1; do not go back to P43/P44.
+- `old_levels/overstep`: corrected inspection around the P33/P45/P47 family.
+  At P33, `(14,11)` is empty; the future blocker is the upper rat at `(16,9)`,
+  which becomes `(15,10)` at P45 and then `(14,11)` at P46/P47. From actual
+  P47 (`P33+vvvvvvvvv<<<<<`), `cellnot:14,11,rat` returned empty even when
+  relaxed to five rats / three explosives / twelve triggers. From P45, a small
+  all-rat frontier shows the decisive fork: stepping left creates the
+  `(14,11)` blocker, while stepping right/up keeps it at `(15,10)` but only
+  cycles local positions. Direct continuation from P45 timed out without a win.
+  This narrows overstep: the P47/P49 route is not merely late; the future
+  `(14,11)` rat must be redirected before P45 or by a different upper-rat
+  extraction route.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
