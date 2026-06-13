@@ -4584,6 +4584,47 @@ were left running after the checked probes.
   whose known access and rat-trigger routes are already closed from the useful
   frontiers.
 
+### OOM-safe continuation - 2026-06-13 tenth Codex pass
+
+No new verified win. This pass focused on `old_levels/on_the_clock` and kept
+local solver searches under `ulimit -v 800000` plus external `timeout`. One
+small three-way trigger-order comparison was accidentally launched in parallel;
+all three processes were capped, timed out cleanly, and the process table was
+confirmed clear before continuing serially.
+
+- `old_levels/on_the_clock`: the `>>>^^>>>vvv>` branch from `triganylookup` is
+  a useful but still blocked alternative to P31. It fires the top/right trigger
+  family and verifies as `Playing` at 12 turns with 8 rats, 7 explosives,
+  35 webs, 17 triggers, and one reachable rat. However, bounded checks from
+  that state for strict trigger 4 and strict trigger 5 returned empty, even
+  when rat-preservation constraints were relaxed. The nearby trigger distances
+  are therefore dynamically misleading under rat pressure.
+- `old_levels/on_the_clock`: P31 has a non-strict trigger-8 route that is more
+  productive than the earlier strict-trigger checks. Waypointing from P31
+  `v>>><^^v>><^^>>>vvv>>^v<<vvvvvv` to `(4,13)` gives the 51-turn frontier
+  `v>>><^^v>><^^>>>vvv>>^v<<vvvvvv>^>^>^><<vv<<<<v<vvv`. It leaves 6 rats,
+  2 explosives, 23 webs, 4 triggers, and 2 reachable rats. The route is not a
+  strict trigger-8 event because other resources are consumed on the way, which
+  is why earlier `triggeronly:8` checks from P31 returned empty.
+- `old_levels/on_the_clock`: from that 51-turn frontier, strict trigger 6 is
+  reachable and materially improves the board. The representative 82-turn
+  branch
+  `v>>><^^v>><^^>>>vvv>>^v<<vvvvvv>^>^>^><<vv<<<<v<vvv^^^^^>^>>>>>>^^^vvv<<<<<<^<<<<v`
+  has 6 rats, 1 explosive, 19 webs, 2 triggers, and 2 reachable rats.
+  From there, making trigger 7 reachable/consumed with suffix
+  `^^^^^^^^^^^^^^^^^^` gives a 100-turn state with 6 rats, no explosives,
+  no triggers, and 5 reachable rats:
+  `v>>><^^v>><^^>>>vvv>>^v<<vvvvvv>^>^>^><<vv<<<<v<vvv^^^^^>^>>>>>>^^^vvv<<<<<<^<<<<v^^^^^^^^^^^^^^^^^^`.
+- `old_levels/on_the_clock`: the 100-turn state is a sharper dead basin, not a
+  cleanup. A capped `lookup --goal win` from it reached 240k expansions without
+  a solution. Diagnostics show the sole unreachable blocker is rat `(12,14)`;
+  all P100 trigger-7 suffix variants checked leave the same 5/6 reachable-rat
+  structure. Backing up to the 51-turn frontier, `reachable:12,14` with 6 rats
+  and 2 reachable rats returned empty. From P31, `reachable:12,14` with at
+  least 7 rats and 2 reachable rats also returned empty. Continue this puzzle
+  only with a mechanism that changes access to the lower-right `(12,14)`
+  component before the trigger-8/6/7 collapse; do not deepen P100 as a mop-up.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
