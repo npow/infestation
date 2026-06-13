@@ -3470,6 +3470,16 @@ leftover `target/release/solver`, `timeout`, or `clingo` jobs after the probes.
   scan reconfirmed the documented dead pattern. The best immediate event
   `>>>^^` leaves six rats, three explosives, three webs, 15 triggers, and still
   zero reachable rats. Do not continue the `>>> -> ^^` line as a cleanup route.
+- `cooperation/blocked_v2`: the B20 three-rat frontier was checked from the
+  right side of the lower-left pocket as well as the previously documented left
+  blockers. From
+  `B20=^< ^^ v^ ^^ v> v> v> vv vv ^v ^v ^< ^v ^v v< ^> v> ^< v< ^^`,
+  direct `cellnot:4,15,web` returned empty while preserving three rats, two
+  reachable rats, and four triggers. The strict trigger-4 variant
+  `triggeronlycellnot:4,4,15,web` also returned empty. The lower-left rat is
+  blocked from both sides of the `(1..4,15)` barrier from this frontier; keep
+  looking before B20 or for a different actor/trigger path, not for another
+  local B20 cleanup.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
