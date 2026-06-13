@@ -2850,6 +2850,37 @@ processes before and after batches.
   rat reachable, but capped continuations for `trigger:1`, `trigger:6`,
   `reachablege:2`, `cellnot:1,21,web`, and `ratat:1,21` all returned empty.
   Treat this as a one-actor local basin, not a path to the bottom-left rat.
+- `old_levels/on_the_clock`: after the machine OOM, this pass used only
+  low-concurrency capped probes (`ulimit -v 800000; timeout ...`) and left no
+  solver processes running. No verified win was found, but the mechanism map is
+  sharper. The standard trigger-5 frontier
+  `>>>^<^>>>>vvv><^vvvvvv^^>>>` strands the initial lower-right rat inside the
+  sealed `(12,14)` component. That component is surrounded by walls with only
+  web gate `(14,15)`, and remaining triggers/explosions do not open a player
+  route to that web. Continuing `5 -> 8 -> 6 -> 7` or the symmetric order is a
+  dead mechanism unless the lower-right rat is handled before trigger 5.
+- `old_levels/on_the_clock`: the older nonstandard 2-rat basin exposed a better
+  timing idea. In the old route, the top-right rat fires trigger 9 on `(16,6)`,
+  self-sealing into a one-cell unreachable pocket. Replacing the local
+  `.`/turning sequence around turn 40 with earlier south moves gives the useful
+  frontier
+  `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvvvvvv`
+  at 44 turns: player `(7,8)`, all 8 rats alive, top-right rat `(15,8)`, and
+  11 triggers left. Stepping south once more fires trigger 4:
+  `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvvvvvvv`
+  at 45 turns has all 8 rats and all 9 remaining triggers player-reachable
+  (`reachable_rats=8/8`, `trapped_unreachable_rats=0`). This is the best new
+  constructive state.
+- `old_levels/on_the_clock`: the 45-turn all-reachable state is only a one-turn
+  window. On the next player action, the rat at `(14,9)` steps onto trigger 9
+  at `(13,9)`, leaving `triggers=0` and only 5 reachable rats. Immediate
+  `ratdrop` / `ratsle:7` / generic `win` checks from that state return no
+  branch. Backing up to the 44-turn frontier, strict trigger-9-first branches
+  fire too early and leave only 2 reachable rats; strict trigger-3 and
+  rat-triggered trigger-4 alternatives were not found in the checked caps. The
+  next useful hypothesis is to alter the turn-40-to-45 timing so trigger 4 can
+  fire while the top-right rat is not forced onto `(13,9)` on the following
+  turn, or to find a way to consume/disable that trigger-9 step first.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
