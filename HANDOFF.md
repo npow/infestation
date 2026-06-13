@@ -3292,6 +3292,11 @@ No new verified win. This pass kept one capped solver process active at a time
   T58, capped branchdumps preserving all 16 rats returned empty. This rules out
   "same route, better end choreography"; the route needs a different door timing
   before T58 or a different lower-rat release geometry.
+- `old_levels/on_the_clock`: applied `ratdeathgeom` to the early-trigger-9 plus
+  trigger-3 state `>>>v>vv^^^<^^>>>vvvvvvvvv^^^`; the top/right pocket rat at
+  `(17,5)` has no one-step black-hole/explosive self-delete geometry under the
+  checked synthetic stances. This supports the existing conclusion that the
+  pocket must be released structurally before/during the trigger-9 route.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
