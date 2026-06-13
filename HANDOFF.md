@@ -4063,6 +4063,68 @@ before and after the solver queue found no leftover `target/release/solver`,
   preserved returned empty. Keep the prefix only as a possible pre-P20
   divergence if a sharper target appears.
 
+### OOM-safe continuation - 2026-06-13 Codex pass
+
+No new verified wins. This pass kept memory bounded with `ulimit -v 800000`;
+solver work was serial except for short capped `events` scans. Process checks
+before/after probes showed no leftover `target/release/solver`, `cargo`,
+`clingo`, or `timeout` jobs.
+
+- `tinderrectangle`: the pre-opened `(1,5)` latch is reachable from the long
+  safe-side prefix
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv^^^>v^<vvvv^^^^<<vvv<<^^^<<<vvv<^^<<v<<>>>>>^^>>>vvv>>^^^>>vvv`.
+  Target `ratplayerfacing:1,4,1,5,north` returns branches; best suffix
+  `vv>^^^^^<<<vvv<<^^^<<<<<<vvv<<<^` gives all 16 rats, player `(1,5)`,
+  lower rat `(1,4)`, and 19 webs. Follow-up is a contact trap: side moves die,
+  `^` kills the lower rat, `v` shifts to player `(1,6)` / rat `(1,5)`, and
+  `ratrectplayerrect:1,4,2,5,14,7,14,8`, `ratat:0,0`, and local lure/ratdeath
+  checks returned empty. The center-left blocker target
+  `cellnotplayerrect:4,2,web,14,6,15,8` from compact staging also returned
+  empty. Treat this latch as explanatory evidence, not a solution route.
+- `release`: a side audit proposed backing up one move to
+  `P8=v<vv^^>>`. Four capped P8 probes all returned empty:
+  `triggeronlycellnot:2,18,5,web`, `cellnot:18,6,explosive`,
+  `triggeronlycellnot:6,1,16,explosive` with trigger 2 reachable, and
+  `cellnotratrect:18,6,explosive,2,16,5,19`. An initial `events` sibling
+  `^^^^^^v^vvvvvvv>>>v` also failed `triggeronlycellnot:2,18,5,web` while
+  preserving all 24 rats. This further weakens both "pre-final-opener trigger
+  2" and "right-stack detonation before sealing" from the known central route.
+- `old_levels/overstep`: an alternate first event
+  `v<<^^^^^^>>>>>>>v>>>^` reaches a 5-rat state, but diagnostics show zero
+  reachable rats. A follow-up `reachablege:1` branch
+  `v<<^^^^^^>>>>>>>v>>>^^<<vvv<<` exposes only the left-side `(0,13)` rat.
+  Killing it drops to 4 rats, but both checked 4-rat continuations have zero
+  reachable rats; a further `reachablege:1` check from the less-destructive
+  54-turn branch returned empty. This closes that alternate event family unless
+  a new trigger target changes the upper/right pockets before the left cleanup.
+- `reload_v3`: a short `events` scan again produced only the known two-rat basin
+  `^^^^^<<<<<<^^<^^^^^vvvvvvv>>>>>>`: rats `(19,2)` and sealed `(0,21)`, with
+  only trigger 7 reachable. Do not spend more trigger-7-first budget there
+  unless a preceding event changes `(1,21)` / `(2,21)`.
+- `cooperation/blocked_v2`: an ASP over-approximation in `/tmp/infestation_asp`
+  was rerun with `/tmp/infestation-clingo-venv/bin/python`; saved states
+  `b9.csv`, `b17.csv`, `after5.csv`, and `upper3.csv` were all UNSAT for
+  clearing `(1,15)`, removing `(0,15)`, or luring it to a black hole. Four
+  bounded oracle probes from pre-B20/B9 also returned empty:
+  `playerat:4,11`, `cellnotplayerrect:6,11,explosive,4,10,5,12`,
+  `ratrectplayerrect:0,15,0,15,0,17,1,17`, and
+  `cellnotplayerrect:1,15,web,0,15,2,17`. This is stronger evidence that the
+  lower-left rat is structurally blocked in the known families.
+- `cyborg_rats/ai_takeover`: the best new lead backs up before Q64. From
+  `Q54=^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>`,
+  `noratsrect:13,10,17,11` returns branches. Best branch:
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvv^vvv^^^`
+  reaches 14 enemies with 13 reachable, triggers 2/8 still present, and the
+  sealed enemy `(18,4)` still behind `(18,5)`. From there, `vv^^` gives a
+  stronger 13-enemy prefix
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvv^vvv^^^vv^^`
+  with triggers still present. However, `triggeronlycellnot:2,18,5,web` from
+  both the 14-enemy and 13-enemy prefixes returned empty. If continuing this
+  lead, avoid marching all the way to
+  `...vvv<<<<<<<<<<<<<<<<^^^<<<`: that 89-turn state has all 13 enemies
+  reachable but no triggers, no `ratdrop` branch, and direct solve/cleanup
+  stalls immediately in a cyborg contact cage.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
@@ -4091,10 +4153,10 @@ before and after the solver queue found no leftover `target/release/solver`,
    contact trap. The next useful hypothesis must create a side loop or delayed
    release before `(2,4)` opens, because opening `(2,4)` starts the lower rat
    immediately and the current row-6 route loses the timing race.
-4. **Continue `ai_takeover` from Q64, not D101 cleanup.** Q64 is the current
-   best preserved frontier before trigger 2; D101 improves the triggerless basin
-   to 7 rats but still has no cleanup branch in bounded checks. Use `release`
-   for trigger vocabulary only, not as a move skeleton.
+4. **Continue `ai_takeover` from the Q54/P68 lead, not Q64 or D101 cleanup.**
+   Q54 can be shaped into a 13-enemy preserved-trigger state with
+   `...vvv^vvv^^^vv^^`; the open problem is still `(18,4)` / `(18,5)`. Use
+   `release` for trigger vocabulary only, not as a move skeleton.
 5. **For two-player levels, work in `wp2` waypoint pairs.** Start with
    structural access checks (`cellnot` / `playerat`) before trigger
    choreography. `tug_of_war` may be unwinnable as authored because the top
