@@ -912,6 +912,7 @@ enum LookupGoal {
     RectangleReady,
     RectangleLowerReady,
     RectangleLowerSeparated,
+    RectangleLowerIgnition,
     TriggerNumber(u8),
     TriggerNumberOnly(u8),
     TriggerNumberOpen(u8, usize),
@@ -957,6 +958,7 @@ impl LookupGoal {
                 "rectready" | "rectangle-ready" => Self::RectangleReady,
                 "rectlower" | "rectangle-lower" => Self::RectangleLowerReady,
                 "rectsep" | "rectangle-lower-separated" => Self::RectangleLowerSeparated,
+                "rectignite" | "rectangle-lower-ignition" => Self::RectangleLowerIgnition,
                 "allreachable" | "all-rats-reachable" => Self::AllRatsReachable,
                 "ratdrop" => Self::RatDrop,
                 other => panic!("unknown lookup goal {other}"),
@@ -1531,6 +1533,9 @@ fn lookup_goal_reached(
         LookupGoal::RectangleLowerSeparated => {
             play_state == PlayState::Won || rectangle_lower_separated(current)
         }
+        LookupGoal::RectangleLowerIgnition => {
+            play_state == PlayState::Won || rectangle_lower_ignition_ready(current)
+        }
         LookupGoal::TriggerNumber(number) => {
             trigger_count(current, number) < trigger_count(initial, number)
         }
@@ -1649,6 +1654,11 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             rectangle_lower_ready_heuristic(current, count_rats(initial), count_explosives(initial))
         }
         LookupGoal::RectangleLowerSeparated => rectangle_lower_separated_heuristic(
+            current,
+            count_rats(initial),
+            count_explosives(initial),
+        ),
+        LookupGoal::RectangleLowerIgnition => rectangle_lower_ignition_heuristic(
             current,
             count_rats(initial),
             count_explosives(initial),
@@ -1905,6 +1915,11 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
             rectangle_lower_ready_heuristic(current, count_rats(initial), count_explosives(initial))
         }
         LookupGoal::RectangleLowerSeparated => rectangle_lower_separated_heuristic(
+            current,
+            count_rats(initial),
+            count_explosives(initial),
+        ),
+        LookupGoal::RectangleLowerIgnition => rectangle_lower_ignition_heuristic(
             current,
             count_rats(initial),
             count_explosives(initial),
@@ -5980,8 +5995,54 @@ fn rectangle_lower_separated(grid: &Grid) -> bool {
     })
 }
 
+fn rectangle_lower_ignition_ready(grid: &Grid) -> bool {
+    if win_ready(grid) {
+        return true;
+    }
+
+    let players = positions_matching(grid, |cell| cell == CellKind::Player);
+    if !players
+        .iter()
+        .any(|&player| rectangle_lower_has_escape_staging(player))
+    {
+        return false;
+    }
+
+    rat_positions(grid).into_iter().any(|rat| {
+        rat.1 == 6
+            && (2..=6).contains(&rat.0)
+            && rectangle_lower_east_blocked(grid, rat.0, rat.1)
+            && rectangle_lower_has_adjacent_ignition(grid, rat.0, rat.1)
+    })
+}
+
 fn rectangle_lower_has_escape_staging(player: (i32, i32)) -> bool {
     rectangle_lower_safe_targets().contains(&player)
+}
+
+fn rectangle_lower_east_blocked(grid: &Grid, x: i32, y: i32) -> bool {
+    let east_x = x + 1;
+    if east_x < 0 || y < 0 || east_x as usize >= grid.width() || y as usize >= grid.height() {
+        return true;
+    }
+
+    matches!(
+        grid.cell_kind_at(east_x as usize, y as usize),
+        CellKind::Wall | CellKind::Spiderweb
+    )
+}
+
+fn rectangle_lower_has_adjacent_ignition(grid: &Grid, x: i32, y: i32) -> bool {
+    [(x - 1, y + 1), (x, y + 1), (x + 1, y + 1)]
+        .into_iter()
+        .any(|(candidate_x, candidate_y)| {
+            candidate_x >= 0
+                && candidate_y >= 0
+                && (candidate_x as usize) < grid.width()
+                && (candidate_y as usize) < grid.height()
+                && grid.cell_kind_at(candidate_x as usize, candidate_y as usize)
+                    == CellKind::Explosive
+        })
 }
 
 fn rectangle_lower_separated_heuristic(
@@ -6053,6 +6114,32 @@ fn rectangle_lower_separated_heuristic(
     };
 
     lost_rats * 500_000 + contact_penalty + target_clearance + best_pair_score
+}
+
+fn rectangle_lower_ignition_heuristic(
+    grid: &Grid,
+    initial_rats: usize,
+    initial_explosives: usize,
+) -> i64 {
+    if rectangle_lower_ignition_ready(grid) {
+        return 0;
+    }
+
+    let base = rectangle_lower_separated_heuristic(grid, initial_rats, initial_explosives);
+    let blocker_penalty = rat_positions(grid)
+        .into_iter()
+        .filter(|&(x, y)| y == 6 && (2..=6).contains(&x))
+        .map(|(x, y)| {
+            if rectangle_lower_east_blocked(grid, x, y) {
+                0
+            } else {
+                400_000
+            }
+        })
+        .min()
+        .unwrap_or(200_000);
+
+    base + blocker_penalty
 }
 
 fn rectangle_lower_ready_heuristic(

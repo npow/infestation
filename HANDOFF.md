@@ -3589,6 +3589,59 @@ before and after probes found no leftover `target/release/solver`, `timeout`, or
   for changing explosive `(14,12)` while preserving at least 12 enemies, 10
   reachable enemies, and a trigger.
 
+### OOM-safe continuation - 2026-06-13 Codex rectignite pass
+
+No new verified win. All local probes in this pass were serial and used
+`ulimit -v 800000` plus short `timeout` wrappers; process checks after the
+probes found no leftover `target/release/solver`, `timeout`, or `clingo` jobs.
+
+- Inventory/status: `solver/solutions/final_solutions.json` still verifies
+  `35/35` under the current Rust oracle.
+- `solver`: added lookup/branchdump goal `rectignite`
+  (`rectangle-lower-ignition`). This is stricter than `rectsep`: it accepts
+  only states where a lower rat is in `(2..6,6)`, the player is in the known
+  right-side safe staging cells, the rat has an adjacent explosive below, and
+  the cell immediately east of that rat is still a web/wall blocker. This
+  rejects the known false `(6,6)` contact line where `(7,6)` has already been
+  opened and the rat chases horizontally instead of stepping into the explosive
+  row.
+- `tinderrectangle`: validating `rectignite` against the old false branch
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^^^^^<<<vvv<<^^^<<<<<<vv>v<<<<>>>>>>`
+  correctly returns no goal; diagnostics show player `(7,6)`, lower rat
+  `(6,6)`, and `(7,6)` open/player-occupied.
+- `tinderrectangle`: `rectignite` from the 135-turn delayed staging branch
+  returned `NO_SOLUTION` quickly. From the 84-turn safe-side branch, A* reached
+  50k expansions with best heuristic `335000` and no hit; a full-state
+  `branchdump --no-canonical` from the same branch also returned empty.
+- `tinderrectangle`: an initial-board capped `branchdump --goal rectignite`
+  at depth 160 / 40s / 250k nodes returned empty. A larger full-state A* pass
+  from the initial board stopped at 422,956 expansions / 85s with no hit; its
+  best state was the compact staging
+  `<<>^^^>>v>vv>>^^^>>vvv`, with player `(14,6)` and lower rat `(2,3)`, still
+  before a safe release. From that compact staging, direct safe-pocket door
+  checks for `cellnotplayerrect:2,4,web,14,6,14,8` and
+  `cellnotplayerrect:3,4,web,14,6,14,8` both returned empty.
+- `tinderrectangle`: top/corner ignition was rechecked as a separate family.
+  Initial-board `ratrectplayerrect:0,0,16,0,1,3,15,3` returned empty both with
+  all 16 rats preserved and with `--min-rats 15`. This keeps the lower-row
+  separation problem as the main constructive lead, but with the added east
+  blocker condition.
+- `cyborg_rats/ai_takeover`: the 13-rat frontier
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<<<<<<<<<<<<<<<<^^^v>>>><<`
+  verifies as `Playing` with player `(5,17)`, 13 enemies, 5 explosives, 2
+  trigger-2 cells, and `12/13` reachable enemies. Static diagnostics report
+  left trigger 2 `(0,16)` at distance 6, but `wp` to `(0,16)` returns
+  `UNREACHABLE`; short frontiers show safe movement only to the right/up while
+  the cyborg line follows. A capped direct A* win probe from this frontier
+  returned `NO_SOLUTION` quickly. Treat this frontier as a drain-shape witness,
+  not a trigger-2 route.
+- `cooperation/blocked_v2`: the lower-left black-hole bypass was checked from
+  the B4 frontier `v< v^ v^ <^ <^ << <^ >v`. Diagnostics show 8 rats with
+  `(0,15)` directly above the black-hole row, but bounded checks for
+  `playerat:1,17` and `noratsrect:0,15,1,16` returned empty while preserving
+  the 8-/7-rat structure. This does not solve trigger-2 access; it just rules
+  out the obvious south-lure bypass from that frontier.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
