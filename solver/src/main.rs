@@ -7017,6 +7017,49 @@ fn main() {
         return;
     }
 
+    if mode == "timeline" {
+        // solver timeline <csv> "<actions>" — compact per-turn feature summary.
+        let action_str = &args[3];
+        let nplayers = count_players(&grid);
+        let path = parse_action_string(action_str, nplayers);
+        let mut state = grid.clone();
+        let print_row = |turn: usize, action_text: &str, play_state: PlayState, grid: &Grid| {
+            let features = Features::from_grid(grid);
+            println!(
+                "turn={} action={} state={:?} features={:?} reachable_rats={} reachable_triggers={} players=[{}] rats=[{}]",
+                turn,
+                action_text,
+                play_state,
+                features,
+                reachable_rat_count(grid),
+                reachable_trigger_count(grid),
+                positions_key(grid, player_cell),
+                positions_key(grid, rat_or_cyborg)
+            );
+        };
+        print_row(0, ".", PlayState::Playing, &state);
+        for (idx, actions) in path.iter().enumerate() {
+            let (next_state, play_state) = step(&state, actions);
+            state = next_state;
+            let action_text = if nplayers == 1 {
+                actions
+                    .first()
+                    .map(|action| action_to_ch(*action).to_string())
+                    .unwrap_or_else(|| ".".to_string())
+            } else {
+                actions
+                    .iter()
+                    .map(|action| action_to_ch(*action))
+                    .collect::<String>()
+            };
+            print_row(idx + 1, &action_text, play_state, &state);
+            if play_state != PlayState::Playing {
+                break;
+            }
+        }
+        return;
+    }
+
     if mode == "stats" {
         // solver stats <csv> "<actions>" — print feature/position summary after each turn.
         let action_str = &args[3];

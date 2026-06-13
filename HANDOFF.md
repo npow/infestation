@@ -4722,6 +4722,54 @@ oracle checks were run locally.
   waypoint-pair 0 unreachable. The upper-trigger-3 / useful-trigger-2
   choreography is not viable from that prefix.
 
+### OOM-safe continuation - 2026-06-13 thirteenth Codex pass
+
+No new verified win, but `cyborg_rats/ai_takeover` now has a substantially
+better constructive frontier. Heavy solver work stayed serial under
+`ulimit -v 800000` and external `timeout`. A larger `release` background probe
+hit the virtual-memory cap cleanly (`memory allocation failed`) rather than
+leaving machine-level pressure; do not repeat 900k-node branchdumps under the
+800 MB cap.
+
+- Solver tooling: added `timeline <csv> <moves>`, a compact per-turn diagnostic
+  that prints features, reachable rat/trigger counts, player positions, and rat
+  positions. This is diagnostic-only; it does not affect solving or game rules.
+- `old_levels/overstep`: the P47 trigger-1 preservation probe
+  `triggeronlycellnot:1,0,10,explosive` returned empty with all 6 rats,
+  2 reachable rats, and 6 reachable triggers required. A small `macro` pass
+  from P47 found a 3-rat best state with rats `(11,7)`, `(14,11)`, `(0,20)`,
+  but strict trigger 1 from that frontier was empty and loose trigger 1 sealed
+  the player into a one-cell basin with zero reachable rats. The P47-left branch
+  `P47+<` also has only trigger 4 reachable; a tiny macro pass from it returned
+  no solution immediately.
+- `tinderrectangle`: from the long delayed P135 state, exact separation
+  `ratrectplayerrect:2,5,2,5,14,6,15,8` returned empty. This confirms the
+  lower rat cannot even be advanced to `(2,5)` while the player remains in the
+  right safe pocket from that staging family.
+- `cyborg_rats/ai_takeover`: event-level `macro` search produced a new
+  130-turn one-enemy frontier:
+  `P130=^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>><<<vvv<<<<<<<<^^^<<<<>^^^^^^<^^^^>>>>`.
+  It verifies as `Playing` with only cyborg `(18,4)` left, 8 explosives,
+  28 webs, 7 triggers, and player `(5,1)`. However, from P130 both
+  `ratat:18,5` and `cellnot:18,6,explosive` returned empty, and the reachable
+  trigger-6 waypoint to `(17,16)` strands the player in a two-cell pocket while
+  `(18,4)` remains alive. P130 is a diagnostic dead finish, not a solution.
+- `cyborg_rats/ai_takeover`: `timeline` showed the useful cut is turn 93, before
+  retreating left:
+  `P93=^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>`.
+  P93 has 3 enemies `(18,4)`, `(11,9)`, `(16,19)`, player `(16,11)`, and
+  trigger 6 / 8 still reachable. Direct `lookup --goal win` from P93 did not
+  solve in 75s / 400k nodes, but its best state was useful.
+- `cyborg_rats/ai_takeover`: from P93, `cellnot:18,6,explosive` returns a
+  126-turn two-enemy frontier:
+  `P126=^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>v>vv>>vvvvv<<<<<<<<<<<<<<<<^^^<<<`.
+  P126 has enemies `(18,4)` and `(11,9)`, no triggers, two explosives
+  `(14,12)/(15,12)`, and both enemies reachable. A cleanup lookup from P126
+  still falls into the lower-right one-cyborg trap. More specific probes for
+  reducing to one enemy with the player at `(19,18)` or `(18,19)` returned
+  empty. Continue `ai_takeover` from P93/P126 by changing the final lure
+  geometry before killing `(11,9)`; do not continue P130.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
@@ -4750,10 +4798,11 @@ oracle checks were run locally.
    contact trap. The next useful hypothesis must create a side loop or delayed
    release before `(2,4)` opens, because opening `(2,4)` starts the lower rat
    immediately and the current row-6 route loses the timing race.
-4. **Continue `ai_takeover` from the Q54/P68 lead, not Q64 or D101 cleanup.**
-   Q54 can be shaped into a 13-enemy preserved-trigger state with
-   `...vvv^vvv^^^vv^^`; the open problem is still `(18,4)` / `(18,5)`. Use
-   `release` for trigger vocabulary only, not as a move skeleton.
+4. **Continue `ai_takeover` from P93/P126, not P130 cleanup.** P93 preserves
+   the right-side trigger/explosive resources with 3 enemies left; P126 proves
+   the right explosive column can be detonated and leaves only `(18,4)` and
+   `(11,9)`. The open problem is final lure geometry before killing `(11,9)`;
+   P130 kills too much too late and strands the final cyborg.
 5. **For two-player levels, work in `wp2` waypoint pairs.** Start with
    structural access checks (`cellnot` / `playerat`) before trigger
    choreography. `tug_of_war` may be unwinnable as authored because the top
