@@ -5974,6 +5974,60 @@ were left running.
   5-rat reductions, but every returned candidate had `reachable_rats=0`. Those
   are dead basins and should not be used as prefixes without an added
   reachability constraint.
+- Process discipline update: later parallel waves used up to 8 capped solver
+  processes on the 32-core machine. That kept CPU busy without memory pressure
+  because every process used `timeout ... bash -lc 'ulimit -v 850000; exec
+  target/release/solver ...'`. Do not launch uncapped `solver`, `cargo`, `clingo`,
+  tmux panes, or detached jobs.
+- `tinderrectangle`: `rectsep` is too weak by itself because it accepts
+  contact states that still lose on the ignition move. Use `rectignite` for the
+  strict lower-row finish predicate: it requires a lower rat in `(2..6,6)`,
+  player on a safe right-side cell, an east blocker, and an adjacent explosive.
+  Capped `branchdump --goal rectignite` from both the initial board and the
+  71-turn prepared-safe branch
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv`
+  returned no branches under 500k-node caps. The likely missing mechanism is a
+  release that creates separation before the rat enters row 6, not another
+  direct ignition target search.
+- `tinderrectangle`: best near-miss from the latest bounded agent pass:
+  `<<<^<<^>>>>^>>v>v<v>>v^>^^>>v>.vvvv<<>^^^^^<<vvv<<^^^<<<<` reaches
+  player `(6,3)`, lower rat `(6,6)`, all 16 rats alive. Synthetic
+  `ratdeathgeom --source 6,6` says player `(14,7)` or `(14,8)` would win.
+  The natural return
+  `>>>>vvv>>^^^>>vvvv` reaches player `(14,7)`, but the lower rat has
+  overrun to `(8,6)` and no immediate action wins. The actionable timing target
+  is therefore: return safe-side while ending with the lower rat still at
+  `(5,6)` or `(6,6)`, or find a local hold that keeps the rat from taking those
+  two extra east steps.
+- `release`: event enumeration from the opener `v<vv^^>>v` found 22-rat
+  variants such as `v<vv^^>>v^vvv<<<^<^^`, but diagnostics still show `(18,4)`
+  sealed behind `(18,5)` and trigger 2 unreachable. A stricter structural check
+  for `cellnotratrect:18,5,web,16,4,19,8` also returned no branch. Treat these
+  as another dead form of the opener family unless a new line handles `(18,4)`
+  before the top sweep.
+- `reload_v3`: strict lower-left checks for `cellnot:1,21,web` and
+  `cellnot:2,21,explosive` with all 3 rats preserved either hit the process
+  memory cap or returned no branch under 500k nodes. The unresolved mechanism is
+  still opening the bottom-left reload lane before the middle/top rat kills
+  strand access.
+- `cooperation/handoff`: a capped branch can clear the left pocket and make the
+  left rat reachable:
+  `vv >^ >v >^ >< >< ^< vv ^> v> ^< v. v. <v ^^ <> <^ <^ << ^< ^< ^< ^^ ^>`.
+  However, that branch has already consumed trigger 2; follow-up checks still
+  cannot make `(10,5)` reachable or move/kill the `(10,6)` rat. The useful
+  conclusion is narrow: left-pocket handoff is possible, but the intended
+  solution must address `(10,6)` before trigger 2 is spent.
+- `cooperation/tug_of_war`: from the clean pre-trigger prefix
+  `.< v^ <^ >^ <^ <^ >^ <^`, diagnostics show the top rat at `(7,0)` remains
+  sealed in a size-2 component with 4/5 rats reachable. `wp2` to `(7,3)` or
+  `(8,3)` for either player is unreachable, and capped `allreachable` checks
+  returned empty. The top pocket `{(7,0),(8,0)}` remains the structural blocker.
+- `cooperation/blocked_v2`: B23
+  `^< ^^ v^ ^^ v^ ^^ v^ ^> v> ^> vv ^v v^ ^v vv ^v vv ^v v> ^> v< v> ^<`
+  leaves rats `(9,13)`, `(9,14)`, `(0,15)` with trigger-2 cells `(5,11)` and
+  `(3,14)` unreachable. Capped checks for `reachable:5,11`,
+  `reachable:3,14`, `cellnotratrect:2,15,explosive,0,14,1,16`, and initial
+  `(6,11)` carrier-lane clearing returned empty under the tested caps.
 
 ---
 
@@ -5990,10 +6044,11 @@ were left running.
    trigger 2. The next useful attack must handle `(18,4)` before the top sweep
    or open its web without spending the adjacent explosive chain.
 3. **Solve `tinderrectangle` as a separation problem, not an ignition problem.**
-   The ignition geometry is proven; use `--goal rectsep` to reject the known
-   contact trap. The next useful hypothesis must create a side loop or delayed
-   release before `(2,4)` opens, because opening `(2,4)` starts the lower rat
-   immediately and the current row-6 route loses the timing race.
+   The ignition geometry is proven; use `--goal rectignite` for strict finish
+   checks and treat `rectsep` only as a loose staging diagnostic. The next useful
+   hypothesis must create a side loop or delayed release before `(2,4)` opens,
+   because opening `(2,4)` starts the lower rat immediately and the current
+   row-6 route loses the timing race.
 4. **Continue `ai_takeover` from AFTER8/P172, not old P130/Q143 cleanup.**
    P172 proves trigger 2 can be fired remotely while the player is off left
    trigger `(0,16)`, leaving player `(3,16)`, cyborg `(18,7)`, and normal
