@@ -3576,6 +3576,18 @@ before and after probes found no leftover `target/release/solver`, `timeout`, or
   enumerated the known bottom-left drain family toward the 7-/3-rat cleanup
   basins. Do not deepen that family without a compound structural target such
   as changing `(14,12)` / `(15,12)` or moving the remote cyborg before trigger 2.
+- A serial tmux-backed queue was used only after ordinary detached `nohup`
+  children were observed to be cleaned up by the execution environment. It ran
+  one Python-supervised solver child at a time with `RLIMIT_AS=800MB`, then the
+  tmux session was killed. Empty branchdump results from that queue:
+  `old_levels/order_of_operations` initial `cellnot:9,4,web`
+  (`--min-rats 5 --min-reachable-rats 4`), `old_levels/on_the_clock` from
+  `v>>><^^v>^^>>>vvv><v` for
+  `triggeronlycellnot:6,12,19,explosive` with all 8 rats and at least 10
+  triggers, `tinderrectangle` from `T106+PREOPEN+RET` for
+  `ratrectplayerrect:2,6,7,6,14,7,14,8`, and `cyborg_rats/ai_takeover` from Q64
+  for changing explosive `(14,12)` while preserving at least 12 enemies, 10
+  reachable enemies, and a trigger.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
