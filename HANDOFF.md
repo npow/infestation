@@ -3480,6 +3480,15 @@ leftover `target/release/solver`, `timeout`, or `clingo` jobs after the probes.
   blocked from both sides of the `(1..4,15)` barrier from this frontier; keep
   looking before B20 or for a different actor/trigger path, not for another
   local B20 cleanup.
+- `old_levels/order_of_operations`: the top-rat blocker was checked at the P30
+  cutoff as an earlier alternative to the exhausted P35/P56 route. With
+  `P30=<<<<<<^v^^^^>^^vv^vv^vv^^^vvvv`, all four remaining rats are still
+  reachable in diagnostics, but `cellnot:9,4,web` returned empty under a
+  four-rat / four-reachable-rat gate, and the direct stance
+  `ratplayerfacing:9,3,9,4,north` also returned empty. The initial synthetic
+  `ratdeathgeom` check for `(9,3)` found no one-step explosive/black-hole
+  self-delete. Continue before P30 or with a route that changes the top enclosure
+  before the player is committed to the lower-left cleanup.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
