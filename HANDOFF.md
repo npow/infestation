@@ -2085,6 +2085,39 @@ still reports 29 verified wins and 0 failures under the current Rust oracle.
   still alive all returned empty under 1.2M-2M node caps. The top rat remains
   the structural blocker.
 
+### Continuation pass - 2026-06-13 all-clean follow-up
+
+No new verified wins. The raw CSV scan shows 10 missing solution entries, but
+three are the child files inside `levels/old_levels/`; their hub metadata labels
+them broken and the portal-linked hub `old_levels/old_levels.csv` is already a
+verified win. The current hard working set remains the 7 listed above.
+
+- `cooperation/blocked_v2`: rechecked the all-rat frontiers instead of the
+  low-rat basins. From the 17-turn trigger-3 state
+  `^< ^^ v^ ^^ vv ^v v^ ^^ v> v> v> vv vv ^v ^v ^v ^v`, trigger 5 does not
+  produce a useful continuation: requiring trigger 2 to remain reachable after
+  `triggeronly:5` returned no branch with either 8 rats or a relaxed 7-rat
+  floor, and the compound `triggeronlycellnot:5,2,15,explosive` was also empty.
+  Backing up to the 16-turn state
+  `^< ^^ v^ ^^ v^ ^^ v^ ^> v> ^> vv ^v v^ ^v vv ^v`, `triggeronly:3` itself is
+  easy and preserves all 8 rats, but requiring trigger 2 to be reachable after
+  it returned empty, and `triggeronlycellnot:3,6,11,explosive` also returned
+  empty. This rules out the current `3 -> 5 -> 2` access story from those
+  frontiers.
+- `tinderrectangle`: from prepared-safe P71
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv`,
+  individual safe-side compound goals (`ratplayer` for lower rat
+  `(2,4)/(2,5)/(2,6)/(4,6)/(6,6)` with player `(14,7)` and row-8 safe cells)
+  returned no solution in capped checks. A native `rectlower` lookup from P71
+  found a sharper best diagnostic suffix
+  `^^^^<<vvv<<^^^<<<<<vvv<<<<>`, giving P98 with rat `(1,5)` and player `(2,6)`.
+  From P98, every one-step move except `>` is `GameOver`; `>` reaches the known
+  contact trap with rat `(2,6)` and player `(3,6)`. The player can escape back
+  to `(14,7)` only if rat preservation is dropped, yielding P125 with 15 rats
+  and the lower rat gone. A no-preservation `rectlower` lookup from the contact
+  trap still returned no solution. This is stronger evidence that the lower
+  route needs separation before P98, not a recovery after contact.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
