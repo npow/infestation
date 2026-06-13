@@ -5476,6 +5476,62 @@ stored-solution replay all pass (`36/36` verified).
   staging family. Continue only with a release-geometry predicate that is not
   already true in the staged state.
 
+### OOM-safe continuation - 2026-06-13 twenty-sixth Codex pass
+
+No new verified win. Current worktree audit still shows nine rat-bearing CSVs
+missing from `solver/solutions/final_solutions.json`: `blocked_v2`, `handoff`,
+`tug_of_war`, `ai_takeover`, `on_the_clock`, `overstep`, `release`,
+`reload_v3`, and `tinderrectangle`. Solver work again stayed serial and capped
+with `ulimit -v 800000`; process checks found no leftover solver/cargo/clingo
+jobs.
+
+- `cyborg_rats/ai_takeover`: backing up from Q143 to Q106 did not expose the
+  obvious one-rat-plus-lane alternative. From Q106
+  `^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>v>vv>>vvvv<v<`,
+  combined `ratsleratrectplayerrect` checks returned empty for final cyborg
+  `(18,14)` with player row-19 lane `(14..18,19)`, final cyborg `(18,8)` with
+  player kill-stance rectangle `(16..19,11..13)`, and broader final cyborg
+  rectangle `(15..18,11..14)` with player lower-right lane `(14..19,13..19)`.
+  This means the bad Q143 cut is not the only reason the obvious one-rat finish
+  is absent; Q106 itself cannot reach those final-lure shapes under the tested
+  cap.
+- `cyborg_rats/ai_takeover`: a resource-preserving P93 probe did find a live
+  branch. From P93
+  `^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>`,
+  `ratrectplayerrectcellis:16,18,18,19,17,16,18,18,18,19,trigger8` reaches
+  Q103 `P93+v>vv>>vvv<`, preserving all three enemies, seven triggers, and
+  trigger 8. Direct continuation from Q103 timed out and fell back toward a
+  two-enemy basin. The sharper P93 check
+  `cellnotcellis:18,6,explosive,18,19,trigger8`, preserving all three enemies,
+  also returned empty; the best state still had `(18,6)` intact. Q103 is a
+  real timing variant, but so far it does not open the right column while
+  preserving trigger 8.
+- `reload_v3`: the lower-helper-before-station alternative returned empty from
+  the initial board:
+  `ratrectplayerrectcellis:3,20,5,21,2,17,5,18,4,18,trigger1` with three rats,
+  fourteen triggers, and six explosives preserved. This directly attacks the
+  P43 failure mode and says the helper cannot be staged on row 20/21 with the
+  player near trigger 1 while trigger 1 remains intact, at least under the
+  tested cap.
+- `release`: three non-duplicate physical blocker checks closed. From the
+  standard pre-seal prefix `v<vv^^>>`,
+  `ratrectplayerrectcellis:18,4,18,4,19,6,19,8,18,5,web` returned empty, so the
+  player cannot be staged in the right pocket while `(18,4)` and web `(18,5)`
+  remain intact under the tested resource floor. Initial-board left trigger-2
+  carrier staging `ratrectcellis:0,13,2,17,0,16,trigger2` also returned empty.
+  The same left-carrier idea from newer basin
+  `v<vv^^^^^v^vvvvv>>><^`, with central player control and `(0,16)` trigger 2
+  intact, returned empty as well. This closes the latest left-trigger-2 carrier
+  hypothesis; `release` still needs a different way to handle `(18,4)` before
+  the top sweep.
+- `tinderrectangle`: the remaining "release from above" safe-side predicate
+  `ratrectplayerrectcellis:2,3,2,3,13,6,15,8,4,3,empty` from B4 is positive but
+  still just rediscovered the known safe-side family. It produced a shortest
+  P77 branch
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^^vv>>^^>>>v>vv>>^^^>>vv>v`,
+  but direct continuation from P77 returned no solve. Treat P77 like P81/P83:
+  useful separation evidence, not a solved route.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
