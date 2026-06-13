@@ -4452,6 +4452,46 @@ synthetic local geometry.
   `ratdeathgeom` found no synthetic death placement. The pocket must first
   change `(1,21)`/`(2,21)` terrain; the rat cannot be lured out directly.
 
+### OOM-safe continuation - 2026-06-13 eighth Codex pass
+
+No new verified win. Solver searches stayed serial under `ulimit -v 800000`
+and external `timeout`; process checks found no leftover solver, cargo,
+clingo, or timeout jobs.
+
+- `old_levels/on_the_clock`: Descartes' live-bomb predicates were tested and
+  returned empty under guarded caps. From P22
+  `v>>><^^v>><^^>>>vvv>>^`, `ratcell:1,18,1,17,explosive` found no branch with
+  all 8 rats, 7 explosives, and 17 triggers preserved. From P23
+  `v>>><^^v>><^^>>>vvv>>^v`, `ratcell:16,18,16,17,explosive` also returned
+  empty under the same preservation gates. From P24
+  `v>>><^^v>><^^>>>vvv>>^v<`, guarded reachability checks for `(14,16)`,
+  `(16,18)`, and `(12,18)` all returned empty. This closes the concrete
+  live-bomb / early lower-chamber access hypotheses before P31 under the tested
+  budgets.
+- `old_levels/overstep`: backing up before P52 produced a real new upper-rat
+  mechanism. From P21 `vvvvvv>>>>>>>>>v>><>>`, branchdump found
+  `P33=vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^`, with all 6 rats alive, 6 explosives,
+  7 webs, 21 triggers, and the old upper rat pulled down to `(16,4)`. Continuing
+  gives `P45=P33+vvvvvvvvv<<<`, with the rat at `(15,5)`, and then
+  `P47=P45+<<`, with the old upper pocket rectangle `(14,2)..(16,5)` empty and
+  the rat at `(13,6)`. This is materially different from the P52/P62/P88
+  family, where the upper rat remains sealed at `(14,2)` / `(15,3)`.
+- `old_levels/overstep`: the P47 mechanism still has a second sealed-component
+  blocker. A capped direct continuation from P47 returned `NO_SOLUTION` after
+  178k expansions / 60s. `noratsrect:11,6,15,11` from P47 returned empty, so
+  emptying the broader upper/right component is not yet available. `ratsle:4`
+  from P47 found a diagnostic P95 branch:
+  `vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^vvvvvvvvv<<<<<>><<<^<<<<^^<<^<<<^^<<^^^^^^>>>>>>>v>>>^^<<vvv<<`.
+  P95 has 4 rats, 3 explosives, 5 webs, 8 triggers, and 1 reachable rat, with
+  rats at `(11,6)`, `(14,11)`, `(0,13)`, `(0,20)`.
+- `old_levels/overstep`: P95 can reduce further, but the best returned branch is
+  a dead 2-rat basin. The representative P140 branch
+  `P95+>^^<<<<<vvv<<vvv>vvvv<<v^^v>>^^^^>^>>v^^^^^^^` leaves rats `(6,7)` and
+  `(14,11)`, no explosives, no webs, no triggers, and only the `(6,7)` rat
+  reachable. `ratsle:1` from P95 returned empty immediately. Continue overstep
+  from P47/P95 only with a mechanism that handles `(14,11)` before spending the
+  remaining explosive/trigger resources; do not just deepen the P140 basin.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
