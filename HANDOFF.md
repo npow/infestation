@@ -2624,6 +2624,43 @@ probes, kept solver runs under `timeout` / `ulimit`, and ended with no
   cells `(1,15)` / `(2,15)`. The 20-turn three-rat frontier remains the best
   diagnostic start, but not a solved path.
 
+### Continuation pass - 2026-06-13 OOM-safe parallel follow-up
+
+No new verified win. This pass used two read-only side agents and local capped
+oracle probes. Local searches were wrapped in `timeout` / `ulimit -v`; the pass
+kept the process table clean between probe groups.
+
+- `release`: the trigger-6 hypothesis is now weaker. From the standard opener
+  `v<vv^^>>v`, direct `wp` to trigger-6 cells `(17,16)` and `(19,18)` reports
+  `UNREACHABLE`. Capped branchdumps for `triggeronly:6` while preserving a
+  reachable trigger 2 returned no branch from the opener, the P37 carrier state
+  `v<vv^^>>vv><<v<<<^<^^<<>>>vvv>>>>>>>>`, or the trigger-5 state
+  `v<vv^^>>vv<>>>^`. Early trigger-6 checks from the initial board with
+  `--min-rats 24`, and trigger-6 checks allowing the standard opener's one rat
+  loss with `--min-rats 23`, also returned empty. Treat trigger 6 as a late
+  diagnostic trap unless a new setup changes access; do not continue widening
+  P37/P5-trigger probes blindly.
+- `tinderrectangle`: T106 delayed-release checks for opening `(3,4)` or `(2,4)`
+  while returning the player to the right safe pocket returned no branch under
+  raw-state capped searches. The latch suffix
+  `^^^>v^<vvvv^^^^<<vvv<<^^^<<<vvv<^^<^<<>` from T106 reaches player `(4,3)`
+  with lower rat `(3,3)`, but the local all-rats frontier is finite: only the
+  player walking right while the lower rat shadows on row 3. Killing the lower
+  rat with suffix `>>>>>><` leaves a clean 15-top-rat state with player `(8,3)`,
+  all 43 explosives intact, and all 15 rats reachable, but a capped `rectready`
+  branchdump from that state returned empty. The lower-rat route still needs a
+  timing/separation idea before release, not another immediate descent.
+- `cyborg_rats/ai_takeover`: a side-agent found a better pre-trigger-2 route.
+  Prefix
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<`
+  verifies `Playing` at 64 turns with 15 rats, 5 explosives, 2 triggers, and
+  14/15 rats reachable. Taking the usual trigger-2 trip after it,
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<<<<<<<<<<>>>>>>>><<<<<<<<<<<<<<^^^<<<`,
+  verifies `Playing` at 101 turns with 7 rats, 2 explosives, 0 triggers, and
+  all 7 rats reachable. This improves the older C97 8-rat triggerless basin,
+  but capped `ratsle:6` / event checks from D101 still found no cleanup branch.
+  Continue from Q64 before trigger 2, not from D101 cleanup.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
@@ -2640,20 +2677,21 @@ probes, kept solver runs under `timeout` / `ulimit`, and ended with no
    in the tree, but the current hard cases still fail because the heuristic
    prefers irreversible dead basins. Use mechanism-specific goals and inspect
    diagnostics after every irreversible event.
-2. **Continue `release` from a new hypothesis, not the trigger-5/6 one-rat
-   family.** The known prefix `v<vv^^>>v` plus trigger 5 can reduce the board to
-   a single `(18,4)` rat, but that mechanism strands it behind `(18,5)`. The next
-   useful attack must handle `(18,4)` before the top sweep or open its web
-   without spending the adjacent explosive chain.
+2. **Continue `release` from a new hypothesis, not the trigger-5/6 family.**
+   The known prefix `v<vv^^>>v` plus trigger 5 can reduce the board to a single
+   `(18,4)` rat, but that mechanism strands it behind `(18,5)`. Recent bounded
+   checks also failed to reach trigger 6 in a way that preserves reachable
+   trigger 2. The next useful attack must handle `(18,4)` before the top sweep
+   or open its web without spending the adjacent explosive chain.
 3. **Solve `tinderrectangle` as a separation problem, not an ignition problem.**
    The ignition geometry is proven; use `--goal rectsep` to reject the known
    contact trap. The next useful hypothesis must create a side loop or delayed
    release before `(2,4)` opens, because opening `(2,4)` starts the lower rat
    immediately and the current row-6 route loses the timing race.
-4. **Do not treat `ai_takeover` as a solved-by-`release` clone.** It has the
-   right-side `(18,5)` opening that `release` lacks, but the standard opener
-   still cannot reach or safely use triggers 7/8. Use `release` for trigger
-   vocabulary only, not as a move skeleton.
+4. **Continue `ai_takeover` from Q64, not D101 cleanup.** Q64 is the current
+   best preserved frontier before trigger 2; D101 improves the triggerless basin
+   to 7 rats but still has no cleanup branch in bounded checks. Use `release`
+   for trigger vocabulary only, not as a move skeleton.
 5. **For two-player levels, work in `wp2` waypoint pairs.** Start with
    structural access checks (`cellnot` / `playerat`) before trigger
    choreography. `tug_of_war` may be unwinnable as authored because the top
