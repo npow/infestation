@@ -5229,6 +5229,67 @@ current hard inventory is nine rat-bearing CSVs:
   `(3,14)`. B17/B20/B23 are still finite basins unless a new route proves
   actor/player access to `(5,11)`.
 
+### OOM-safe continuation - 2026-06-13 twenty-second Codex pass
+
+No new verified win. Work stayed serial for solver calls: one
+`target/release/solver` process at a time, wrapped with `ulimit -v 800000` and
+external `timeout`. Read-only side agents were used in parallel for mechanism
+analysis only. Process checks after the run found no leftover solver/cargo/
+clingo/timeout jobs. Stored solutions still replay `36/36`.
+
+- `tinderrectangle`: side analysis suggested pre-opening the lower shaft from
+  the `(4,4)` topology branch
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^`. This produced a real
+  all-rats/all-explosives branch:
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^^vv>>v<<<<^`,
+  with lower rat `(2,3)`, player `(2,5)`, and 24 webs. That altered topology
+  can still reach the safe side:
+  `...>>^^>>>>>v>vv>>^^^>>vv>v`, but follow-up
+  `cellnotplayerrect:2,4,web,13,6,15,8` and `rectsep` from the P63 topology
+  branch returned empty. Exact safe-cell variants from P83 can put the player
+  at `(14,7)` or `(14,8)` while preserving all rats/explosives, but
+  `cellnotplayerat:2,4,web,14,7/14,8` still returned empty. The simple
+  below-rat side door is closed; continue only with a different pre-release
+  topology change.
+- `reload_v3`: side analysis proposed firing station 1 only after staging the
+  helper/player east of the trigger-1 ring. From P40
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<`, all tested station/carry
+  predicates returned empty:
+  `ratrectplayerrectcellis:3,17,5,19,5,18,8,20,4,18,trigger1`,
+  `ratrectplayerrectcellis:5,18,8,19,8,18,12,19,4,18,trigger1`,
+  `ratrectplayerrectcellis:6,19,10,20,8,18,12,19,4,18,trigger1`, and the
+  corrected post-station crossing
+  `cellnotplayerrect:9,22,explosive,5,18,12,22 --min-explosives 5
+  --min-triggers 12`. This closes the direct row-19 carry/east-player station
+  idea under the tested caps.
+- `cyborg_rats/ai_takeover`: side analysis found one genuinely new live
+  frontier. From P93, preserving the bottom-right actor/trigger-8 resource with
+  `ratrectplayerrectcellis:16,18,19,19,14,17,19,19,18,19,trigger8
+  --min-rats 3 --min-triggers 1` reaches Q102:
+  `^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>v>vv>>vvv`.
+  Diagnostics: three enemies `(18,4)`, `(11,9)`, `(16,19)`, eight explosives,
+  seven triggers, player `(19,17)`, and right trigger 8 still present. This is
+  the best new `ai_takeover` lead because it avoids the P126 two-enemy final
+  trap. Immediate follow-ups from Q102 are closed so far:
+  `triggeronly:8`, `triggeronly:6`, `cellnotratrect:17,19,web,16,18,19,19`,
+  and `cellnotratrect:2,19,explosive,16,18,19,19` all returned empty while
+  preserving all three enemies. The events visible from Q102 mostly kill the
+  bottom actor and collapse back to two-enemy basins; continue by shaping Q102
+  before the bottom actor dies.
+- `cyborg_rats/ai_takeover`: the direct P93/P126 side-agent checks also closed:
+  from P93, moving `(18,4)` below the trigger-2 zap via
+  `ratrectplayerrectcellis:18,5,19,7,12,8,16,11,19,7,trigger2` returned empty;
+  from P126, spending `(14,12)` or `(15,12)` while a right-side actor remains in
+  `(18,5)..(19,7)` returned empty. This reinforces Q102 as the live branch.
+- `release`: side analysis proposed stationing at right trigger 6 from the
+  newer basin `v<vv^^^^^v^vvvvv>>><^`, then using the lower-left gate for
+  trigger 2. Bounded predicates returned empty:
+  `cellisplayerat:19,18,trigger6,19,19`,
+  `ratrectcellis:17,17,19,19,19,18,trigger6`, and the corrected gate invariant
+  `cellnotratrect:1,16,explosive,2,16,4,19 --min-rats 22 --min-triggers 6
+  --min-explosives 3`. Do not retry the right-trigger-6 station from this basin
+  without a new prefix.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
