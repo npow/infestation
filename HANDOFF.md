@@ -3086,6 +3086,32 @@ read-only subagent reasoning and shell reads.
   Q58 also failed the mid-collar target `cellnot:16,12,web` with trigger 2
   reachable. This weakens the "enemy fires left trigger 2 from the Q64 family"
   idea; back up before Q58 if continuing that hypothesis.
+- `old_levels/on_the_clock`: a narrower `noratsrect:16,14,17,19` target from
+  P23 found short displacement branches such as
+  `v>>><^^v>^^>>>vvv><vvvvvv^^^>`, which moves the sealed-component rat to
+  `(15,14)` with all 8 rats alive, but `ratsle:7` from that P29 state returned
+  empty even without a reachability gate. A stricter
+  `noratsrect:15,14,17,19` target found P30 branches such as
+  `v>>><^^v>^^>>>vvv><vvvv^vvv^^^`, moving the rat to `(14,14)`, but that
+  branch also returned empty for `ratsle:7` with `min_reachable_rats=2`.
+  Treat these as displacement diagnostics, not cleanup frontiers.
+- `old_levels/on_the_clock`: trigger 6 and trigger 5 from P25
+  `v>>><^^v>^^>>>vvv><vvvvvv` returned empty under preserved-rat/reachability
+  gates. Adjacent pre-blast timing targets around `(16,17)` also returned
+  empty: `ratcell:16,16,16,17,explosive`,
+  `ratcell:15,17,16,17,explosive`, `ratcell:17,17,16,17,explosive`, and the
+  earlier `ratcell:16,18,16,17,explosive`.
+- `reload_v3`: initial `events` found a clean 2-rat basin without spending
+  trigger/explosive resources:
+  `^^^^^>>>>>>><<<<<<<<<<<<<^^<^^^^^^^^^^^vvvvvvvvv>>>>>>` leaves rats at
+  `(11,11)` and `(0,21)`, all 6 explosives, 14 triggers, and the central rat
+  reachable. From that basin, `cellnot:1,21,web` and
+  `cellnot:2,21,explosive` returned empty while preserving useful rat counts.
+  `triggeronly:7` preserving both rats returned empty; relaxed `trigger:7`
+  only kills the reachable rat and leaves the bottom-left rat unreachable.
+  A broader initial-board `cellnot:1,21,web` probe hit the per-process memory
+  cap at `ulimit -v 800000`; rerun only with lower `--maxnodes` or a sharper
+  mechanism target.
 - `old_levels/on_the_clock`: the stale 35-turn timing family is confirmed
   misleading. Two shim variants
   `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvvvvvv<>v` and
