@@ -3297,6 +3297,27 @@ No new verified win. This pass kept one capped solver process active at a time
   `(17,5)` has no one-step black-hole/explosive self-delete geometry under the
   checked synthetic stances. This supports the existing conclusion that the
   pocket must be released structurally before/during the trigger-9 route.
+- `cooperation/blocked_v2`: a new safe rat-trigger-4 variant exists. From the
+  B17 prefix
+  `^< ^^ v^ ^^ v> v> v> vv vv ^v ^v ^< ^v ^v v< ^> v>`, two stalls
+  (`.. ..`) hold P2 on the x=15 file so the lower transient rat steps onto
+  trigger 4, while P1 stays out of the top-row blast. Adding one more stall
+  self-deletes that rat and leaves the familiar 3-rat shape, but with the top
+  explosive strip cleared:
+  `^< ^^ v^ ^^ v> v> v> vv vv ^v ^v ^< ^v ^v v< ^> v> .. .. ..`.
+  Capped follow-ups from that state for `cellnot:1,15,web`,
+  `triggeronly:2`, `playerat:1,17`, `playerat:0,17`, and a bounded `win`
+  lookup all returned empty. Treat this as a real but insufficient mechanism:
+  trigger 4 is no longer the missing step unless it is combined with an earlier
+  lower-left access change.
+- `old_levels/on_the_clock`: late cleanup from the promising 5-rat bridge state
+  is now bounded more tightly. From
+  `v>>><^^v>^^>>>vvv><vvvvvv^^>>>>^^^vvv><<<<<<<^<<<<v^>>>>v>>>>>>vvv^>>`,
+  a capped direct `win` lookup reached only the same two-rat basin: a reachable
+  left rat and the sealed right-component rat. Exact P69 checks for
+  `noratsrect:12,14,17,19` and `cellnot:14,15,web` returned empty, even when
+  rat preservation was relaxed. The bridge route is still the best near-solve,
+  but the right-component rat has to be displaced or killed earlier than P69.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
