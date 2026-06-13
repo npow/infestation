@@ -3240,10 +3240,26 @@ No new verified win. This pass kept one capped solver process active at a time
   checks `cellnotratat:16,12,web,15,9` and
   `cellnotratat:16,12,web,16,9` both returned empty. The bottom-actor staging
   target `ratcell:4,19,2,19,explosive` also returned empty under resource gates.
+- OOM-safe serial queue `/tmp/infestation_safe_bg_test_fg.log` completed under
+  `RLIMIT_AS=800MB` with no solver processes left active. Empty checks:
+  `blocked_v2` B20 `ratsle:2` with the two survivors reachable and no trapped
+  rats; `ai_takeover` Q64 `cellnot:14,12,explosive` and
+  `cellnot:15,12,explosive` while preserving 12 reachable rats and a trigger;
+  `tinderrectangle` T106 safe-door checks for both `(3,4)` and `(2,4)` webs;
+  and `reload_v3` trigger-2 prefix `triggeronly:6`.
+- `cyborg_rats/ai_takeover`: the same queue reproduced the known Q64
+  `triggeronlycellnot:2,18,4,cyborg` family. Best branch
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<<<<<<<<<<>>>>>>>><<<<<<<<<<<<<<^^^<<<v`
+  reaches 7 rats/cyborgs, all reachable, no triggers, and explosives at
+  `(14,12)` / `(15,12)`, but it is a hard contact trap: from player `(0,17)`,
+  every immediate action (`^`, `v`, `<`, `>`, `.`) is `GameOver`. A capped
+  `lookup --goal win` from that exact state returned `NO_SOLUTION`
+  immediately. Continue from pre-trigger Q64 structure, not this 7-rat basin.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
-  400-500, long budgets) solved several levels but stalled on the current 7.
+  400-500, long budgets) solved several levels but stalled on the current
+  10-level inventory.
 - PDDL and LLM-play agents produced no verified final wins on the current hard
   set. Their useful output was mechanism hints, not move strings.
 - The current productive path is mechanism-first decomposition plus short
@@ -3302,7 +3318,7 @@ solver/solutions/
 
 ## 6. Session context
 - A session Stop-hook with goal **"solve all the puzzles"** may be active in
-  some environments. The current remaining hard set is the 7 listed in §3.
-  Resume by working §4.
+  some environments. The current remaining hard set is the 10 rat-bearing CSVs
+  listed in §3 plus the additional old-level CSVs there. Resume by working §4.
 - Fork created with `gh repo fork`; push with `gh auth setup-git --hostname github.com` then
   `git push fork claude/new-puzzles`. No PR was opened to upstream (`davidspies/infestation`).
