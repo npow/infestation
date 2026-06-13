@@ -2256,6 +2256,38 @@ solver concurrency low, used bounded sidecar probes, and ended with no
   4-rat state with `reachable_rats=0`, so trigger 5 must be delayed or avoided
   until the lower/remote rats are already controlled.
 
+### Continuation pass - 2026-06-13 blocked-v2 frontier advance
+
+No new verified win. This pass kept solver concurrency to one or two bounded
+processes, reduced `branchdump` caps after one probe reached about 1.2 GB RSS,
+and ended with no `solver`, `timeout`, or `clingo` processes running.
+
+- `cooperation/blocked_v2`: the trigger-1/trigger-3 line can be pushed much
+  further before the lower-left blocker. Starting from
+  `^< ^^ v^ ^^ v> v> v> vv vv ^v ^v ^< ^v`, the rat-drop suffix
+  `^v v< ^> v> ^< v< ^^` verifies as `Playing` at 20 turns with only three
+  rats left: `(9,13)`, `(9,14)`, and `(0,15)`. Diagnostics: 15 explosives,
+  10 webs, 9 triggers, `reachable_rats=2/3`, and all remaining rats are in the
+  rat component. This is the best current `blocked_v2` frontier and supersedes
+  the older B17/B23 8-/3-rat notes as the recommended start point.
+- `cooperation/blocked_v2`: from that 20-turn frontier, direct continuation
+  timed out with no win; resource-preserving `ratsle:2`, `cellnot:1,15,web`,
+  `cellnot:2,15,explosive`, `cellnot:10,13,web`, `cellnot:10,14,web`, and
+  `triggeronly:2` probes returned no branch under capped checks. The lower-left
+  blocker is still exactly `(0,15)` behind `(1,15)` web and `(2,15)/(3,15)`
+  explosives.
+- `cooperation/blocked_v2`: late trigger 5 from the 20-turn frontier is no
+  longer an immediate total-collapse branch, but it still does not open the
+  lower-left pocket. A representative trigger-5 branch
+  `v^ v^ v^ v^ vv <v <> <> <> <v` leaves the same three rats, 15 explosives,
+  9 webs, 4 triggers, `reachable_rats=2/3`, and every remaining trigger is
+  unreachable. Do not use trigger 5 after the 20-turn frontier unless a new
+  reason explains how it helps open `(1,15)`.
+- `cooperation/tug_of_war`: a small dropchain from the trigger-1 scaffold
+  `^< ^^ ^^ ^^ ^^ ^^ ^^ ^^ <^ ^v >v` reconfirmed the known side-rat cleanup
+  suffix `^^ <^ <^ <^ v^ v^`, but then remained in the 3-rat/1-reachable top
+  pocket basin. No new top-pocket release mechanism was found.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
