@@ -3825,6 +3825,34 @@ leftover `solver` / `timeout` / `clingo` jobs before continuing.
   before trigger 2 with a structural target that changes the right-middle
   explosives/webs or gives a different local cyborg offset.
 
+### OOM-safe continuation - 2026-06-13 diagnostic helper pass
+
+No new verified win. Added a small `branchdump` / `lookup` diagnostic goal:
+`cellnotratrect:x,y,kind,rx1,ry1,rx2,ry2`. It accepts states where cell
+`(x,y)` is no longer `kind` while at least one rat/cyborg is inside the
+inclusive rectangle. This is for inverse human hypotheses like "open the right
+stack while preserving a lower-left actor"; it does not change game rules or
+the normal solver objective.
+
+- `cooperation/blocked_v2`: direct initial-board inverse access to the useful
+  trigger-2 cell `(5,11)` returned empty:
+  `playerat:5,11` with all 9 rats and at least 5 reachable rats. This supports
+  the current model that `(5,11)` access needs an earlier boundary mutation, not
+  just a different route through the B20/B9 families.
+- `release`: the left-trigger-2-first inversion returned empty from the initial
+  board. Exact goal `cellnotratat:0,16,trigger2,18,4`, preserving at least 22
+  rats, 5 triggers, 2 explosives, and one reachable rat, found no branch. This
+  is distinct from the already documented `triggeronlycellnot:2,18,5,web`
+  checks: it asks whether the left trigger cell can disappear while the isolated
+  `(18,4)` rat is still present.
+- `release`: the new combined actor/right-stack predicates also returned empty
+  from the initial board under resource gates. Both
+  `cellnotratrect:18,5,web,1,16,3,17` and
+  `cellnotratrect:18,6,explosive,1,16,3,17` found no branch while preserving at
+  least 20 rats, 2 triggers, 1 explosive, and one reachable rat. This rules out
+  the simple "open the right pocket while a lower-left carrier is staged"
+  inversion under the checked bounds.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
