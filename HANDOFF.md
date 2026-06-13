@@ -2118,6 +2118,52 @@ verified win. The current hard working set remains the 7 listed above.
   trap still returned no solution. This is stronger evidence that the lower
   route needs separation before P98, not a recovery after contact.
 
+### Continuation pass - 2026-06-13 resource-capped mechanism probes
+
+No new hard-level win was found. The pass kept solver concurrency to at most two
+short searches at a time, with 20s-60s time caps and 200k-1M node caps, and
+ended with no `solver`/`timeout`/`clingo` processes running.
+
+- Solution artifact cleanup: the five `levels/claude/*` child levels already
+  listed in `SOLUTIONS.md` and autoplay artifacts were missing from
+  `solver/solutions/final_solutions.json`. They were reverified with
+  `target/release/solver verify` and added:
+  `claude/sacrifice.csv` (`<>`), `claude/roach_motel.csv` (`^^`),
+  `claude/stampede.csv` (`^^^`), `claude/remote_detonator.csv` (`^<<<<v`), and
+  `claude/web_lair.csv` (`^^vvvv`). These are not new hard-puzzle discoveries;
+  they are verified artifact sync.
+- Solver tooling: `lookup` now supports `ratfar:x,y,d`, accepting a state where
+  a rat is at `(x,y)` and the nearest player is at least Manhattan distance `d`
+  away. This is diagnostic-only and was added to test separation states without
+  over-specifying the exact player square.
+- `tinderrectangle`: P71 separation probes for `ratfar:2,6,3`,
+  `ratfar:4,6,3`, and `ratfar:6,6,3` all returned `NO_SOLUTION` while
+  preserving all 16 rats. This reinforces the P71 conclusion: its natural
+  release is the doomed left-shaft timing, not a recoverable lower-row
+  separation.
+- `tinderrectangle`: the short lower-rat family
+  `<<^<<^<>^>>>vv^` / `<<^<<^<>^>>>vv^.` was checked as a separate mechanism.
+  Diagnostics show the lower rat at `(5,5)` or `(6,5)` with all 16 rats alive,
+  but local one-step checks show a timing trap: from the dotted state only `^`
+  survives, and it pulls the lower rat up to `(7,4)`; attempts to stage
+  `(6,5)` with player `(8,6)` / `(10,6)`, or lure `(7,6)` with safe row-6
+  cells, returned immediate `NO_SOLUTION`. The useful target is not
+  `ratplayer:7,6,14,*` from this exact prefix unless the pre-stall timing is
+  changed.
+- `release`: an independent mechanism audit reconfirmed the likely dependency:
+  left trigger 2 must be made usable while a left-side actor survives, because
+  firing left 2 leaves right 2 as the zap source for the `(18,6..8)` explosive
+  stack that can open `(18,5)`. Short capped probes from the near-miss
+  `v<vv^^>>v^vvv<<<<^<^^<<><` for `ratcell:2,16,1,16,empty`,
+  `triggeronlycellnot:6,1,16,explosive` with trigger 2 reachable, and from
+  opener `v<vv^^>>v` for `cellnotratat:1,16,explosive,2,16` all missed. Best
+  states got a rat near `(2,16)` but left `(1,16)` explosive intact.
+- `reload_v3`: constrained trigger-order checks with
+  `--min-reachable-rats 1 --min-reachable-triggers 1` reject the naive paper
+  chain sooner. Strict `1,2,3,4,5,6` failed at trigger 1 under the reachability
+  gate. A strict `2,1,3,4,5,6` check was also attempted under a 120s wrapper and
+  stopped without a usable branch; process cleanup was verified afterward.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.

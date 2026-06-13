@@ -745,6 +745,7 @@ enum LookupGoal {
     PlayerAt(i32, i32),
     PlayerFacing(i32, i32, Dir4),
     RatAt(i32, i32),
+    RatAtFarFromPlayer(i32, i32, i64),
     RatAtWithPlayer(i32, i32, i32, i32),
     RatAtWithPlayerFacing(i32, i32, i32, i32, Dir4),
     RatAtWithCell(i32, i32, i32, i32, CellKind),
@@ -873,6 +874,10 @@ impl LookupGoal {
             "ratat" => {
                 let (x, y) = parse_required_point(arg);
                 Self::RatAt(x, y)
+            }
+            "ratfar" | "ratatfar" => {
+                let ((x, y), distance) = parse_point_and_distance(arg);
+                Self::RatAtFarFromPlayer(x, y, distance)
             }
             "ratplayer" => {
                 let mut parts = arg.split(',');
@@ -1095,6 +1100,21 @@ fn parse_point_and_cell_kind(s: &str) -> ((i32, i32), CellKind) {
     ((x, y), kind)
 }
 
+fn parse_point_and_distance(s: &str) -> ((i32, i32), i64) {
+    let mut parts = s.split(',');
+    let x = parts.next().expect("x").trim().parse().expect("x");
+    let y = parts.next().expect("y").trim().parse().expect("y");
+    let distance = parts
+        .next()
+        .expect("distance")
+        .trim()
+        .parse()
+        .expect("distance");
+    assert!(distance >= 0, "distance must be non-negative");
+    assert!(parts.next().is_none(), "expected x,y,distance");
+    ((x, y), distance)
+}
+
 fn parse_count_point_and_cell_kind(s: &str) -> (usize, (i32, i32), CellKind) {
     let mut parts = s.split(',');
     let count = parts
@@ -1261,6 +1281,11 @@ fn lookup_goal_reached(
         }
         LookupGoal::PlayerFacing(x, y, dir) => player_facing(current, (x, y), dir),
         LookupGoal::RatAt(x, y) => rat_at(current, (x, y)),
+        LookupGoal::RatAtFarFromPlayer(x, y, min_distance) => {
+            rat_at(current, (x, y))
+                && nearest_player_distance_from(current, (x, y))
+                    .is_some_and(|distance| distance >= min_distance)
+        }
         LookupGoal::RatAtWithPlayer(rat_x, rat_y, player_x, player_y) => {
             rat_at(current, (rat_x, rat_y))
                 && positions_matching(current, |cell| cell == CellKind::Player)
@@ -1392,6 +1417,15 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         LookupGoal::RatAt(x, y) => {
             let rats = rat_positions(current);
             nearest_target_distance(&rats, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::RatAtFarFromPlayer(x, y, min_distance) => {
+            let target = (x, y);
+            let rats = rat_positions(current);
+            let nearest_player = nearest_player_distance_from(current, target).unwrap_or(0);
+            let separation_penalty = min_distance.saturating_sub(nearest_player) * 100_000;
+            nearest_target_distance(&rats, &[target])
+                + separation_penalty
+                + heuristic(current) / 1_000
         }
         LookupGoal::RatAtWithPlayer(rat_x, rat_y, player_x, player_y) => {
             let rats = rat_positions(current);
@@ -1580,6 +1614,17 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
                 + (!player_facing(current, (x, y), dir) as i64)
         }
         LookupGoal::RatAt(x, y) => !rat_at(current, (x, y)) as i64,
+        LookupGoal::RatAtFarFromPlayer(x, y, min_distance) => {
+            let target = (x, y);
+            let rats = rat_positions(current);
+            let rat_penalty = if rat_at(current, target) {
+                0
+            } else {
+                1_000_000 + nearest_target_distance(&rats, &[target])
+            };
+            let nearest_player = nearest_player_distance_from(current, target).unwrap_or(0);
+            rat_penalty + min_distance.saturating_sub(nearest_player)
+        }
         LookupGoal::RatAtWithPlayer(rat_x, rat_y, player_x, player_y) => {
             let player_missing = !positions_matching(current, |cell| cell == CellKind::Player)
                 .contains(&(player_x, player_y)) as i64;
@@ -3623,6 +3668,13 @@ fn rat_at(grid: &Grid, target: (i32, i32)) -> bool {
             grid.cell_kind_at(target.0 as usize, target.1 as usize),
             CellKind::Rat | CellKind::CyborgRat
         )
+}
+
+fn nearest_player_distance_from(grid: &Grid, target: (i32, i32)) -> Option<i64> {
+    positions_matching(grid, |cell| cell == CellKind::Player)
+        .into_iter()
+        .map(|player| manhattan(player, target))
+        .min()
 }
 
 fn player_at_any(grid: &Grid, targets: &[(i32, i32)]) -> bool {

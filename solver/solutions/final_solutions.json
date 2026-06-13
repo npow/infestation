@@ -9,6 +9,31 @@
     "players": 1,
     "moves": 199
   },
+  "claude/remote_detonator.csv": {
+    "sol": "^<<<<v",
+    "players": 1,
+    "moves": 6
+  },
+  "claude/roach_motel.csv": {
+    "sol": "^^",
+    "players": 1,
+    "moves": 2
+  },
+  "claude/sacrifice.csv": {
+    "sol": "<>",
+    "players": 1,
+    "moves": 2
+  },
+  "claude/stampede.csv": {
+    "sol": "^^^",
+    "players": 1,
+    "moves": 3
+  },
+  "claude/web_lair.csv": {
+    "sol": "^^vvvv",
+    "players": 1,
+    "moves": 6
+  },
   "cooperation/coop_world_v3.csv": {
     "sol": "↑↑ ↑→ ↑↑ ↑↑ ↑↑ ↑↑ ↑↑ ↑→ ↑↑ ↓→ ←→ ↑→ ↑→ ↑→ ↑→ ↑→ ↑→ →↓ ←. ↑↓ →← ↓← .→ .↑ ↑↑ ↑↑",
     "players": 2,
