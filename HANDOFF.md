@@ -5778,6 +5778,66 @@ mechanism triage.
   `(0,6)..(1,8)` carrier variant on top of the earlier exact `(0,7)` carrier
   failure.
 
+### OOM-safe continuation - 2026-06-13 thirty-first Codex pass
+
+No new verified win. Solver work stayed serial with `ulimit -v` and external
+`timeout`; one too-broad `overstep` branchdump hit the 800 MB process address
+limit and aborted cleanly with no machine impact, after which probes were kept
+to lower node/address caps. Process checks before/after found no leftover
+`solver`, `cargo`, `clingo`, or `timeout` jobs.
+
+- `cyborg_rats/ai_takeover`: Volta's read-only audit found the best new
+  constructive lead. From Q106
+  `^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>v>vv>>vvvv<v`,
+  walking to the left trigger-2 path
+  `<<<<<<<<<<<<<<<^^<^<<` and then stalling proves late left trigger 2 is a
+  real bridge opener, not just an early trap. After the trigger fires, five
+  stalls pull the cyborg out of the sealed pocket:
+  `(18,4) -> (18,5) -> (18,6) -> (18,7) -> (17,8) -> (16,7)`. This invalidates
+  the previous assumption that left trigger 2 is always bad; it is bad early,
+  but useful after bottom-right prep.
+- `ai_takeover`: a stronger constructive branch was found from pre-left-trigger
+  P105. From
+  `P105=^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>v>vv>>vvvv<v`,
+  `ratsle:2` with resource guards found branches such as
+  `P105+^^^^^^^^<<<<<<vvv<<<<<<<<^^^<<<^<^`, leaving only `(18,4)` and
+  `(11,9)` while preserving both trigger-2 cells and all six explosives. From
+  there, `ratsle:1` found
+  `...^^^^^^>>>^^>>>`, which kills the normal `(11,9)` rat and leaves one
+  cyborg `(18,4)` with trigger 2 still live. Then `wp` can route from player
+  `(7,2)` to left trigger 2 `(0,16)` in 51 moves:
+  `>>>vvvv>vv>>vvv>>>vvv>>>vvvvv<<<<<<<<<<<<<<<<^^^<<<`; five stalls after the
+  trigger leave one cyborg at `(16,7)` with no triggers and two explosives.
+  This is the current most advanced `ai_takeover` line.
+- `ai_takeover`: the remaining one-cyborg endgame is not solved. Generic
+  `lookup`, `branchdump --goal win`, and `branchdump --goal winready` from the
+  clean one-cyborg state all failed under bounded caps. The heuristic repeatedly
+  drives to a bottom-right lure basin with player `(17,19)` and cyborg
+  `(19,19)`, but stepping to `(18,19)` lets the cyborg escape north to
+  `(19,18)`. A mid-board lure to cyborg `(15,11)` also did not expose a winready
+  state. The exact missing tactic is a **faced cyborg kill setup**: start a turn
+  with the player immediately west of the cyborg, then move east. Do not kill
+  the normal rat first unless there is a known way to finish the final cyborg.
+- `old_levels/overstep`: Copernicus identified the key human invariant. At O53,
+  the upper rat is still in the right chute at `(15,5)`, but the known four-rat
+  sweep pulls it back to the dead cell `(14,2)` before spending the remaining
+  mechanisms. Targeting a state with the upper rat still in `(15..16,3..5)`,
+  player near trigger 6, and trigger 6 intact returned no branch under smaller
+  caps, and the larger version hit the process memory cap cleanly. The invariant
+  remains useful: do not accept branches that park the upper rat at `(14,2)`
+  before access is solved.
+- `old_levels/on_the_clock`: Euclid's read-only audit sharpened the P31/P32
+  trap. The `P31+^^^` trigger-3 event is already one rat phase too late: the
+  left rat pair is adjacent enough that the player is in forced contact. Future
+  probes should fire/convert trigger 3 one phase earlier or reroute `(10,14)`;
+  do not deepen P31/P32 without an escape-tempo discriminator.
+- `reload_v3`: R41/R42 were inspected directly. From R41, one-turn `^` and `v`
+  variants preserve trigger 1 while changing the helper row, but shallow
+  frontier shows they only retreat or recreate the same local cage. A guarded
+  `triggeronly:2` branchdump from R42 returned no branches. The station-1 event
+  is real, but still finite unless pre-station geometry lets an actor cross
+  the bottom relay.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
