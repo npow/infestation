@@ -2468,6 +2468,44 @@ The pass ended with no `solver`/`timeout`/`clingo` processes running.
   staging toward `(9,8)` unless it is paired with a new way to reach a true
   southeast lure cell.
 
+### Continuation pass - 2026-06-13 OOM-safe mechanism audit
+
+No new verified win. This pass fetched remotes, confirmed the branch was already
+current, kept solver probes memory-capped, and ended with no
+`solver`/`timeout`/`clingo` processes running.
+
+- `cooperation/blocked_v2`: from the 20-turn three-rat frontier
+  `^< ^^ v^ ^^ v> v> v> vv vv ^v ^v ^< ^v ^v v< ^> v> ^< v< ^^`,
+  `wp2` can put P2 at `(11,14)` east of the two reachable rats with suffix
+  `v^ v^ v> v> >> vv <v <> ^v ^v ^v ^< ^< ^< ^< ^< ^<`, but opening the
+  adjacent webs from `(11,13)`, `(11,14)`, or `(11,15)` is immediate
+  `GameOver`. Firing trigger 5 from that staged position only walls off more of
+  the board; it does not open the lower-left pocket.
+- `tinderrectangle`: the row-6 route is now an exact local spacing trap, not
+  just a vague near miss. At the P137 sidecar, `>` walks the lower rat along row
+  6, but `v` detonates the rectangle and kills the player, while continuing
+  right pins the player at `(8,6)` with the rat behind. A capped `rectlower`
+  branchdump from the P132 gate-open state returned no branch under depth 70 /
+  20s / 100k nodes.
+- `reload_v3`: the short trigger-2-first line
+  `>>>^>>>>.>>.<.<<<<` is confirmed as a rat-triggered event: the right rat
+  steps onto trigger 2 while the player stays at `(17,15)`. Trying to keep that
+  actor for the next station fails locally; after suffix `vvv`, the player is at
+  `(17,17)` and the rat at `(17,16)`, and every side/pivot move is `GameOver`
+  except moving back up, which kills the rat and returns to the known dead
+  two-rat basin.
+- `cooperation/tug_of_war`: the central-rat top-gate hypothesis remains
+  blocked. Preserving all seven rats, capped branchdumps for `ratat:7,4` and
+  `ratat:8,4` returned no branch, so the central rat was not even pulled one row
+  upward toward the top planks in the tested window.
+- `cyborg_rats/ai_takeover`: B75 is slightly more nuanced than the previous
+  note: immediate `v`, `<`, and `.` are safe. Repeated stalling/wall-pivoting
+  lets the remote cyborg walk around the two remaining explosives, but source
+  confirms cyborg pathfinding treats explosives as blocked. Local escape checks
+  after several stall counts still have `>`/`^` as `GameOver`; only `v`, `<`,
+  or more waiting survive, so B75 remains a diagnostic trap rather than a
+  cleanup route.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
