@@ -3039,6 +3039,41 @@ No new verified wins yet. This session used one memory-capped solver process at
 a time (`ulimit -v 800000`) after the previous OOM, with parallelism limited to
 read-only subagent reasoning and shell reads.
 
+- `solver`: added a bounded diagnostic goal
+  `noratsrect:x1,y1,x2,y2` for `lookup` / `branchdump`. It is equivalent to
+  asking that no rat/cyborg remains in an inclusive rectangle, and is intended
+  for sealed-component tests like the `on_the_clock` right pocket. This is only
+  a search-target helper; it does not change game rules.
+- `old_levels/on_the_clock`: the previous "top/right rat pocket" blocker was
+  reframed and improved. Trigger 1 can first move the top/right rat out of the
+  original pocket:
+  `v>>><^^` gives all 8 rats alive, top/right rat at `(19,1)`, and trigger 9
+  still reachable. Holding that rat in `(19,0..2)` through trigger 9 returned
+  empty, but a better bridge exists:
+  `v>>><^^v>^^>>>vvv><vvvv` reaches a 23-turn state with the top/right rat at
+  `(16,7)`, all 8 rats alive, and `reachable_rats=2`. From there,
+  `v>>><^^v>^^>>>vvv><vvvvvv^` fires trigger 9 with all 8 rats alive and
+  `reachable_rats=4`; the top/right rat is no longer the final isolated
+  blocker.
+- `old_levels/on_the_clock`: the new bridge route can be chained much farther
+  than the stale early-trigger-9 chain:
+  `v>>><^^v>^^>>>vvv><vvvvvv^^>>>>^` -> 7 rats / 3 reachable,
+  `v>>><^^v>^^>>>vvv><vvvvvv^^>>>>^^^v` -> 6 rats / 2 reachable,
+  `v>>><^^v>^^>>>vvv><vvvvvv^^>>>>^^^vvv><<<<<<<^<<<<v^>>>>v>>>>>>vvv^>>`
+  -> 5 rats / 3 reachable with 1 explosive and 2 triggers, then firing trigger
+  8 gives a triggerless 5-rat state with 3 reachable. Cleanup can continue to
+  4 rats / 3 reachable, then 3 rats / 2 reachable, then 2 rats / 1 reachable.
+  The best inspected 2-rat prefix is
+  `v>>><^^v>^^>>>vvv><vvvvvv^^>>>>^^^vvv><<<<<<<^<<<<v^>>>>v>>>>>>vvv^>>v^<^vv>>>>>>>vv^^<<<<<<^<^^<<<<<<<^^^^^vvvvvvvv<vvvvvvvvv^^^^^<<>>>>><`,
+  with rats at `(12,14)` and `(7,17)`.
+- `old_levels/on_the_clock`: the new remaining blocker is not the old top rat;
+  it is the sealed right component. Component analysis shows the trapped rat
+  lives in cells `(12,14),(13,14),(14,14),(15,14),(16,14),(16,15),(16,16),
+  (16,17),(16,18),(16,19),(17,14),(17,15)`, whose only interesting boundary is
+  web `(14,15)`. Exact probes to clear `cellnot:14,15,web` from P23/P26/P35
+  returned empty. `noratsrect:12,14,17,19` from P23 also returned empty. The
+  route is a near-solution but needs an earlier way to kill/displace the
+  bottom-right component rat before the trigger-9/trigger-8 cleanup sequence.
 - `old_levels/on_the_clock`: the stale 35-turn timing family is confirmed
   misleading. Two shim variants
   `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvvvvvv<>v` and

@@ -754,6 +754,7 @@ enum LookupGoal {
     RatAtWithCell(i32, i32, i32, i32, CellKind),
     RatGone(i32, i32),
     NoRatsAt2(i32, i32, i32, i32),
+    NoRatsInRect(i32, i32, i32, i32),
     RatsAtMost(usize),
     ReachableRatsAtLeast(usize),
     AllRatsReachable,
@@ -1070,6 +1071,14 @@ impl LookupGoal {
                     .expect("second y");
                 assert!(parts.next().is_none(), "expected x1,y1,x2,y2");
                 Self::NoRatsAt2(x1, y1, x2, y2)
+            }
+            "noratsrect" | "noratsinrect" => {
+                let values: Vec<i32> = arg
+                    .split(',')
+                    .map(|part| part.trim().parse().expect("coordinate"))
+                    .collect();
+                assert_eq!(values.len(), 4, "expected x1,y1,x2,y2");
+                Self::NoRatsInRect(values[0], values[1], values[2], values[3])
             }
             "ratsle" | "ratsatmost" => Self::RatsAtMost(arg.parse().expect("rat count")),
             "reachablege" | "reachableratsge" => {
@@ -1407,6 +1416,9 @@ fn lookup_goal_reached(
         LookupGoal::NoRatsAt2(x1, y1, x2, y2) => {
             !rat_at(current, (x1, y1)) && !rat_at(current, (x2, y2))
         }
+        LookupGoal::NoRatsInRect(x1, y1, x2, y2) => rat_positions(current)
+            .iter()
+            .all(|&point| !point_in_rect(point, x1, y1, x2, y2)),
         LookupGoal::RatsAtMost(count) => count_rats(current) <= count,
         LookupGoal::ReachableRatsAtLeast(count) => reachable_rat_count(current) >= count,
         LookupGoal::AllRatsReachable => reachable_rat_count(current) == count_rats(current),
@@ -1596,6 +1608,14 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
                 .filter(|&&(x, y)| rat_at(current, (x, y)))
                 .count() as i64;
             remaining * 500_000 + nearest_target_distance(&players, &targets)
+        }
+        LookupGoal::NoRatsInRect(x1, y1, x2, y2) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let rats_in_rect = rat_positions(current)
+                .into_iter()
+                .filter(|&point| point_in_rect(point, x1, y1, x2, y2))
+                .count() as i64;
+            rats_in_rect * 500_000 + nearest_rect_distance(&players, x1, y1, x2, y2)
         }
         LookupGoal::RatsAtMost(count) => {
             count_rats(current).saturating_sub(count) as i64 * 1_000_000
@@ -1795,6 +1815,10 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
         LookupGoal::NoRatsAt2(x1, y1, x2, y2) => {
             rat_at(current, (x1, y1)) as i64 + rat_at(current, (x2, y2)) as i64
         }
+        LookupGoal::NoRatsInRect(x1, y1, x2, y2) => rat_positions(current)
+            .into_iter()
+            .filter(|&point| point_in_rect(point, x1, y1, x2, y2))
+            .count() as i64,
         LookupGoal::RatsAtMost(count) => count_rats(current).saturating_sub(count) as i64,
         LookupGoal::ReachableRatsAtLeast(count) => {
             count.saturating_sub(reachable_rat_count(current)) as i64
