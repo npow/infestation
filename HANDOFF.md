@@ -5352,6 +5352,40 @@ and after this pass found no leftover solver/cargo/clingo/timeout jobs.
   while preserving five rats and four triggers. This reinforces that `(10,5)`
   is not legally opened by a simple top step before the trigger-2 sweep.
 
+### OOM-safe continuation - 2026-06-13 twenty-fourth Codex pass
+
+No new verified win. Added diagnostic lookup/branchdump goal
+`ratsleratrect:count,x1,y1,x2,y2`, which requires the board to have at most
+`count` rats and at least one remaining rat in the rectangle. This is a general
+tool for distinguishing one-rat endgames; it does not change rules or solution
+scoring. `cargo build --release -p solver`, `cargo test -p solver --no-run`,
+and the stored-solution replay all pass (`36/36` verified).
+
+- `cyborg_rats/ai_takeover`: Q143 is now the best branch family. It is the
+  far-left two-enemy trigger-2 cut from Q106:
+  `^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>v>vv>>vvvv<v<<<<<<<<<<<<<<<<^^^>>>>>>>><<<<<<<<<<<`.
+  Diagnostics: two enemies `(18,4)` and `(11,9)`, two explosives
+  `(14,12)/(15,12)`, zero triggers, player `(0,16)`, both enemies reachable.
+  From Q143, plain `ratsle:1` reduces to a one-rat state Q207 with the last
+  cyborg at `(13,9)`, but Q207 is a trap: direct A*, branchdump win, and
+  `ratdeathgeom` show no one-step death placement for source `(13,9)`.
+- `cyborg_rats/ai_takeover`: the new `ratsleratrect` goal found alternative
+  one-rat endgames from Q143:
+  - right-edge branches with the last cyborg around `(18,14)/(19,14)/(19,15)`;
+  - central branches with the last cyborg around `(15,11)/(16,12)`;
+  - upper-right branches with the last cyborg at `(18,8)`.
+  These are real alternatives to the Q207 `(13,9)` trap, but none has produced
+  a verified finish yet. R227, with final cyborg `(18,8)` and player `(18,6)`,
+  is locally trapped: frontier only permits a short vertical chase, and exact
+  winning stances `(16..19,11..13)` are unreachable while the cyborg remains at
+  `(18,8)`. R223, with final cyborg `(18,14)` and player `(12,8)`, is also
+  not immediately solved; `ratdeathgeom` says row-19 player stances would kill
+  it, but frontier shows the cyborg drifts away before the player can reach
+  those stances. Combined geometry checks from Q143 for right-edge/central
+  cyborg plus the player already in the killing lane only hit with two rats
+  still alive. Continue Q143 by finding a one-rat branch that lands the player
+  in the killing lane before the last cyborg leaves its death square.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
