@@ -3255,6 +3255,37 @@ No new verified win. This pass kept one capped solver process active at a time
   every immediate action (`^`, `v`, `<`, `>`, `.`) is `GameOver`. A capped
   `lookup --goal win` from that exact state returned `NO_SOLUTION`
   immediately. Continue from pre-trigger Q64 structure, not this 7-rat basin.
+- OOM-safe tmux queue `/tmp/infestation_safe_bg_20260613_093208_live_tmux.log`
+  also completed with one solver at a time and no leftover processes. Empty
+  structural checks:
+  `old_levels/order_of_operations` initial `ratgone:9,3` with at least 5 rats
+  and 4 reachable rats; `old_levels/on_the_clock` from `>>v>>^^` for
+  `norats2:17,5,18,5` with all 8 rats and 5 reachable rats;
+  `release` standard opener `v<vv^^>>v` for `cellnot:18,5,web` preserving
+  23 rats / 20 reachable rats; `cooperation/handoff` initial
+  `cellnot:10,5,web` preserving all 5 rats; and
+  `cooperation/tug_of_war` initial `cellnot:7,1,web` preserving all 7 rats.
+  These rechecks further support the current model that the hard blockers need
+  different earlier mechanisms, not wider searches on the known frontiers.
+- Added solver diagnostic mode `ratdeathgeom` for human-style local trap checks:
+  `solver ratdeathgeom <csv> [prefix] --source x,y [--target x,y] --kind blackhole|explosive|any`.
+  It enumerates synthetic player stances where a stalled turn removes a source
+  rat without killing the player. This is useful for distinguishing real lure
+  geometry from unreachable cleanup ideas.
+- `cooperation/blocked_v2`: `ratdeathgeom` confirms the lower-left rat `(0,15)`
+  can be lured into the adjacent black-hole row only from synthetic stances such
+  as player `(13,16)` / `(14,16)` or `(0,17)` / `(1,17)`. Capped real-state
+  `playerat` checks for those cells from the B20 frontier returned empty, so the
+  black-hole self-delete idea is geometrically real but dynamically unreachable
+  from the current best frontier.
+- `tinderrectangle`: `ratdeathgeom` confirms the exact row-6 winning geometry:
+  from P137, if the lower rat is at `(2,6)` and the player is safely at
+  `(14,7)` or `(14,8)`, stalling detonates the rectangle and wins. The same is
+  true one chase step later with the lower rat at `(3,6)`. However, capped
+  `ratplayer` checks from P137/P138 for `(rat,player)=(2,6,14,7)`,
+  `(2,6,14,8)`, and `(3,6,14,7)` all returned empty. The missing trick is now
+  very narrow: create that right-pocket separation while the lower rat stays on
+  row 6.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
