@@ -2376,6 +2376,47 @@ No new verified win. This pass kept solver concurrency low, used
   `cell:1,15` and `cell:2,15`, returned empty. This trigger-4-first line is a
   better frontier to compare against the previous 20-turn trigger-1/3 frontier.
 
+### Continuation pass - 2026-06-13 tinder/ai refinement
+
+No new verified win. This pass found a more explanatory `tinderrectangle`
+near-solution, and ruled out the new `ai_takeover` B75 frontier more sharply.
+It ended with no `solver`/`timeout`/`clingo` processes running.
+
+- `tinderrectangle`: the staged-safe T58 lead can open a side return lane while
+  preserving every rat. A useful full prefix is:
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv`.
+  This verifies `Playing` at 106 turns with player `(14,6)`, lower rat `(2,3)`,
+  all 16 rats, and all 43 explosives. It differs from older P101/P135 families
+  because the player returns to the right pocket after opening `(3,5)`, while
+  the lower rat remains parked at `(2,3)`.
+- `tinderrectangle`: T106 still cannot release the rat from the safe side.
+  Stalling or nudging from `(14,6)` does not move the lower rat because `(2,4)`
+  and `(3,4)` remain webs. A bounded raw `rectsep` lookup from T106 returned
+  empty. Returning left and opening `(2,4)` reaches the sword-pin state:
+  `...T106 + ^^^><<<vvv<<^^^<<<<<v<v<<^` at 132 turns, with player `(2,4)` and
+  lower rat `(2,3)`.
+- `tinderrectangle`: the P132/P137 row-6 chase explains the remaining failure.
+  From P132, the lower rat can be walked to `(2,6)` / `(3,6)` while preserving
+  all 16 rats. The representative P137 prefix from the sidecar is:
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv><v^>v^<^>v<vv<>^^>vv^^<^^>vv<^^^<<vvv<<^^<^<<vvv<<<<<>>>>>^<<<>>>^^<vv<<<v<<>>`.
+  At P137, `>` keeps all 16 rats and moves the lower rat to `(3,6)`, but the
+  row-6 chase dead-ends near `(8,6)`. The tempting move from player `(6,6)` /
+  rat `(5,6)` is `v`, which detonates the rectangle but kills the player:
+  `GameOver` with `rats=0`, not `Won`. A capped `winready` branchdump from P137
+  returned empty. The missing step is not getting the lower rat to row 6; it is
+  making the rat hit the lower explosive strip without the player standing on
+  the same blast cell.
+- `cyborg_rats/ai_takeover`: B75 is now ruled out as a cleanup frontier under
+  targeted checks. B75 is
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>v>vv>>vvvvv<<<<<<<<<<<<<<<<^^^<<<`
+  and verifies with 16/16 rats reachable, explosives `(14,12)/(15,12)`, and no
+  triggers. Immediate `v` is safe, but every action after `B75+v` is
+  `GameOver`. Long stalling from B75 leaves `rats=16`, `explosives=2`, and
+  `triggers=0`; no blackhole drain or explosive use occurs. Targeted raw
+  lookups for `ratdrop` and `explosivesle:1` from both B75 and `B75+v` returned
+  `NO_SOLUTION` under depth-40 caps. Treat B75 as a better diagnostic trap, not
+  a cleanup route.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
