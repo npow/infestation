@@ -3033,6 +3033,63 @@ processes. All probes below ended with no visible `solver` / `timeout` /
   Empty replay is `Playing`, and bounded `lookup` returns `NO_SOLUTION`
   immediately. Do not count it with the rat-bearing hard puzzles.
 
+### Current run notes - 2026-06-13
+
+No new verified wins yet. This session used one memory-capped solver process at
+a time (`ulimit -v 800000`) after the previous OOM, with parallelism limited to
+read-only subagent reasoning and shell reads.
+
+- `old_levels/on_the_clock`: the stale 35-turn timing family is confirmed
+  misleading. Two shim variants
+  `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvvvvvv<>v` and
+  `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvvvvv<>vv` still have
+  `reachable_rats=0` and only trigger 4 reachable. The third shim
+  `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvvvvvv^vv` exposes 5 rats, but
+  bounded `win` and `ratsle:7` branches returned empty; the reachable rats are
+  not capturable in that terrain.
+- `old_levels/on_the_clock`: a new trigger route is better. Early trigger 9
+  from the initial state is possible with all 8 rats preserved; shortest useful
+  prefix is `>>>v>vv^`. A small `triganylookup` then found
+  `>>>v>vv^^^<^^>>>vvvvvvvvv`, which preserves all 8 rats and gives
+  `reachable_rats=2`. Rat-count chaining from there produced:
+  `>>>v>vv^^^<^^>>>vvvvvvvvv^^>>>>>` -> 7 rats / 4 reachable,
+  `>>>v>vv^^^<^^>>>vvvvvvvvv^^>>>>><` -> 6 rats / 3 reachable,
+  `>>>v>vv^^^<^^>>>vvvvvvvvv^^>>>>><>v>v<v>>>>>>>>vv` -> 5 rats / 2 reachable,
+  and
+  `>>>v>vv^^^<^^>>>vvvvvvvvv^^>>>>><>v>v<v>>>>>>>>vv^^<<<<<<<^^^^<vvvv>>>>>>>>vv<<<<<<<<<vv`
+  -> 4 rats / 1 reachable. Continuing blindly to 3 rats spends all triggers and
+  explosives, leaving the right-side rat pocket unsolved.
+- `old_levels/on_the_clock`: the real remaining blocker on the early-trigger-9
+  route is the top/right rat pocket. From the 4-rat state, `ratgone:17,5` only
+  moves that rat to `(18,5)`. The stricter `norats2:17,5,18,5` returned empty
+  from the 25-, 49-, and 88-turn prefixes while preserving contact/resources.
+  Trigger 1 before trigger 9 is reachable (`>>v>>^^` then trigger 9 branches),
+  but a bounded trigger-order lookup from `>>v>>^^<^v<<vvvv^` reached no
+  branch with reachable rats and ended `NO_SOLUTION`. Next useful attack:
+  solve or release the top/right pocket before or during the first trigger-9
+  event, not after the lower cleanup chain.
+- `old_levels/overstep`: the 26-turn reachable-rat lead
+  `v<<^^^^^^^>>>>>>>>>>>>><>>` exposes rat `(15,17)`, and `ratsle:5` quickly
+  kills it, but every first-kill state has `reachable_rats=0`. Adding
+  `--min-reachable-rats 1` returns empty. Backing up to `v<<^^^^>>>>`,
+  `reachablege:3` and `triggeronly:3` both returned empty under caps. Park this
+  trigger-7 family unless a new earlier event appears.
+- `release`: from `v<vv^^`, strict
+  `triggeronlycellnot:2,18,5,web` returned empty. From `v<vv^^>>`,
+  `reachable:0,16` and `cellnot:1,16,explosive` also returned empty while
+  preserving rats/resources. This supports the earlier conclusion that the
+  standard opener cannot make trigger 2 solve `(18,4)`.
+- `old_levels/order_of_operations`: from cutoff
+  `<<<<<<^v^^^^>^^vv^vv^vv`, both
+  `ratplayerfacing:9,3,9,4,north` and `playerat:9,4` returned empty. From
+  trigger-3-first prefix `<<<<<<^v^^^^>^^^vvvv^vv^^^vvvv`, `ratgone:9,3`
+  also returned empty. The top rat still needs an earlier interrupt.
+- `cooperation/handoff`: exact southeast lure
+  `ratplayer:10,6,14,8` with all rats and trigger 2 reachable returned empty.
+  From courier prefix `v^ >^ >^ >^ >^ >^ ^^ .v .> v> v>`,
+  `cellnot:10,8,explosive` and `cellnot:11,8,explosive` returned empty with
+  trigger 2 preserved. Park the P2 sweep/courier family.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
