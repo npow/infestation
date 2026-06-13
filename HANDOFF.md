@@ -5933,6 +5933,48 @@ fan-out was relaunched.
 - The current productive path is mechanism-first decomposition plus short
   oracle checks.
 
+### Current run notes - 2026-06-13
+
+Run discipline after a machine OOM: keep solver probes bounded with external
+`timeout`, `ulimit -v`, and modest `--maxnodes`. The safe pattern used here was
+2-4 concurrent probes with `ulimit -v 850000..900000` and `timeout 45s..120s`.
+One `on_the_clock` broad all-reachable probe hit its own `ulimit` and exited
+with an allocation failure; the machine stayed healthy and no solver processes
+were left running.
+
+- `tinderrectangle`: the one-step finish condition is confirmed. Synthetic
+  ignition geometries show that a lower rat at `(2,6)`, `(3,6)`, or `(4,6)`
+  with the player on the safe right-side cells `(14,6)`, `(14,7)`, `(15,7)`,
+  `(13,8)`, `(14,8)`, or `(15,8)` wins immediately with a simple safe action.
+  The known 28-move partial
+  `<<<^<^<>^>>>vv^^>>v>v.>>><>v` is not enough: it puts the lower rat at
+  `(6,6)` and the player at `(10,6)`, but `(7,6)` has already been cleared, so
+  the rat walks east instead of being forced down onto the explosives. A direct
+  long `branchdump` for
+  `ratrectplayerrect:2,6,4,6,13,6,15,8` returned no branch within depth 170 /
+  100s / 850k nodes. The best long `winready` probe was
+  `<<<<<>^>^>>^>>v>vv>>^^^>>vvvv`, leaving the lower rat at `(2,3)` and the
+  player at `(14,7)`; the missing move is still moving that rat back to row 6
+  without opening the east blocker.
+- `old_levels/on_the_clock`: the P30+`v` family is better than the old P30+`^`
+  family because it avoids creating the isolated `(14,8)` rat, but the P39/P128
+  descendants are still dead if followed greedily. P39 trigger-6-first branches
+  preserve trigger 8, and trigger-8-first branches open some left terrain, but
+  both trigger orders checked (`6 -> 8` and `8 -> 6`) still leave `(1,19)` or
+  `(4,19)` unreachable. Do not continue by simply taking triggers 6/8 from P39;
+  the missing event must happen earlier and must open player access to the
+  bottom-left cages, not merely reduce the rat count.
+- `cyborg_rats/ai_takeover`: the corrected P172-class branch still looks like a
+  trap. It leaves player `(3,16)`, cyborg `(18,7)`, normal rat `(11,9)`, 2
+  explosives, 0 triggers, and both enemies reachable. Bounded probes for direct
+  win, `swordready`, `cyborgsle:0`, and `ratgone:11,9` from that state returned
+  no branch. Treat P172 as evidence that the trigger skeleton works, not as a
+  solved endgame.
+- `old_levels/overstep`: a bounded `ratdrop` branchdump found several 4- and
+  5-rat reductions, but every returned candidate had `reachable_rats=0`. Those
+  are dead basins and should not be used as prefixes without an added
+  reachability constraint.
+
 ---
 
 ## 4. Planned next steps (start here)
