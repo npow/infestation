@@ -3489,6 +3489,12 @@ leftover `target/release/solver`, `timeout`, or `clingo` jobs after the probes.
   `ratdeathgeom` check for `(9,3)` found no one-step explosive/black-hole
   self-delete. Continue before P30 or with a route that changes the top enclosure
   before the player is committed to the lower-left cleanup.
+- `old_levels/order_of_operations`: a read-only audit suggested the inverse
+  north-entry stance for the top rat: stand at `(9,2)` facing south before the
+  P35 terrain seal. Exact `ratplayerfacing:9,3,9,2,south` checks returned empty
+  both from `P15=<<<<<<^v^^^^>^^` and from the initial board under 45-depth /
+  120k-node caps with at least 5 rats and 4 reachable rats. This closes the
+  simplest "enter from above instead of reopening below" version.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
