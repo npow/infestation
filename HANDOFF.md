@@ -5999,6 +5999,11 @@ were left running.
   is therefore: return safe-side while ending with the lower rat still at
   `(5,6)` or `(6,6)`, or find a local hold that keeps the rat from taking those
   two extra east steps.
+- `tinderrectangle`: from that overrun state, `ignitions` still reports the
+  top-corner `(0,0)` geometry as a one-step win, but a capped
+  `branchdump --goal ratat:0,0` from the 75-turn overrun prefix returned no
+  branch under depth 180 / 75s / 500k nodes. Do not treat the safe-side overrun
+  as a solved top-corner setup without a new staging idea.
 - `release`: event enumeration from the opener `v<vv^^>>v` found 22-rat
   variants such as `v<vv^^>>v^vvv<<<^<^^`, but diagnostics still show `(18,4)`
   sealed behind `(18,5)` and trigger 2 unreachable. A stricter structural check
@@ -6010,6 +6015,25 @@ were left running.
   memory cap or returned no branch under 500k nodes. The unresolved mechanism is
   still opening the bottom-left reload lane before the middle/top rat kills
   strand access.
+- `reload_v3`: latest capped pass reconfirmed trigger 7 first is bad under
+  reachability guards. Trigger 2 first is reachable with actuator rat preserved
+  via `^>>>>>>>^^^vvv<<v<`, but diagnostics then show `reachable_rats=0/3` and
+  no trigger-3 continuation. Trigger 1 first is the best structural lead:
+  `^>>>>>>>^^vvvvvv<<<^^<<^^<<<^<<<<<<<<<v<v` reduces explosives from 6 to 5,
+  but still leaves `(0,21)` unreachable; `1 -> 2` and `1 -> 7` continuations
+  tend to strand only the lower-left rat.
+- `old_levels/on_the_clock`: new live anchor
+  `>>>^^>>>vvv><vvvvvv` came from an alternate early `>>>^^>>>vvv>` route, not
+  the warned P31/P39 family. It preserves all 8 rats, has 4 reachable rats and
+  8 reachable triggers, and a bounded win lookup did not solve. Treat it as a
+  better starting point for bottom-cage access than the old trigger-6/8 greedy
+  branches.
+- `old_levels/overstep`: new live anchor
+  `v<<^^^^>>>><^^^>>>>>>>>>>>><<<>>` preserves all 6 rats, 5 explosives, 18
+  triggers, trigger 6 at `(13,8)`, and 1 reachable rat. A guarded first
+  reduction and bounded win lookup both returned empty; best states still
+  stranded the top rat around `(14,2)`. This is more useful than the zero-
+  reachable-rat basins, but not a solution.
 - `cooperation/handoff`: a capped branch can clear the left pocket and make the
   left rat reachable:
   `vv >^ >v >^ >< >< ^< vv ^> v> ^< v. v. <v ^^ <> <^ <^ << ^< ^< ^< ^^ ^>`.
