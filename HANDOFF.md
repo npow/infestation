@@ -4491,6 +4491,18 @@ clingo, or timeout jobs.
   reachable. `ratsle:1` from P95 returned empty immediately. Continue overstep
   from P47/P95 only with a mechanism that handles `(14,11)` before spending the
   remaining explosive/trigger resources; do not just deepen the P140 basin.
+- `old_levels/overstep`: the P47 trigger route is real and strict, but still
+  not sufficient. `P48=P47+v` fires trigger 4 and moves the old upper rat to
+  `(13,7)`. From P48, strict `triggeronly:6` succeeds immediately with suffix
+  `^` or stall, giving `P49=P48+^`: all 6 rats alive, 6 explosives, 7 webs,
+  15 triggers, and rats at `(13,8)`, `(14,11)`, `(0,13)`, `(10,14)`,
+  `(13,14)`, `(0,20)`. A P49 `ratsle:4` branch with 2 reachable rats exists:
+  `P108=P49+vv^^>>>^>^>^^^^^^^^^^^<<<<<<<<<v<<<<<vvv<<<vvv>>^>>v^^^^^^^`,
+  with rats `(6,7)`, `(7,7)`, `(0,13)`, `(1,17)`, 2 explosives, 1 web, and
+  10 triggers. However, `ratsle:2` from P108 returned empty immediately. This
+  means the strict trigger-6 line is a better diagnostic branch than P95, but
+  it still needs a mechanism for the left sealed rats before the reachable pair
+  is cleaned up.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
