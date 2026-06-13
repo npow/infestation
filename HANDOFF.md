@@ -4525,6 +4525,65 @@ clingo, or timeout jobs.
   must change access to trigger 6 or the bottom-left pocket by another
   mechanism.
 
+### OOM-safe continuation - 2026-06-13 ninth Codex pass
+
+No new verified win. This pass stayed serial for local solver searches under
+`ulimit -v 800000` and short external `timeout` wrappers. Read-only side agents
+were used for independent mechanism audits; no solver/cargo/clingo processes
+were left running after the checked probes.
+
+- `old_levels/overstep`: P49/P108 are now more tightly bounded. `frontier`
+  from P108 with `--min-rats 4` finds exactly one state: the prefix state with
+  rats `(6,7)`, `(7,7)`, `(0,13)`, `(1,17)`. There is no local move preserving
+  all four rats. `frontier` from P49 with `--min-rats 6` likewise finds only
+  the prefix state. With `--min-rats 5`, the only local family first kills the
+  reachable rat, then roams with zero reachable rats and no resource changes in
+  the checked depth. This supports the current model: the strict trigger-6 line
+  must handle left-side resources before entering P108, not afterward.
+- `old_levels/overstep`: targeted P49 left-resource probes can move the left
+  trapped rat but still collapse. From P49,
+  `cellnotnoratsrect:0,10,explosive,0,13,1,17` and the analogous `(2,12)`
+  check both find the same four-rat branch:
+  `vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^vvvvvvvvv<<<<<v^v^<^<<<<^^<<^<<<^^<<^^^^^^>>>>>>>v>>>^^<<v<<<<<vv><v<<<vvv>vvvv<<v^`.
+  Diagnostics show player `(0,11)`, rats `(11,7)`, `(14,11)`, `(0,12)`,
+  `(0,20)`, and only `(0,12)` reachable. Firing trigger 1 from there clears the
+  bottom-left explosive but seals the player into a one-cell pocket with zero
+  reachable rats; trigger 2 produced no branch under the bounded check.
+- `old_levels/overstep`: backing up to use the upper explosive before the
+  left-corridor event also looks dead. From P49,
+  `cellnotratrect:9,7,explosive,11,7,14,11` found a short P78 branch
+  `...vvvvvvvvv<<<<<v^v^<^<<<<^^<<^<<<^^^>>v^^^^^^^`, but P78 is a forced
+  pocket: four legal next moves die, and the one survivor kills the adjacent
+  rat and leaves zero reachable rats. Later upper-first variants preserve five
+  rats but are the same tiny reachable pocket with no trigger access.
+- `old_levels/on_the_clock`: immediate strict trigger 6 is reachable while all
+  8 rats survive, but the useful continuation suggested by side analysis did
+  not materialize. From `vvvvv`, the guarded probe
+  `cellnotratrect:19,3,web,19,0,19,2` with all 8 rats, high resources, and at
+  least 4 reachable rats returned empty. This closes the fresh "fire 6 first,
+  then reopen the top/right pocket before P31" hypothesis under the tested
+  bounds.
+- `reload_v3`: a side-agent hypothesis targeted staging before trigger 2 fires,
+  rather than the already-closed post-trigger-2 basin. From
+  `^>>>>>>>^^vvvvvv<<<^^<<^^<<<^<<<<<<<<<v<v`, the guarded
+  `ratrectplayerrect:15,12,18,15,12,12,18,16` probe, requiring all 3 rats,
+  at least 12 triggers, reachable `(17,13)`, and a reachable rat, returned no
+  branch. This closes that pre-trigger-2 staging idea under the tested bounds.
+- `tinderrectangle`: the latest top-row notch idea from the long staged prefix
+  also returned empty. From the `TH<v>` prefix used in the side-agent note,
+  both `cellnotnoratsrect:13,2,web,12,1,14,1` and
+  `cellnotnoratsrect:15,2,web,14,1,15,1` returned no branch while preserving at
+  least 15 rats and 40 explosives. This pushes the puzzle back to needing a new
+  release/separation geometry, not another notch from that staging family.
+- `cooperation/handoff`, `cooperation/tug_of_war`, and
+  `cooperation/blocked_v2`: the read-only two-player audit found no new
+  constructive route. `handoff` is still blocked by the sealed `(10,6)` rat
+  before trigger 2 walls `(11,7)`; `tug_of_war` is still blocked by the top
+  pocket `{(7,0),(8,0)}` with no verified web/plank-clearing event; and
+  `blocked_v2` still reduces to the trigger-2 cascade at `(5,11)` / `(3,14)`,
+  whose known access and rat-trigger routes are already closed from the useful
+  frontiers.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
