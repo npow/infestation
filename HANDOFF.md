@@ -3117,6 +3117,13 @@ read-only subagent reasoning and shell reads.
   `v>>><^^v>^^>>>vvv><vvvvv`, but this only excludes row 19; diagnostics show
   the actual bottom-right rat remains at `(16,19)` in the same sealed component.
   Do not treat this as a component-empty success.
+- Bounded queue `/tmp/infestation_safe_probes_20260613_085106_c.log` completed
+  cleanly with no branches. Empty checks:
+  `reload_v3` initial `cellnot:1,21,web` (`--maxnodes 180000`),
+  `reload_v3` initial `cellnot:2,21,explosive` (`--maxnodes 180000`),
+  `reload_v3` 2-rat basin `reachable:0,21`,
+  `on_the_clock` P23 `cellnot:14,15,web`, and
+  `on_the_clock` P23 `ratcell:16,18,16,17,explosive`.
 - `old_levels/on_the_clock`: the stale 35-turn timing family is confirmed
   misleading. Two shim variants
   `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvvvvvv<>v` and
