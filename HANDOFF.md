@@ -4414,6 +4414,44 @@ checks found no leftover solver, cargo, clingo, or timeout jobs afterward.
   21 reachable rats preserved. This supports treating `(18,5)` web opening as
   the necessary missing mechanism before any right-rat lure is possible.
 
+### OOM-safe continuation - 2026-06-13 seventh Codex pass
+
+No new verified win. This pass stayed serial for solver searches, under
+`ulimit -v 800000` plus short external `timeout` wrappers. It focused on
+checking whether several appealing "human" routes are real mechanisms or just
+synthetic local geometry.
+
+- `tinderrectangle`: the top-corner ignition route appears synthetic from the
+  current map. `ignitions` can win with a rat manually placed at `(0,0)`, but
+  local `ratgeom` from the initial board printed no way for the top-left rat
+  `(1,1)` to move to `(0,0)`, `(1,0)`, or `(0,1)`. A capped specialized
+  `tinder --rat-target 0,0 --safe-target 2,3` run timed out after 200k
+  expansions and its best state was just another lower-rat overrun, because the
+  tinder heuristic ignores top-pack rats while a lower lure rat exists.
+- `tinderrectangle`: the older separated P18 state
+  `<<^<<^<>^>>>vv^^<<` still verifies as `Playing` with lower rat `(5,5)`,
+  player `(5,3)`, and all 16 rats alive. Local `ratgeom` says `(5,5)->(6,6)`
+  is possible if the player is already in safe-side cells such as `(14,7)`, but
+  the exact branch targets `ratplayer:6,6,14,7` and
+  `ratrectplayerrect:6,6,6,6,14,7,15,8` returned empty with all 16 rats
+  reachable. Treat P18 as another spacing trap unless a new route crosses the
+  player to the safe side before the rat reaches row 6.
+- `cooperation/handoff`: the initial-board far-lure plan is closed more
+  directly. `ratplayer:11,7,14,8` returned empty with all 5 rats preserved, and
+  even the precursor `ratplayer:10,6,14,8` returned empty. This means the player
+  cannot reach the `(14,8)` lure cell while the sealed `(10,6)` rat remains
+  intact under the tested caps; the route needs a different board-opening event
+  before the lure, not just better timing.
+- `old_levels/overstep`: initial-board `triggeronly:6` returned empty with all
+  6 rats preserved. Loose `trigger:6` exists before P62, but the representative
+  branch `v<<^^^^^^^>>>>>>>>>>>>>>><<<^^>>` leaves only one reachable rat and
+  keeps the two upper rats in a sealed size-13 component. This is another false
+  trigger-6 lever, not a pre-P62 escape.
+- `reload_v3`: local geometry for the bottom-left rat `(0,21)` is static.
+  Initial-board `ratgeom` found no move to `(1,21)` or `(2,21)`, and
+  `ratdeathgeom` found no synthetic death placement. The pocket must first
+  change `(1,21)`/`(2,21)` terrain; the rat cannot be lured out directly.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
