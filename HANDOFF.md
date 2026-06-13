@@ -3112,6 +3112,11 @@ read-only subagent reasoning and shell reads.
   A broader initial-board `cellnot:1,21,web` probe hit the per-process memory
   cap at `ulimit -v 800000`; rerun only with lower `--maxnodes` or a sharper
   mechanism target.
+- `old_levels/on_the_clock`: corrected the over-broad right-component rectangle
+  check. `noratsrect:12,14,17,18` from P23 immediately returns
+  `v>>><^^v>^^>>>vvv><vvvvv`, but this only excludes row 19; diagnostics show
+  the actual bottom-right rat remains at `(16,19)` in the same sealed component.
+  Do not treat this as a component-empty success.
 - `old_levels/on_the_clock`: the stale 35-turn timing family is confirmed
   misleading. Two shim variants
   `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvvvvvv<>v` and
