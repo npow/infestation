@@ -4038,6 +4038,30 @@ before and after the solver queue found no leftover `target/release/solver`,
   is already not a rat at P21 and only produced trivial one-step branches.
   The useful overstep frontier remains P52/P62/P88, with the upper pocket still
   the blocker.
+- `old_levels/on_the_clock`: the P25 tempo issue is now narrower. At
+  `P25=v>>><^^v>^^>>>vvv><v^^^vv`, diagnostics show the lower-right component
+  rat at `(16,18)`, player `(7,5)`, 8 rats, 6 explosives, 31 webs, and 15
+  triggers. A `frontier` from P25 shows that immediate `v` is the only branch
+  preserving all 15 triggers; `^`, `.`, and related waits let trigger 9 collapse
+  the right side. A direct P25 check for `reachable:12,18` while preserving all
+  8 rats, 15 triggers, and at least 2 reachable rats returned empty, so the
+  useful trigger-6 cell still cannot be reached by simply taking the downward
+  tempo faster.
+- `old_levels/on_the_clock`: the all-rats structural event `P25+vvvv`
+  (`v>>><^^v>^^>>>vvv><v^^^vvvvvv`) reaches P29 with 8 rats, 3 explosives,
+  27 webs, and 13 triggers. The lower-right blocker is `(15,14)` in a sealed
+  component. `ratdeathgeom` for `(15,14)` and adjacent guesses `(14,14)` /
+  `(16,14)` printed no one-step death geometry, and a P29-specific
+  `cellnot:14,15,web` probe preserving all 8 rats and 4 reachable rats returned
+  empty. This further weakens the P25/P29 bridge family unless a route diverges
+  before P20.
+- `old_levels/on_the_clock`: a bounded event-level macro pass produced an
+  undocumented early prefix `>>^>^v<v<vvvv<v`, but it did not solve and appears
+  cosmetic so far. Diagnostics show 8 rats, 10 explosives, 38 webs, and 24
+  triggers; follow-up `events` mostly report left-side trigger/plank churn.
+  From that prefix, `reachablege:4` with all 8 rats and at least 20 triggers
+  preserved returned empty. Keep the prefix only as a possible pre-P20
+  divergence if a sharper target appears.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
