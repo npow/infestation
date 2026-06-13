@@ -2296,7 +2296,9 @@ and ended with no `solver`, `timeout`, or `clingo` processes running.
   prefix `v^ >^ >^ >^ >^ >^ ^^ .v .> v> v>`, which preserves all triggers and
   leaves central rats at `(7,5)` and `(8,7)`. The next useful test is whether a
   central rat can detonate the bottom-right explosive chain before trigger 2,
-  opening southeast lure cells for `(10,6)`.
+  opening southeast lure cells for `(10,6)`. Immediate capped resource-preserved
+  checks from that courier prefix found no branch for clearing `(10,8)`,
+  `(12,6)`, or `(12,7)`.
 - `reload_v3`: a stronger trigger-2-first prefix is
   `>>>^>>>>.>>.<.<<<<`. It safely fires trigger 2 with 3 rats, 5 explosives,
   16 webs, and 12 triggers; `(12,22)` is no longer explosive, while `(2,21)`
