@@ -933,6 +933,7 @@ enum LookupGoal {
     RatAtFarFromPlayer(i32, i32, i64),
     RatAtWithPlayer(i32, i32, i32, i32),
     RatInRectWithPlayerInRect(i32, i32, i32, i32, i32, i32, i32, i32),
+    RatInRectWithCellIs(i32, i32, i32, i32, i32, i32, CellKind),
     RatAtWithPlayerFacing(i32, i32, i32, i32, Dir4),
     RatAtWithCell(i32, i32, i32, i32, CellKind),
     RatGone(i32, i32),
@@ -1306,6 +1307,31 @@ impl LookupGoal {
                 Self::RatInRectWithPlayerInRect(
                     values[0], values[1], values[2], values[3], values[4], values[5], values[6],
                     values[7],
+                )
+            }
+            "ratrectcellis" | "ratinrectcellis" => {
+                let mut parts = arg.split(',');
+                let values: Vec<i32> = parts
+                    .by_ref()
+                    .take(6)
+                    .map(|part| part.trim().parse().expect("coordinate"))
+                    .collect();
+                assert_eq!(
+                    values.len(),
+                    6,
+                    "expected ratx1,raty1,ratx2,raty2,cellx,celly,kind"
+                );
+                let kind = parts
+                    .next()
+                    .map(str::trim)
+                    .map(parse_cell_kind_name)
+                    .expect("cell kind");
+                assert!(
+                    parts.next().is_none(),
+                    "expected ratx1,raty1,ratx2,raty2,cellx,celly,kind"
+                );
+                Self::RatInRectWithCellIs(
+                    values[0], values[1], values[2], values[3], values[4], values[5], kind,
                 )
             }
             "ratplayerfacing" | "ratplayerdir" => {
@@ -1752,6 +1778,12 @@ fn lookup_goal_reached(
                     .iter()
                     .any(|&point| point_in_rect(point, px1, py1, px2, py2))
         }
+        LookupGoal::RatInRectWithCellIs(rx1, ry1, rx2, ry2, cell_x, cell_y, kind) => {
+            rat_positions(current)
+                .iter()
+                .any(|&point| point_in_rect(point, rx1, ry1, rx2, ry2))
+                && current.cell_kind_at(cell_x as usize, cell_y as usize) == kind
+        }
         LookupGoal::RatAtWithPlayerFacing(rat_x, rat_y, player_x, player_y, dir) => {
             rat_at(current, (rat_x, rat_y)) && player_facing(current, (player_x, player_y), dir)
         }
@@ -1977,6 +2009,17 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_rect_distance(&rats, rx1, ry1, rx2, ry2) * 1_000
                 + nearest_rect_distance(&players, px1, py1, px2, py2)
+                + heuristic(current) / 1_000
+        }
+        LookupGoal::RatInRectWithCellIs(rx1, ry1, rx2, ry2, cell_x, cell_y, kind) => {
+            let rats = rat_positions(current);
+            let cell_penalty = if current.cell_kind_at(cell_x as usize, cell_y as usize) == kind {
+                0
+            } else {
+                500_000
+            };
+            nearest_rect_distance(&rats, rx1, ry1, rx2, ry2) * 1_000
+                + cell_penalty
                 + heuristic(current) / 1_000
         }
         LookupGoal::RatAtWithPlayerFacing(rat_x, rat_y, player_x, player_y, _) => {
@@ -2236,6 +2279,16 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
                 .any(|&point| point_in_rect(point, rx1, ry1, rx2, ry2))
                 as i64;
             rat_missing * 1_000 + nearest_rect_distance(&players, px1, py1, px2, py2)
+        }
+        LookupGoal::RatInRectWithCellIs(rx1, ry1, rx2, ry2, cell_x, cell_y, kind) => {
+            let rats = rat_positions(current);
+            let rat_missing = !rats
+                .iter()
+                .any(|&point| point_in_rect(point, rx1, ry1, rx2, ry2))
+                as i64;
+            let cell_missing =
+                (current.cell_kind_at(cell_x as usize, cell_y as usize) != kind) as i64;
+            rat_missing * 1_000 + cell_missing * 1_000_000
         }
         LookupGoal::RatAtWithPlayerFacing(rat_x, rat_y, player_x, player_y, dir) => {
             let facing_missing = !player_facing(current, (player_x, player_y), dir) as i64;

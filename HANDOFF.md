@@ -5017,6 +5017,52 @@ under the current Rust oracle.
   rechecking the inventory. `chase.csv` is solved and in
   `final_solutions.json`; do not continue unless upstream invalidates it again.
 
+### OOM-safe continuation - 2026-06-13 eighteenth Codex pass
+
+No new verified win. Added a general lookup/branchdump diagnostic goal
+`ratrectcellis:rx1,ry1,rx2,ry2,cellx,celly,kind`, which succeeds when any rat
+is in the rectangle and a specific cell still has the requested kind. This is
+for human-ordering predicates like "a rat is in the lower-right corridor while
+trigger 3 is still intact"; it is not puzzle-specific.
+
+- `old_levels/on_the_clock`: backing up to P9 found a sharper timing state:
+  `v>>><^^v>^^>>>vvvvvvvvv`. It has the lower-right actor in the corridor
+  while `(10,14)` is still trigger 3, two central rats reachable, 8 rats, 5
+  explosives, 30 webs, and 19 triggers. Exact predicates confirmed the shape:
+  `ratrectcellis:11,12,18,14,10,14,trigger3` succeeds from P9, but only the
+  P23 branch has a reachable-rat count above zero. However, from P23 and from
+  every safe first-move variant after the staged rat consumes trigger 2, all
+  follow-ups returned empty under caps: `ratslecellis:7,10,14,trigger3`,
+  `ratslecellis:6,10,14,trigger3`, `trigger:3`, `trigger:6`, `trigger:8`, and
+  strict `triggeronly:6/8`. A direct `lookup --goal win` from P23 also returned
+  `NO_SOLUTION` immediately. Treat P23 as useful evidence about the intended
+  order, but a closed basin unless an earlier move changes the central-rat
+  tempo.
+- `reload_v3`: the new compound helper predicates found one real improvement
+  before the old finite P41 station. From prefix
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<`, the sidecar-suggested lower
+  helper target `ratrectplayerrect:2,19,3,20,0,18,3,20` reaches branches such as
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v><v`: 3 rats, 5 explosives, 16 webs,
+  12 triggers, player `(1,19)`, helper rat `(2,19)`, and bottom-left explosive
+  `(2,21)` still intact. This proves station 1 can be fired with all rats alive
+  and better lower timing. But follow-up
+  `ratrectcellis:8,19,12,21,12,21,trigger2` from that state returned empty, and
+  a small frontier shows the helper cannot be carried toward station 2 while
+  trigger 2 survives. Keep the "bottom relay" hypothesis, but the next attempt
+  must change the carry geometry before or during this new P44 branch.
+- `release`: sidecar proposed a P21 left-carrier mechanism: park a carrier at
+  `(3,17)/(4,17)`, fire trigger 6 to clear `(2,17)/(1,16)`, then let the
+  carrier consume left trigger 2 `(0,16)` so right trigger 2 opens `(18,5)`.
+  Local checks did not find the staging state. From
+  `P21=v<vv^^^^^v^vvvvv>>><^`, both
+  `ratrectcellis:3,17,4,17,1,16,explosive --min-rats 23 --min-triggers 7 --min-explosives 5 --next-trigger 6`
+  and the broader lower-left precondition
+  `ratrectcellis:2,18,5,19,1,16,explosive --next-trigger 6` returned empty.
+  A different right-side staging check
+  `ratrectcellis:18,6,19,8,18,5,web` also returned empty while preserving useful
+  resources. This closes the direct P21 carrier staging predicates; do not
+  retry them without a new prefix that changes the lower-left actor timing.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
