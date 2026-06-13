@@ -5622,6 +5622,70 @@ shows nine rat-bearing CSVs absent from `solver/solutions/final_solutions.json`:
   P77/P81 are still likely too late, but the tested row-6 stopper and
   left-latch mechanisms are not the missing separation route.
 
+### OOM-safe continuation - 2026-06-13 twenty-ninth Codex pass
+
+No new verified win. Work stayed serial and capped after the earlier machine
+OOM: every heavy solver command used `ulimit -v 800000` and an external
+`timeout`, and process-table checks found no leftover solver/cargo/clingo jobs.
+The useful progress was narrowing `cyborg_rats/ai_takeover` and finding a new
+`old_levels/overstep` timing basin.
+
+- `cyborg_rats/ai_takeover`: new live chain from P93:
+  `A105=^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>v>vv>>vvv<>v`,
+  then `A107=A105+v<`. A107 has player `(18,19)`, enemies
+  `(18,4)`, `(11,9)`, `(16,19)`, two triggers left, and trigger 2 at
+  `(0,16)` reachable. The branch
+  `A140=A107+<<<<<<<<<<<<<<<<^^^>>>>>><<<<<<<<<` fires trigger 2 and leaves
+  player `(0,16)`, enemies `(18,4)` and `(11,9)`, no triggers, two explosives
+  `(14,12)/(15,12)`, and both rats reachable.
+- `ai_takeover`: A140 is a strong reduction but probably the wrong terminal
+  basin. From A140, `P157=A140+v^v^v^v^v^v^v^v^v` stages the right cyborg into
+  the central approach. Bounded checks found several one-rat states, including
+  `P218=P157+>>>>>>>>>>>>>v<<<<<<<<<<vv>>>>>>>>>>>>>>>>^^^^^^^^<<<<^<<^^<`
+  with player `(12,8)` and survivor `(15,11)`, and
+  `P222=P157+>>>>>>>>>>>>>>>v<<<<<<<<<<<<vv>>>>>>>>>>>>>>>>^^^^^^^^<<<<^<<^^<`
+  with player `(12,8)` and survivor `(13,9)`. Local `win`, `ratsle:0`, and
+  A*/lookup checks from those states returned empty. Rule inspection explains
+  why: a lone cyborg cannot be lured onto explosives or black holes because
+  cyborg pathfinding excludes them, and stepping into a cyborg's cell makes the
+  cyborg stay/overwrite the player. Do not repeat generic cleanup from P218 or
+  P222 without a new kill resource.
+- `ai_takeover`: the correct human model is now "kill the cyborg before the
+  normal rat." Trigger 2 at `(0,16)` zaps the paired trigger at `(19,7)`, which
+  detonates the right-column explosives `(18,6..8)`. A140 fires it while the
+  right cyborg is still at `(18,4)`, just outside the blast. A tighter A107
+  predicate requiring trigger 2 consumed and `(18,4)` empty only found states
+  where the cyborg moves to `(18,5)` after the trigger has already fired; an
+  even stricter `ratslecellnot:1,0,16,trigger2` check from A107 returned empty.
+  Next `ai_takeover` work should back up before A107/P93 and stage the
+  `(18,4)` cyborg into `(18,5..7)` before the trigger-2 detonation, not after.
+- `old_levels/overstep`: the P45/P47 trap has a real alternate timing basin.
+  From P45 `vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^vvvvvvvvv<<<`, the lower-right
+  stopper/clock predicate
+  `cellnotratrect:14,11,rat,14,15,14,16` returned a 53-turn branch
+  `vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^vvvvvvvvv<<<<>>^>^>^`.
+  Diagnostics: player `(18,10)`, old blocker shifted to `(15,10)`, reachable
+  rat `(14,15)`, central triggers still present. Firing trigger 4 from that
+  state is possible via suffix `vvv<<<<<`, producing player `(13,13)` and
+  reachable rat `(13,14)`. Follow-up `triggeronly:3`, `triggeronly:5`, and
+  `ratsle:5` checks from the trigger-4 state returned empty under caps. Treat
+  this as a new basin worth revisiting, but not yet a cleanup path.
+- `blocked_v2` / `on_the_clock`: read-only side agents produced bounded next
+  probes but no file edits. `blocked_v2`'s fresh route is earlier carrier
+  preservation: open `(6,11)` while top-left rat `(0,7)` remains a carrier, then
+  test `ratat:5,11`. `on_the_clock`'s fresh route is P25 timing: prevent the
+  forced `(14,9)` rat from stepping on trigger 9, or put a rat into the
+  trigger-3 zap ring before the row-14 door walls off.
+- ASP/clingo approach: a read-only design pass recommends encoding the Rust
+  engine exactly, using `game/src/game.rs`, `player.rs`, `rat.rs`,
+  `cyborg_rat.rs`, `animation.rs`, `zap.rs`, and `explosion.rs` as authority.
+  Model explicit turn phases: player planning, cyborg Dijkstra/sequential
+  moves, normal-rat sequential moves, final placement order, zaps, explosion
+  waves, then win/loss. Validate first against scenario tests for cyborg
+  pathing, trigger consumption, explosion ordering, and two-player collisions.
+  Use ASP first for event skeletons and bounded impossibility checks; verify
+  every candidate move string back through the Rust oracle.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
