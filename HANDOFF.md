@@ -5167,6 +5167,14 @@ safe, relay cell intact" checks; it does not change game rules or scoring.
   the B4 topology branch returned empty, as did `rectsep` from P83. This is a
   better pre-release staging proof than the old contact branches, but the
   missing move is still opening the lower web after reaching the safe side.
+- `cooperation/handoff`: the alternate top/right explosive-column idea produced
+  an early positive but did not preserve the actual far-lure mechanism.
+  `cellnotcellis:14,6,explosive,11,7,trigger2 --min-rats 4 --min-triggers 4`
+  finds short branches such as `v^ >^ >^ >^ >^ >^ ^^`, but `(10,5)` remains web,
+  only one rat is reachable, and follow-up
+  `cellisplayerat:11,7,trigger2,14,8 --min-rats 4 --min-triggers 4` from that
+  branch returned empty. Treat this as another early cleanup basin unless a
+  different prefix changes the sealed `(10,6)` rat before this mutation.
 - ASP/clingo assessment: do not build a full ASP clone of the game. A faithful
   model would need exact player/facing resolution, sequential rat/cyborg
   movement, Dijkstra tie-breaks, trigger sibling-zap semantics, and explosion
