@@ -2506,6 +2506,60 @@ current, kept solver probes memory-capped, and ended with no
   or more waiting survive, so B75 remains a diagnostic trap rather than a
   cleanup route.
 
+### Continuation pass - 2026-06-13 bounded frontier audit
+
+No new verified win. This pass kept solver processes capped with `timeout` and
+`ulimit -v` except for one accidental unwrapped `ratgeom`, which was killed by
+PID after ~30s. The final process table was clear before committing.
+
+- `solver`: `lookup` / `branchdump` now support
+  `--goal cellnotplayer:x,y,kind,playerx,playery`. This is a diagnostic-only
+  compound goal for checks like "door web is open while the player is back in a
+  safe pocket."
+- `solver`: added a diagnostic `frontier` mode:
+  `solver frontier <csv> --prefix <moves> --depth N --secs S --maxnodes N`.
+  It enumerates first paths to distinct local configurations and can be gated
+  with `--min-rats`, `--states`, and `--no-canonical`. Use it to answer finite
+  local-state questions before spawning many separate `branchdump` probes.
+- `reload_v3`: the all-rats trigger-1 station
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v.`
+  is now tightly bounded. `frontier` from that prefix with `--min-rats 3`,
+  depth 20, and both canonical and raw hashes fully exhausts after only 20
+  states. The only real local mechanism is the released rat chewing plank
+  `(3,18)` via suffix `<`; after that, the rat can shadow to `(2,17)`,
+  `(2,18)`, or `(2,19)`, but cannot be carried lower or into the `(2,21)`
+  explosive without killing the player or sacrificing the actor. Exact capped
+  checks for changing `(4,17)` or `(4,19)` planks from `P1<` returned no
+  branch. Treat this trigger-1 station as a finite local dead end unless a
+  different pre-trigger-1 setup changes the geometry before the rat is released.
+- `tinderrectangle`: `frontier` from T106
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv`
+  confirms that, while preserving all 16 rats, the lower rat remains parked at
+  `(2,3)`; local states are mostly the player clearing right-side webs. This
+  supports the current model: T106 is a prepared-safe pocket, but it still lacks
+  a delayed release for `(2,4)` / `(3,4)`. A later subagent pass found one
+  non-winning but concrete mechanism from T106: suffix
+  `^^^>v^<vvvv^^^^<<vvv<<^^^<<<vvv<^^<^<<>` reaches player `(4,3)` with the
+  lower rat at `(3,3)`; stepping west into `(3,3)` can sword-block the rat's
+  east move and safely open the upper door. Direct descent still dies, so the
+  next useful test is an inserted blocker/delay before descending, not another
+  immediate rectangle ignition.
+- `release`: from opener `v<vv^^>>v`, the intended dependency is still left
+  trigger 2 opening the right-side isolated rat, but the route to trigger 6 is
+  dynamically unreachable. Capped `branchdump` checks for `triggeronly:6` and
+  for trigger-6 plus left explosives `(1,16)` / `(0,17)` changing returned no
+  branch; `wp` to `(17,16)` and `(19,18)` is `UNREACHABLE`, even via the simple
+  trigger-5 waypoint `(11,12)`.
+- `cooperation/blocked_v2`: the 20-turn three-rat frontier was checked for the
+  black-hole shortcut: the last unreachable rat at `(0,15)` has a black hole
+  directly below at `(0,16)`, but capped checks for `ratgone:0,15` and
+  `ratsle:2` from that state returned no branch. Do not assume the black hole
+  is enough without a reachable lure.
+- `clingo`: no `clingo` CLI or Python module is installed in this environment.
+  An ASP route would first need a bounded subproblem to encode; the new
+  `frontier` command is currently the lower-risk way to get finite local proofs
+  from the real Rust oracle.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.

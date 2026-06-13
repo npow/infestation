@@ -741,6 +741,7 @@ enum LookupGoal {
     CellIs(i32, i32, CellKind),
     CellNot(i32, i32, CellKind),
     CellNotAndRatAt(i32, i32, CellKind, i32, i32),
+    CellNotWithPlayerAt(i32, i32, CellKind, i32, i32),
     CellReachable(i32, i32),
     PlayerAt(i32, i32),
     PlayerFacing(i32, i32, Dir4),
@@ -840,6 +841,43 @@ impl LookupGoal {
                     "expected cellx,celly,kind,ratx,raty"
                 );
                 Self::CellNotAndRatAt(x, y, kind, rat_x, rat_y)
+            }
+            "cellnotplayer" | "cellnotplayerat" | "cellnot-and-playerat" => {
+                let mut parts = arg.split(',');
+                let x = parts
+                    .next()
+                    .expect("cell x")
+                    .trim()
+                    .parse()
+                    .expect("cell x");
+                let y = parts
+                    .next()
+                    .expect("cell y")
+                    .trim()
+                    .parse()
+                    .expect("cell y");
+                let kind = parts
+                    .next()
+                    .map(str::trim)
+                    .map(parse_cell_kind_name)
+                    .expect("cell kind");
+                let player_x = parts
+                    .next()
+                    .expect("player x")
+                    .trim()
+                    .parse()
+                    .expect("player x");
+                let player_y = parts
+                    .next()
+                    .expect("player y")
+                    .trim()
+                    .parse()
+                    .expect("player y");
+                assert!(
+                    parts.next().is_none(),
+                    "expected cellx,celly,kind,playerx,playery"
+                );
+                Self::CellNotWithPlayerAt(x, y, kind, player_x, player_y)
             }
             "reachable" | "cellreachable" => {
                 let (x, y) = parse_required_point(arg);
@@ -1275,6 +1313,11 @@ fn lookup_goal_reached(
         LookupGoal::CellNotAndRatAt(x, y, kind, rat_x, rat_y) => {
             current.cell_kind_at(x as usize, y as usize) != kind && rat_at(current, (rat_x, rat_y))
         }
+        LookupGoal::CellNotWithPlayerAt(x, y, kind, player_x, player_y) => {
+            current.cell_kind_at(x as usize, y as usize) != kind
+                && positions_matching(current, |cell| cell == CellKind::Player)
+                    .contains(&(player_x, player_y))
+        }
         LookupGoal::CellReachable(x, y) => distance_from_player(current, (x, y)) < 1_000,
         LookupGoal::PlayerAt(x, y) => {
             positions_matching(current, |cell| cell == CellKind::Player).contains(&(x, y))
@@ -1402,6 +1445,16 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             };
             let rat_penalty = nearest_target_distance(&rats, &[(rat_x, rat_y)]) * 1_000;
             cell_penalty + rat_penalty + heuristic(current) / 1_000
+        }
+        LookupGoal::CellNotWithPlayerAt(x, y, kind, player_x, player_y) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let cell_penalty = if current.cell_kind_at(x as usize, y as usize) != kind {
+                0
+            } else {
+                nearest_target_distance(&players, &[(x, y)]) * 50 + 100_000
+            };
+            let player_penalty = nearest_target_distance(&players, &[(player_x, player_y)]) * 1_000;
+            cell_penalty + player_penalty + heuristic(current) / 1_000
         }
         LookupGoal::CellReachable(x, y) => {
             distance_from_player(current, (x, y)) * 10_000 + heuristic(current) / 1_000
@@ -1602,6 +1655,12 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
             let cell_missing = (current.cell_kind_at(x as usize, y as usize) == kind) as i64;
             let rat_missing = !rat_at(current, (rat_x, rat_y)) as i64;
             cell_missing + rat_missing
+        }
+        LookupGoal::CellNotWithPlayerAt(x, y, kind, player_x, player_y) => {
+            let cell_missing = (current.cell_kind_at(x as usize, y as usize) == kind) as i64;
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let player_distance = nearest_target_distance(&players, &[(player_x, player_y)]);
+            cell_missing * 1_000 + player_distance
         }
         LookupGoal::CellReachable(x, y) => distance_from_player(current, (x, y)),
         LookupGoal::PlayerAt(x, y) => {
@@ -8325,6 +8384,191 @@ fn main() {
                 println!("STATE\n{}", branch.grid.to_csv());
             }
         }
+        return;
+    }
+
+    if mode == "frontier" {
+        // solver frontier <csv> [--prefix MOVES] [--depth N] [--secs S]
+        //                       [--maxnodes N] [--limit N] [--min-rats N]
+        //                       [--states] [--no-canonical]
+        //
+        // Enumerate first paths to distinct local configurations. This is a
+        // bounded diagnostic for hand-solving, not a global solver.
+        let mut prefix_str = String::new();
+        let mut depth = 16usize;
+        let mut secs = 10.0f64;
+        let mut max_nodes = 50_000usize;
+        let mut limit = 80usize;
+        let mut min_rats: Option<usize> = None;
+        let mut print_states = false;
+        let mut canonical = true;
+        let mut i = 3;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--depth" => {
+                    depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--secs" => {
+                    secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--maxnodes" => {
+                    max_nodes = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--limit" => {
+                    limit = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--min-rats" => {
+                    min_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--states" => {
+                    print_states = true;
+                    i += 1;
+                }
+                "--no-canonical" => {
+                    canonical = false;
+                    i += 1;
+                }
+                _ => i += 1,
+            }
+        }
+
+        let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
+        if min_rats.is_some_and(|minimum| count_rats(&start_grid) < minimum) {
+            println!("NO_FRONTIER prefix has fewer rats than --min-rats");
+            return;
+        }
+
+        let state_key = |state: &Grid| {
+            if canonical {
+                state.search_hash()
+            } else {
+                state.state_hash()
+            }
+        };
+        let signature = |state: &Grid| {
+            let features = Features::from_grid(state);
+            format!(
+                "r{} x{} w{} t{} p{} players=[{}] rats=[{}] reachable_rats={} reachable_triggers={}",
+                features.rats,
+                features.explosives,
+                features.webs,
+                features.triggers,
+                features.planks,
+                positions_key(state, player_cell),
+                positions_key(state, rat_or_cyborg),
+                reachable_rat_count(state),
+                reachable_trigger_count(state)
+            )
+        };
+
+        eprintln!(
+            "frontier: players={} prefix={} depth={} secs={} maxnodes={} limit={} min_rats={:?} canonical={}",
+            nplayers,
+            prefix.len(),
+            depth,
+            secs,
+            max_nodes,
+            limit,
+            min_rats,
+            canonical
+        );
+
+        let start = Instant::now();
+        let tuples = all_action_tuples(nplayers);
+        let mut nodes = vec![Node {
+            grid: start_grid.clone(),
+            parent: usize::MAX,
+            action: Vec::new(),
+            depth: 0,
+        }];
+        let mut visited = HashSet::new();
+        visited.insert(state_key(&start_grid));
+        let mut printed = HashSet::new();
+        let mut q = VecDeque::new();
+        q.push_back(0usize);
+
+        while let Some(idx) = q.pop_front() {
+            if start.elapsed().as_secs_f64() > secs || nodes.len() >= max_nodes {
+                break;
+            }
+            let sig = signature(&nodes[idx].grid);
+            if printed.insert(sig.clone()) {
+                let mut full_path = prefix.clone();
+                let suffix = reconstruct(&nodes, idx);
+                full_path.extend(suffix.clone());
+                let features = Features::from_grid(&nodes[idx].grid);
+                println!(
+                    "FRONTIER idx={} depth={} total={} features={:?} trapped={} {}",
+                    printed.len() - 1,
+                    nodes[idx].depth,
+                    full_path.len(),
+                    features,
+                    trapped_unreachable_rat_count(&nodes[idx].grid),
+                    sig
+                );
+                println!("ASCII {}", format_path_ascii(&full_path));
+                println!("SUFFIX {}", format_path_ascii(&suffix));
+                if print_states {
+                    println!("STATE\n{}", nodes[idx].grid.to_csv());
+                }
+                if printed.len() >= limit {
+                    break;
+                }
+            }
+
+            if nodes[idx].depth as usize >= depth {
+                continue;
+            }
+            let cur_grid = nodes[idx].grid.clone();
+            for actions in &tuples {
+                let (next_grid, play_state) = step(&cur_grid, actions);
+                if play_state == PlayState::GameOver {
+                    continue;
+                }
+                if play_state != PlayState::Won
+                    && min_rats.is_some_and(|minimum| count_rats(&next_grid) < minimum)
+                {
+                    continue;
+                }
+                let hash = state_key(&next_grid);
+                if !visited.insert(hash) {
+                    continue;
+                }
+                let node_idx = nodes.len();
+                nodes.push(Node {
+                    grid: next_grid,
+                    parent: idx,
+                    action: actions.clone(),
+                    depth: nodes[idx].depth + 1,
+                });
+                q.push_back(node_idx);
+            }
+        }
+        eprintln!(
+            "frontier done: printed={} nodes={} visited={} elapsed={:.1}s",
+            printed.len(),
+            nodes.len(),
+            visited.len(),
+            start.elapsed().as_secs_f64()
+        );
         return;
     }
 
