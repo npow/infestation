@@ -4124,6 +4124,13 @@ before/after probes showed no leftover `target/release/solver`, `cargo`,
   `...vvv<<<<<<<<<<<<<<<<^^^<<<`: that 89-turn state has all 13 enemies
   reachable but no triggers, no `ratdrop` branch, and direct solve/cleanup
   stalls immediately in a cyborg contact cage.
+- `solver`: `branchdump` / `lookup` now support
+  `cellnotnoratsrect:x,y,kind,rx1,ry1,rx2,ry2`, meaning the cell is no longer
+  `kind` and no rats/cyborgs are inside the rectangle. It was added to express
+  "open a gate without filling the contact trap." On `ai_takeover` it showed
+  that `cellnotnoratsrect:18,5,web,0,16,3,19` is a trivial target from P68
+  because `(18,5)` is already open in that level; the blocker is moving/killing
+  the `(18,4)` cyborg safely, not clearing a web as in `release`.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth

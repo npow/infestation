@@ -923,6 +923,7 @@ enum LookupGoal {
     CellNotWithPlayerAt(i32, i32, CellKind, i32, i32),
     CellNotWithPlayerInRect(i32, i32, CellKind, i32, i32, i32, i32),
     CellNotWithRatInRect(i32, i32, CellKind, i32, i32, i32, i32),
+    CellNotWithNoRatsInRect(i32, i32, CellKind, i32, i32, i32, i32),
     CellReachable(i32, i32),
     PlayerAt(i32, i32),
     PlayerFacing(i32, i32, Dir4),
@@ -1122,6 +1123,37 @@ impl LookupGoal {
                     "expected cellx,celly,kind,ratx1,raty1,ratx2,raty2"
                 );
                 Self::CellNotWithRatInRect(x, y, kind, values[0], values[1], values[2], values[3])
+            }
+            "cellnotnoratsrect" | "cellnot-and-noratsrect" => {
+                let mut parts = arg.split(',');
+                let x = parts
+                    .next()
+                    .expect("cell x")
+                    .trim()
+                    .parse()
+                    .expect("cell x");
+                let y = parts
+                    .next()
+                    .expect("cell y")
+                    .trim()
+                    .parse()
+                    .expect("cell y");
+                let kind = parts
+                    .next()
+                    .map(str::trim)
+                    .map(parse_cell_kind_name)
+                    .expect("cell kind");
+                let values: Vec<i32> = parts
+                    .map(|part| part.trim().parse().expect("rat rect coordinate"))
+                    .collect();
+                assert_eq!(
+                    values.len(),
+                    4,
+                    "expected cellx,celly,kind,ratx1,raty1,ratx2,raty2"
+                );
+                Self::CellNotWithNoRatsInRect(
+                    x, y, kind, values[0], values[1], values[2], values[3],
+                )
             }
             "reachable" | "cellreachable" => {
                 let (x, y) = parse_required_point(arg);
@@ -1600,6 +1632,12 @@ fn lookup_goal_reached(
                     .iter()
                     .any(|&point| point_in_rect(point, rx1, ry1, rx2, ry2))
         }
+        LookupGoal::CellNotWithNoRatsInRect(x, y, kind, rx1, ry1, rx2, ry2) => {
+            current.cell_kind_at(x as usize, y as usize) != kind
+                && rat_positions(current)
+                    .iter()
+                    .all(|&point| !point_in_rect(point, rx1, ry1, rx2, ry2))
+        }
         LookupGoal::CellReachable(x, y) => distance_from_player(current, (x, y)) < 1_000,
         LookupGoal::PlayerAt(x, y) => {
             positions_matching(current, |cell| cell == CellKind::Player).contains(&(x, y))
@@ -1774,6 +1812,19 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             };
             let rat_penalty = nearest_rect_distance(&rats, rx1, ry1, rx2, ry2) * 1_000;
             cell_penalty + rat_penalty + heuristic(current) / 1_000
+        }
+        LookupGoal::CellNotWithNoRatsInRect(x, y, kind, rx1, ry1, rx2, ry2) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let cell_penalty = if current.cell_kind_at(x as usize, y as usize) != kind {
+                0
+            } else {
+                nearest_target_distance(&players, &[(x, y)]) * 50 + 100_000
+            };
+            let rats_in_rect = rat_positions(current)
+                .into_iter()
+                .filter(|&point| point_in_rect(point, rx1, ry1, rx2, ry2))
+                .count() as i64;
+            cell_penalty + rats_in_rect * 250_000 + heuristic(current) / 1_000
         }
         LookupGoal::CellReachable(x, y) => {
             distance_from_player(current, (x, y)) * 10_000 + heuristic(current) / 1_000
@@ -2014,6 +2065,14 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
                 .any(|&point| point_in_rect(point, rx1, ry1, rx2, ry2))
                 as i64;
             cell_missing * 1_000 + rat_missing
+        }
+        LookupGoal::CellNotWithNoRatsInRect(x, y, kind, rx1, ry1, rx2, ry2) => {
+            let cell_missing = (current.cell_kind_at(x as usize, y as usize) == kind) as i64;
+            let rats_in_rect = rat_positions(current)
+                .into_iter()
+                .filter(|&point| point_in_rect(point, rx1, ry1, rx2, ry2))
+                .count() as i64;
+            cell_missing * 1_000 + rats_in_rect
         }
         LookupGoal::CellReachable(x, y) => distance_from_player(current, (x, y)),
         LookupGoal::PlayerAt(x, y) => {
