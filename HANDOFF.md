@@ -4191,6 +4191,72 @@ checks after the queue found no leftover `target/release/solver`, `cargo`,
   were stopped after repeatedly reproducing known dead basins. Do not repeat
   those modes from P25/P62 unless the prefix changes the isolated pocket first.
 
+### OOM-safe continuation - 2026-06-13 third Codex pass
+
+No new verified win. This pass kept search concurrency to one or two capped
+solver processes at a time, always under `ulimit -v 800000` and short external
+`timeout` wrappers. Process checks before/after the batch found no leftover
+`target/release/solver`, `cargo`, `clingo`, or `timeout` jobs.
+
+- `solver`: added lookup/branchdump goal
+  `cellisplayerat:x,y,kind,px,py`, meaning the cell is still exactly `kind`
+  while the player is at `(px,py)`. This was added for "reach the station
+  before spending the trigger" checks, specifically `reload_v3` top trigger 6.
+- `reload_v3`: the exact station predicate returned empty from the initial
+  board: `cellisplayerat:9,4,trigger6,9,5` with depth 80 / 25s / 160k nodes,
+  all 3 rats preserved, and at least one reachable rat/trigger. This tests the
+  human hypothesis "stand below top trigger 6 while it is still present"; it is
+  stronger than earlier trigger-count probes. The strict paper-order probe
+  `1,2,3,4,5,6` also returned no solution, and direct strict `triggeronly:1`
+  from the initial board returned empty. Trigger 7 remains the only easy initial
+  trigger, but it is a trap unless it creates top-6 access.
+- `release`: the apparent upper-trigger inversion branches `v<vv^^^`,
+  `v>vv^^^`, and `v>>>vv^^^` are ordinary dead opener variants: diagnostics
+  still show isolated rat `(18,4)` sealed behind `(18,5)` and the bottom rat
+  unreachable. Fresh short probes from those/opening states also returned empty
+  for `ratat:19,7`, `cellnotratat:18,5,web,18,4`,
+  `cellnot:2,17,web`, and `ratat:0,16`. From the standard opener
+  `v<vv^^>>v`, early bottom-trigger-6 side effects returned empty for
+  `cellnot:19,18,6` and `cellnot:0,17,explosive`, and the left blocker
+  `cellnot:1,16,explosive` remained empty.
+- `release`: the P8 target
+  `ratrectplayerrect:14,3,17,6,8,10,11,13` was not useful because it is already
+  satisfied by one-step ordinary movement and the known dead opener. From
+  `v<vv^^`, the stricter left-carrier and right-web-safe predicates
+  `cellnotratrect:1,16,explosive,0,13,2,16` and
+  `cellnotnoratsrect:18,5,web,18,4,18,4` both returned empty under resource
+  gates. Continue `release` only with a genuinely new way to handle `(18,4)`
+  before the top sweep or to open `(18,5)` without filling the contact trap.
+- `tinderrectangle`: Pascal's compact pre-open target is real. From
+  `<<>^^^>>v>vv>>^^^>>vvv`,
+  `cellnotratrect:2,5,web,2,3,2,3` returns a 45-turn branch
+  `<<>^^^>>v>vv>>^^^>>vvv^^^<<vvv<<^^^<<<<vv<<<<` with all 16 rats alive,
+  all 16 reachable, `(2,5)` open, player `(2,5)`, and the lower rat still at
+  `(2,3)`. This is a shorter diagnostic than `T106+PREOPEN+RET`.
+- `tinderrectangle`: the compact pre-open is finite under current follow-ups.
+  From the 45-turn state, returning to the safe-right pocket while keeping the
+  lower rat parked (`ratrectplayerrect:2,3,2,3,14,6,15,8`) returned empty, and a
+  direct `lookup --goal win` stopped at 200k nodes with no solution. From the
+  compact staging, top-right gate `cellnotplayerrect:15,2,web,14,6,15,8`
+  returned empty. Pascal's row-3 latch top-left gate
+  `cellnotplayerrect:3,2,web,14,6,15,8` and the 200-turn `(1,5)` latch top-pack
+  opener `cellnotratrect:2,2,web,1,4,1,4` also returned empty. The active
+  hypothesis remains "change release geometry before `(2,4)` opens"; the
+  compact branch is useful evidence, not the missing route.
+- `cooperation/blocked_v2`: Franklin's read-only audit reconfirmed B20 as the
+  diagnostic anchor. The useful trigger-2 side is `(5,11)`, not `(3,14)`;
+  existing probes for `triggeronlycellnot:2,2,15,explosive`,
+  `triggeronlycellnot:2,1,15,web`, `ratat:5,11`, and lower-left barrier
+  mutations remain empty under preservation gates. Treat trigger-5-before-
+  lower-left-resolution as a one-way trap unless a branch also changes
+  `(1,15)` and leaves useful trigger 2 reachable.
+- `old_levels/on_the_clock`: the pre-P20 lower-right evacuation idea was
+  rechecked under caps and returned empty for
+  `cellnotratat:16,18,web,16,19` from `v>>><^^v>^^>>>vvv><v`, for
+  `noratsrect:15,14,17,19` from `>>^>^v<v<vvvv<v`, and for the same rectangle
+  from the initial board. The lower-right web-opening/evacuation gap is
+  currently closed under these caps.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
