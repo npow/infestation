@@ -3720,6 +3720,58 @@ probes found no leftover `target/release/solver`, `timeout`, or `clingo` jobs.
   `<<>^^^>>v>vv>>^^^>>vvv`: `cellnotplayerrect:4,2,web,14,6,15,8` at depth 70 /
   30s / 150k nodes with all 16 rats preserved produced no branches.
 
+### Current run notes - 2026-06-13
+
+No new verified wins. New evidence to avoid repeating:
+
+- All recorded solutions still verify under the current engine:
+  `verified=35/35`.
+- `reload_v3`: trigger 7 is confirmed as a tempting but bad first event unless
+  a different pre-7 setup is found. The live-looking all-rats branch
+  `^>>>>>^>>^^^<<<<v<<^<<<<<<<^^^` leaves only top/station trigger 2 reachable;
+  firing it with suffix `^^^^^^^vvvvvvvv>>>>>>>>>>v` clears `(12,22)` but seals
+  the bottom-left rat `(0,21)` with no reachable triggers. Adding a preservation
+  constraint (`triggeronlycellnot:2,12,22,explosive` plus
+  `--min-reachable-triggers 1`) returned empty. The alternate high-web-clear
+  trigger-7 branch `^^^^^>>>>>>>^^^^^<<<<vv<<<<<<<<<` leaves zero reachable
+  triggers immediately.
+- `release`: the trigger-6 priming idea was checked and currently has no
+  foothold from the standard opener. From `P9=v<vv^^>>v`, both
+  `cellnotplayerrect:16,17,plank,17,16,19,19` and relaxed
+  `cellnot:16,17,plank` returned empty; `triggeronlycellnot:6,1,16,explosive`
+  returned empty from both P9 and `P11=v<vv^^>>vv>`. Waypoint probes to
+  `(17,16)` and `(17,17)` from P9, and to `(17,16)` from P11, were all
+  dynamically unreachable. Static diagnostics still show those cells are
+  map-reachable; the blocker is rat timing / sword safety, not walls.
+- `cyborg_rats/ai_takeover`: early events mirror `release`; direct trigger-7
+  probes from P9 and P11 returned empty. Do not assume this is simply
+  "release plus trigger 7" unless a different pre-trigger state is identified.
+- `cooperation/blocked_v2`: the lower-left barrier `(1,15)..(4,15)` has one
+  useful static clearing mechanism: standing on trigger 2 at `(5,11)`, which
+  fires sibling `(3,14)` and detonates `(2,15)/(3,15)`, clearing both adjacent
+  webs. Standing on `(3,14)` fires the central chain and cannot open the
+  lower-left rat. New checked families:
+  - B9 event state
+    `v< v^ v^ << <^ <^ ^^ ^v ^^`: both trigger-2 orientations were empty.
+  - trigger-4-first `v< v^ v^ <^ <^ << <^ >v`: preserved-rat lures to
+    `playerat:13,16` and `playerat:14,16` were empty.
+  - pre-B20 state `^< ^^ v^ ^^ v> v> v> vv vv ^v ^v ^<`: trigger-3 branches
+    leave `(6,11)` explosive, and direct useful trigger-2
+    `triggeronlycellnot:2,2,15,explosive` was empty both with and without
+    `--min-rats 8`.
+  This strengthens the authored-blocker hypothesis: prove or find actor access
+  to `(5,11)` before spending more time on cleanup.
+- `tinderrectangle`: the sidestep variant of the 200-turn latch is not a
+  preserved-rat escape. From the long prefix plus
+  `vv>^^^^^<<<vvv<<^^^<<<<<<vvv<<<>`, the player is at `(2,6)` and the lower
+  rat at `(2,5)`; preserving all 16 rats has zero safe continuations. Killing
+  the lower rat with `^` opens movement but leaves a 15-rat top pack, and
+  `ratat:0,0` / `ratat:16,0` from that state returned empty. The other delayed
+  release targets from the long prefix also returned empty:
+  `cellnotplayerrect:3,4,web,14,6,15,8`,
+  `ratrectplayerrect:3,3,3,3,14,6,15,8`, and
+  `ratrectplayerrect:3,2,4,3,14,6,15,8`.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
