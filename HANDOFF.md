@@ -2882,6 +2882,53 @@ processes before and after batches.
   fire while the top-right rat is not forced onto `(13,9)` on the following
   turn, or to find a way to consume/disable that trigger-9 step first.
 
+### OOM-safe follow-up - 2026-06-13
+
+No new verified win. This pass was intentionally conservative after the prior
+machine OOM: every local solver run used `ulimit -v 800000` plus `timeout`, no
+more than two solver processes were active at once, and final process-table
+checks showed no `solver`, `timeout`, or `clingo` processes.
+
+- Inventory sanity: this checkout currently has 35 entries in
+  `solver/solutions/final_solutions.json`. The missing CSVs are the 10
+  rat-bearing files
+  `cooperation/blocked_v2.csv`, `cooperation/handoff.csv`,
+  `cooperation/tug_of_war.csv`, `cyborg_rats/ai_takeover.csv`,
+  `old_levels/on_the_clock.csv`, `old_levels/order_of_operations.csv`,
+  `old_levels/overstep.csv`, `release.csv`, `reload_v3.csv`, and
+  `tinderrectangle.csv`, plus the zero-rat `claude/gauntlet.csv` portal hub.
+- `release`: `frontier` and `events` from the standard opener `v<vv^^>>v`
+  only found local top-pack/web-shaving variations and 22-rat drops. None of
+  the listed event successors changed `(18,5)`, made left trigger 2 reachable,
+  reached trigger 6, or moved the isolated `(18,4)` rat. Treat this as direct
+  evidence that the standard opener is a local-events mirage; back up before
+  the central-trigger family instead of widening it again.
+- `cyborg_rats/ai_takeover`: Q64
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<`
+  still has only left trigger 2 reachable. `events` from Q64 found only the
+  one-step web shave `<`; preserved-resource checks for changing either
+  explosive `(14,12)` or `(15,12)` returned no branch. From the known 3-rat
+  triggerless basin
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<<<<<<<<<<<<<<>>>>>>>>>>>><<<<<<<<<<<<<<^^^<<<`,
+  alternating `><` safely pins the local cyborg while the remote cyborg walks
+  around the map for about 20 pairs, but the pattern collapses at turn 154.
+  The tempting suffix `>v` drops to two rats only as `GameOver`; a capped
+  `ratsle:2` check from the pre-collapse state returned no legal branch. Treat
+  this as a cleanup trap; continue from a pre-trigger-2 structural event, not
+  from D109-style cleanup.
+- `old_levels/overstep`: a short strict trigger-any probe found a concrete
+  first-event branch
+  `v<<^^^^^^^>>>>>>>>>>>>><>><^<<<<<vvv<<`, verified `Playing` at 38 turns
+  with 5 rats, 3 explosives, 5 webs, 8 triggers, and only 2 reachable rats.
+  From that state, a `ratsle:4` branch exists but spends all explosives and
+  triggers, leaving only 2 reachable rats; a resource-preserving `triggeronly:1`
+  continuation returned no branch. This is a useful first lever for mapping
+  `overstep`, but the immediate rat-drop objective is a dead milestone.
+- `cooperation/blocked_v2`: the current 23-move 3-rat basin was rechecked for
+  `triggeronly:2` under resource and reachable-rat gates; no branch was found.
+  A side explorer was started for `blocked_v2` but did not return before the
+  safety cutoff and was closed; no visible solver process was left behind.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
