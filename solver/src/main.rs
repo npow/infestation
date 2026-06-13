@@ -950,6 +950,7 @@ enum LookupGoal {
     RatsAtMostWithCellIs(usize, i32, i32, CellKind),
     RatsAtMostWithCellNot(usize, i32, i32, CellKind),
     RatsAtMostWithRatInRect(usize, i32, i32, i32, i32),
+    RatsAtMostWithRatInRectAndPlayerInRect(usize, i32, i32, i32, i32, i32, i32, i32, i32),
     RatsAtMostWithPlayerAt(usize, i32, i32),
     RatsAtMostWithPlayerFacing(usize, i32, i32, Dir4),
     TriggerNumberOnlyWithCellIs(u8, i32, i32, CellKind),
@@ -1490,6 +1491,28 @@ impl LookupGoal {
                     values[4],
                 )
             }
+            "ratsleratrectplayerrect" | "ratsatmostratrectplayerrect" => {
+                let values: Vec<i32> = arg
+                    .split(',')
+                    .map(|part| part.trim().parse().expect("coordinate"))
+                    .collect();
+                assert_eq!(
+                    values.len(),
+                    9,
+                    "expected count,rx1,ry1,rx2,ry2,px1,py1,px2,py2"
+                );
+                Self::RatsAtMostWithRatInRectAndPlayerInRect(
+                    values[0] as usize,
+                    values[1],
+                    values[2],
+                    values[3],
+                    values[4],
+                    values[5],
+                    values[6],
+                    values[7],
+                    values[8],
+                )
+            }
             "ratsleplayer" | "ratsatmostplayer" | "ratsleplayerat" => {
                 let (count, (x, y)) = parse_count_and_point(arg);
                 Self::RatsAtMostWithPlayerAt(count, x, y)
@@ -1880,6 +1903,25 @@ fn lookup_goal_reached(
                     .into_iter()
                     .any(|point| point_in_rect(point, x1, y1, x2, y2))
         }
+        LookupGoal::RatsAtMostWithRatInRectAndPlayerInRect(
+            count,
+            rx1,
+            ry1,
+            rx2,
+            ry2,
+            px1,
+            py1,
+            px2,
+            py2,
+        ) => {
+            count_rats(current) <= count
+                && rat_positions(current)
+                    .into_iter()
+                    .any(|point| point_in_rect(point, rx1, ry1, rx2, ry2))
+                && positions_matching(current, |cell| cell == CellKind::Player)
+                    .into_iter()
+                    .any(|point| point_in_rect(point, px1, py1, px2, py2))
+        }
         LookupGoal::RatsAtMostWithPlayerAt(count, x, y) => {
             count_rats(current) <= count
                 && positions_matching(current, |cell| cell == CellKind::Player).contains(&(x, y))
@@ -2214,6 +2256,38 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             };
             rats_penalty + rect_penalty + heuristic(current) / 1_000
         }
+        LookupGoal::RatsAtMostWithRatInRectAndPlayerInRect(
+            count,
+            rx1,
+            ry1,
+            rx2,
+            ry2,
+            px1,
+            py1,
+            px2,
+            py2,
+        ) => {
+            let rats_penalty = count_rats(current).saturating_sub(count) as i64 * 1_000_000;
+            let rats = rat_positions(current);
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let rat_rect_penalty = if rats
+                .iter()
+                .any(|&point| point_in_rect(point, rx1, ry1, rx2, ry2))
+            {
+                0
+            } else {
+                nearest_rect_distance(&rats, rx1, ry1, rx2, ry2)
+            };
+            let player_rect_penalty = if players
+                .iter()
+                .any(|&point| point_in_rect(point, px1, py1, px2, py2))
+            {
+                0
+            } else {
+                nearest_rect_distance(&players, px1, py1, px2, py2)
+            };
+            rats_penalty + rat_rect_penalty + player_rect_penalty + heuristic(current) / 1_000
+        }
         LookupGoal::RatsAtMostWithPlayerAt(count, x, y) => {
             let rats_penalty = count_rats(current).saturating_sub(count) as i64 * 1_000_000;
             let players = positions_matching(current, |cell| cell == CellKind::Player);
@@ -2475,6 +2549,39 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
                 nearest_rect_distance(&rats, x1, y1, x2, y2)
             };
             count_rats(current).saturating_sub(count) as i64 + rect_penalty
+        }
+        LookupGoal::RatsAtMostWithRatInRectAndPlayerInRect(
+            count,
+            rx1,
+            ry1,
+            rx2,
+            ry2,
+            px1,
+            py1,
+            px2,
+            py2,
+        ) => {
+            let rats = rat_positions(current);
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let rat_rect_penalty = if rats
+                .iter()
+                .any(|&point| point_in_rect(point, rx1, ry1, rx2, ry2))
+            {
+                0
+            } else {
+                nearest_rect_distance(&rats, rx1, ry1, rx2, ry2)
+            };
+            let player_rect_penalty = if players
+                .iter()
+                .any(|&point| point_in_rect(point, px1, py1, px2, py2))
+            {
+                0
+            } else {
+                nearest_rect_distance(&players, px1, py1, px2, py2)
+            };
+            count_rats(current).saturating_sub(count) as i64
+                + rat_rect_penalty
+                + player_rect_penalty
         }
         LookupGoal::RatsAtMostWithPlayerAt(count, x, y) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);

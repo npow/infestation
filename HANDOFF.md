@@ -5388,6 +5388,90 @@ and the stored-solution replay all pass (`36/36` verified).
   one-rat branch that lands the player in the killing lane before the last
   cyborg leaves its death square, or by changing the trigger-2 cut before Q143.
 
+### OOM-safe continuation - 2026-06-13 twenty-fifth Codex pass
+
+No new verified win. Solver work stayed serial and capped with
+`ulimit -v 800000`; process checks before/after found no leftover
+`target/release/solver`, `cargo`, `clingo`, or `timeout` jobs. Added diagnostic
+lookup/branchdump goal
+`ratsleratrectplayerrect:count,rx1,ry1,rx2,ry2,px1,py1,px2,py2`, which requires
+at most `count` rats, at least one remaining rat in the rat rectangle, and the
+player in the player rectangle. `cargo fmt -p solver`,
+`cargo build --release -p solver`, `cargo test -p solver --no-run`, and the
+stored-solution replay all pass (`36/36` verified).
+
+- `cyborg_rats/ai_takeover`: the Q143 one-rat geometry is now more tightly
+  bounded. From Q143, combined final-rat/player-lane checks returned empty for:
+  exact R223-style cyborg `(18,14)` with player row-19 lane `(14..18,19)`;
+  exact R227-style cyborg `(18,8)` with player kill stance rectangle
+  `(16..19,11..13)`; and central cyborg rectangle `(15..16,11..12)` with player
+  lower-right lane `(14..19,13..19)`. This is stronger than the previous
+  separate checks: Q143 can still make one-rat states, but not with the player
+  already in the obvious winning rectangles while the last cyborg remains on
+  those target squares. Continue by changing the trigger-2 cut before Q143 or
+  by finding a post-cut way to move the player after the one-rat reduction
+  without letting the final cyborg drift out of the death square.
+- `reload_v3`: the compound helper-station predicate is positive but finite.
+  From prefix `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<`, the goal
+  `ratrectplayerrectcellis:2,19,3,20,0,18,3,20,4,18,trigger1` reaches
+  `P43=>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<vvv`. At P43 the player is
+  `(2,19)`, the helper rat is `(3,19)`, the sealed bottom rat remains `(0,21)`,
+  and trigger 1 at `(4,18)` is intact. However, from P43 both guarded
+  `triggeronly:1` and concrete `cellnot:4,18,trigger1` returned empty. A tiny
+  frontier from P43 prints only leftward motion along row 19 while the helper
+  follows; it cannot touch `(4,18)`. The earlier lower-staging and direct fuse
+  checks from the same family also returned empty, so do not treat P43/P44 as a
+  reload station unless a different pre-P40 geometry moves the helper lower or
+  east.
+- `release`: the side-agent right-carrier hypothesis was checked and closed.
+  From `v<vv^^` and from `v<vv^^>>`, guarded targets for a right-side carrier at
+  trigger 6 (`ratrectcellis:17,18,19,19,19,18,trigger6`) and for a right trigger
+  2 pocket actor (`ratrectcellis:19,6,19,8,19,7,trigger2`) all returned empty or
+  timed out with best states far from the target. This reinforces that the next
+  `release` move must be a genuinely different way to handle isolated `(18,4)`,
+  not another trigger-5/6 or right-pocket carrier variant.
+- `old_levels/on_the_clock`: two new door/staging hypotheses closed under caps.
+  From `P19=v>>><^^v>><^^>>>vvv`, the pre-trigger-3 row-14 door predicate
+  `ratrectplayerrectcellis:14,14,17,16,9,14,11,14,10,14,trigger3` returned no
+  branch. From alternate prefix `>>>^^>>>vvv>`,
+  `ratrectcellis:16,18,16,19,10,14,trigger3` also returned no branch. The
+  lower-right rat still cannot be staged through the row-14 door before trigger
+  3 timing closes it.
+- `cooperation/handoff`: a real right-edge opener exists but appears finite.
+  Initial lookup found
+  `v^ >^ >^ >^ >^ >^ ^^`, which clears `(14,6)` while keeping trigger 2 at
+  `(11,7)` live. Follow-ups from that opener returned empty for the preserved
+  far-lure `cellisplayerat:11,7,trigger2,14,8`, for stationing a player at
+  newly opened `(14,6)` with the sealed rat still at `(10,6)`, for the same
+  station with useful left-facing, for letting the sealed rat move into
+  `(10,6)..(11,7)` while `(12,6)` remains explosive, and for one-turn timing
+  pivots `.<`, `.^`, and `.v`. Direct continuation from the opener timed out
+  without a solve. Record the opener as a topology change, not a route yet.
+- `cooperation/tug_of_war`: helper staging below the top pocket is real, but
+  currently circular. The 33-turn branch
+  `>< vv vv ^v .v <v <> <> >v v^ >< << <^ ^^ <^ ^^ <^ ^^ v^ v^ >^ .^ v^ ^^ <^ .v >< ^^ <^ <^ <^ >> >>`
+  satisfies both staged-helper goals
+  `ratrectcellis:7,3,8,4,7,2,plank` and
+  `ratrectcellis:7,3,8,4,8,2,plank`. Direct continuation did not solve, and
+  from this branch `cellnot:7,1,web`, `cellnot:8,1,web`,
+  `cellnotratrect:7,2,plank,7,3,8,4`,
+  `cellnotratrect:8,2,plank,7,3,8,4`, plus the inverse lure-station predicates
+  with player in `(7..8,1)` all returned empty. The helper can be parked under
+  the pocket, but no tested state lets it chew or lure upward through the
+  plank/web gate.
+- `tinderrectangle`: the safe-side staging branch is real, but the tested
+  bypass-door variants are not discriminating. From B4
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^`,
+  `ratrectplayerrect:2,3,2,3,13,6,15,8` reaches safe-side states, shortest
+  P81
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^^vv<<>>>>^^>>>v>vv>>^^^>>vv>v`.
+  From P81 and the 83-turn variant, `cellnotplayerrect:2,4,web,13,6,15,8`
+  remains empty, and direct continuation from P81 returns no solve. Laplace's
+  suggested bypass cells `(3,5)` and `(4,5)` are already satisfied by trivial
+  suffixes from P81, and the P63 topology variant reaches the same safe-side
+  staging family. Continue only with a release-geometry predicate that is not
+  already true in the staged state.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
