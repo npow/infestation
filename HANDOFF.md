@@ -2595,14 +2595,22 @@ probes, kept solver runs under `timeout` / `ulimit`, and ended with no
   `(18,5)` web, moved the isolated `(18,4)` rat to `(18,5)`, reached trigger 6
   via `(19,18)`, or staged `ratplayer:18,17,19,19` under the caps. The solution
   still needs a setup before the known central-trigger family that either opens
-  `(18,5)` or gives the isolated rat useful motion.
+  `(18,5)` or gives the isolated rat useful motion. A follow-up relaxed check
+  with no rat-count floor also found no `triggeronlycellnot:2,18,5,web` branch
+  from the initial state, standard opener `v<vv^^>>v`, or alternate opener
+  `v<vv^^>>>>v`; the useful left-trigger-2 event is unreachable in those basins,
+  not just overconstrained by preservation.
 - `cyborg_rats/ai_takeover`: the lower safe-7/8 route
   `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvvv<`
   is still the better frontier than old B75. It can reach trigger 2 with suffix
   `<<<<<<<<<>>>>>>>><<<<<<<<<<<<<<^^^<<<`, producing C97: 8 rats, 2 explosives,
   0 triggers, all 8 rats reachable. But capped `ratsle:7` from C97 returned no
   branch, and B75 follow-ups for `ratsle:14` / changing `(14,12)` explosive also
-  returned no branch. Treat both as cleanup basins, not solutions.
+  returned no branch. A longer raw `frontier` from C97 showed the safe local
+  actions are essentially repeated left wall-pivots and occasional down toggles:
+  the nearby cyborg cluster stays fixed while only the remote cyborg walks
+  around the map. A relaxed depth-120 `ratsle:7` branchdump still returned no
+  branch. Treat C97 and B75 as cleanup basins, not solutions.
 - `cooperation/tug_of_war`: capped checks from the initial state and the
   trigger-1 scaffold found no branch opening pocket webs `(7,1)` / `(8,1)` or
   breaking planks `(7,2)` / `(8,2)` while preserving the required rats. The
