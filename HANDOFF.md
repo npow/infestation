@@ -5290,6 +5290,68 @@ clingo/timeout jobs. Stored solutions still replay `36/36`.
   --min-explosives 3`. Do not retry the right-trigger-6 station from this basin
   without a new prefix.
 
+### OOM-safe continuation - 2026-06-13 twenty-third Codex pass
+
+No new verified win. Work stayed OOM-safe and serial for solver calls; read-only
+side agents ran in parallel only for mechanism analysis. Process checks before
+and after this pass found no leftover solver/cargo/clingo/timeout jobs.
+
+- `cyborg_rats/ai_takeover`: Q102 is still the best live lead, but the first
+  follow-up was over-constrained in the previous pass. Manual diagnostics show
+  `Q102+v` fires trigger 6 while preserving all three enemies, leaving four
+  triggers; `Q102+v<v<` then fires trigger 8 while still preserving all three
+  enemies, leaving two trigger-2 cells. Corrected `branchdump` confirms
+  `Q103` reaches trigger 8 with suffix `v<`. From
+  `Q106=Q102+v<v<`, strict trigger-2 preserving all three enemies returned
+  empty, as did staging the right cyborg near `(18,5)..(19,8)` while right
+  trigger 2 remains. Allowing one actor loss reaches many trigger-2 branches,
+  but they all collapse to the same two-enemy basin with player on the far left,
+  the center cyborg at `(11,9)`, and the right cyborg still high on the right
+  wall.
+- `cyborg_rats/ai_takeover`: a bounded direct lookup from Q106 found a best
+  two-enemy cut Q150:
+  `Q106+<<<<<<<<<<<<<<<^^^<<<>>v>vv>>>>>>>>>>>>>>>>^`. Diagnostics: player
+  `(19,18)`, enemies `(11,9)` and `(19,16)`, two explosives `(14,12)/(15,12)`,
+  zero triggers, all rats reachable. However, Q150 is the same final right-edge
+  trap: `ratsle:1`, direct `lookup --goal win`, and `dropchain` from Q150 all
+  returned empty/no rat-drop branch. Immediate local action inspection can move
+  the right cyborg up/down the edge, but does not produce the black-hole entry.
+  Continue by changing the Q106 trigger-2 cut before it becomes Q150, not by
+  mopping Q150.
+- `old_levels/on_the_clock`: side-agent predicates returned empty. From
+  `P19=v>>><^^v>><^^>>>vvv`, the row-14 door handoff
+  `ratrectplayerrectcellis:14,14,17,16,9,14,11,14,10,14,trigger3` found no
+  branch. From alternate `>>>^^>>>vvv>`, the lower-right staging predicate
+  `ratrectcellis:16,18,16,19,10,14,trigger3` also found no branch. These close
+  the latest "lower-right actor staged while trigger 3 remains open" variants.
+- `old_levels/overstep`: side-agent checks produced one new positive and then
+  closed it as a trap. From P33, the upper-left trigger-7 latch predicate
+  `ratrectplayerrectcellis:0,13,0,13,3,11,4,14,2,13,trigger7` reaches O74:
+  `vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^^^^^<<<<^<>>><<<<<<<v<<<<<vvv<<<vvvv>vv>v`.
+  O74 has six rats, six explosives, five webs, 18 triggers, and only one
+  reachable rat. Its event successor `v>v^vv` reaches O80 with four rats and
+  four explosives, but zero reachable rats. From O80, `ratsle:3` can fire more
+  resources and reduce to three rats, but every printed branch has zero
+  reachable rats; `lookup --goal win` returns `NO_SOLUTION` immediately. Treat
+  O74/O80 as a structural proof/trap, not a solve path.
+- `old_levels/overstep`: the other side-agent predicates returned empty under
+  caps: upper-rat trigger-4/explosive setup from P33 and P47,
+  bottom-left rat with the player in the outside lane from P21/P33, and the
+  upper-left trigger-7 latch from P21. The only positive was the P33 latch
+  branch described above.
+- `cooperation/blocked_v2`: initial-board useful-trigger-mouth checks returned
+  empty for both player and rat staging:
+  `cellisplayerat:5,11,trigger2,4,11` and
+  `ratrectcellis:4,11,4,11,5,11,trigger2`, with all eight rats and five
+  reachable rats required. Correctly spaced preserved-rat prefix
+  `^< ^^ v^ ^^ vv ^v` returned empty for the same two goals. This closes the
+  direct `(4,11)` mouth staging idea.
+- `cooperation/handoff`: the top-access idea also returned empty. From the
+  initial board and from correctly spaced safe staging prefix
+  `v. >. >. >. >. >. v. >.`, `cellisplayerat:10,5,web,10,4` found no branch
+  while preserving five rats and four triggers. This reinforces that `(10,5)`
+  is not legally opened by a simple top step before the trigger-2 sweep.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
