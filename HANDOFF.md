@@ -3666,6 +3666,59 @@ probes found no leftover `target/release/solver`, `timeout`, or `clingo` jobs.
   `^^^^^^v^vvvvvvv>>>v` / `...>>><`, the short central trigger family
   `v<v` / `vv<v`, and `v>>>v` variants. No new first event appeared outside the
   documented dead trigger-3/4/5 basins.
+- `reload_v3`: initial `events` at depth 80 / 25s / max 8 again produced only
+  the familiar middle-rat-loss family. The top-ranked event is
+  `^^^^^<<<<<<^^<^^^^^vvvvvvv>>>>>>`, leaving 2 rats, all 6 explosives, all 18
+  webs, all 14 triggers, and all 16 planks. Re-running the same event scan from
+  the all-rats-preserved staging `^^^^^<<<<<<^^<^^^^^vv` also immediately
+  converged to the same family via suffix `vvvvv>>>>>>` and nearby vertical
+  tempo variants. This closes the "maybe the preserved staging has a different
+  first structural event" hypothesis under the checked bounds.
+- `cooperation/blocked_v2`: trigger sequencing matters: the trigger cell a
+  player/rat steps onto is overwritten before the zap wave, so only the other
+  same-number trigger cells emit zaps. For trigger 2 this means stepping on
+  `(5,11)` fires the lower-left explosive pair `(2,15)/(3,15)`, while stepping
+  on `(3,14)` fires the central explosive chain near `(6..12,11)`. From the
+  B20 three-rat frontier, bounded rat-trigger checks for `ratat:5,11` and
+  `ratat:3,14` both returned empty at depth 32 / 20s / 80k nodes while
+  preserving all three rats and at least two reachable rats. This closes the
+  obvious "make a central rat fire trigger 2 from B20" idea.
+- `reload_v3`: the same per-cell trigger rule clarifies the intended reload
+  chain. Useful cells are top/station trigger 1 `(4,18)` for bottom explosive
+  `(9,22)`, top/station trigger 2 `(17,13)` for `(12,22)`, top/station trigger
+  3 `(4,11)` for `(15,22)`, top/station trigger 4 `(4,4)` for `(18,22)`,
+  bottom trigger 5 `(20,22)` for the top gate `(9,6)/(10,5)`, and top trigger
+  6 `(9,4)` for the lower-left fuse `(2,21)`. Stepping on the paired bottom
+  triggers 1-4 is mostly a walling/reload effect, not the explosive clear.
+  This explains why simple numeric trigger-order checks are misleading. A
+  confirming check from the 18-turn rat-triggered trigger-2 prefix
+  `^>>>>>>>^^^vvv<<v<` found no strict trigger-1 bottom-opening branch
+  (`triggeronlycellnot:1,9,22,explosive`) at depth 45 / 20s / 100k nodes while
+  preserving all 3 rats and at least 10 triggers.
+- `release`: per-cell trigger 2 is directional. Stepping on left trigger
+  `(0,16)` fires right trigger `(19,7)` and opens web `(18,5)`; stepping on
+  right trigger `(19,7)` fires the left stack and opens `(2,17)`. From the
+  standard opener `v<vv^^>>v`, a direct bounded check for the useful right-web
+  opening (`triggeronlycellnot:2,18,5,web`) returned empty at depth 60 / 35s /
+  180k nodes while preserving at least 22 rats, 20 reachable rats, 5 triggers,
+  and 2 explosives. The usual opener still lacks a route to the left trigger-2
+  cell before the isolated `(18,4)` rat is stranded.
+- `tinderrectangle`: the pre-opened `(1,5)` latch from the side audit is real.
+  From the long pre-opened safe-side prefix
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv^^^>v^<vvvv^^^^<<vvv<<^^^<<<vvv<^^<<v<<>>>>>^^>>>vvv>>^^^>>vvv`,
+  the exact target `ratplayerfacing:1,4,1,5,north` returned preserved-rat
+  branches; best suffix:
+  `vv>^^^^^<<<vvv<<^^^<<<<<<vvv<<<^`. The resulting 200-turn state has all 16
+  rats, player `(1,5)`, lower rat `(1,4)`, and `(2,5)` open. Follow-up is
+  finite so far: lateral moves die, `v` shifts to player `(1,6)` / rat `(1,5)`
+  but then every non-`^` continuation dies, and `^` kills the lower rat. From
+  the 200-turn latch, `ratrectplayerrect:1,4,2,5,14,7,14,8` returned empty; from
+  the lower-rat-killed branch, `ratat:0,0` and `winready` returned empty under
+  small caps. Treat this latch as explanatory progress, not yet a solution.
+- `tinderrectangle`: the center-left top-pack blocker target suggested by a
+  side audit also returned empty from compact staging
+  `<<>^^^>>v>vv>>^^^>>vvv`: `cellnotplayerrect:4,2,web,14,6,15,8` at depth 70 /
+  30s / 150k nodes with all 16 rats preserved produced no branches.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
