@@ -5909,6 +5909,20 @@ fan-out was relaunched.
   `triggeronlycellnot:5,10,5,web`, and bottom-left
   `cellnotratat:1,21,web,0,21` all returned empty. If revisiting this idea,
   decompose the remote-5 setup earlier; do not hammer direct trigger 6.
+- `old_levels/on_the_clock`: a shallow frontier from P31 shows `^^^` is the
+  next meaningful event: it changes `triggers=17 -> 8`, `explosives=4 -> 3`,
+  and `reachable_rats=2 -> 6`. However, a guarded `ratsle:6` branch from
+  `P31+^^^` returned empty. The event is useful for reading the board but did
+  not produce an immediate reduction route.
+- `old_levels/overstep`: the O53 blocker-avoidance predicate
+  `ratslecellnot:4,14,11,rat` is positive, but representative branches are
+  traps. Example branch leaves four rats at `(14,2)`, `(12,4)`, `(0,13)`,
+  `(0,20)`, with only `(12,4)` reachable; a short `lookup --goal win` from that
+  branch returned no solution and its best state still stranded the top rat.
+- `cooperation/blocked_v2`: B20 follow-ups returned empty for both
+  `ratrectplayerrectcellis:4,10,6,12,7,11,10,14,5,11,trigger2` and
+  `cellnotratrect:2,15,explosive,0,14,1,16`. The known B20 line still lacks a
+  lower-left trigger/explosive carrier.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
