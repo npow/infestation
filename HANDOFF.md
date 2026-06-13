@@ -4257,6 +4257,61 @@ solver processes at a time, always under `ulimit -v 800000` and short external
   from the initial board. The lower-right web-opening/evacuation gap is
   currently closed under these caps.
 
+### OOM-safe continuation - 2026-06-13 fourth Codex pass
+
+No new verified win. This pass kept search concurrency to at most two capped
+solver processes at a time, under `ulimit -v 800000` and short external
+`timeout` wrappers. Process checks found no leftover `target/release/solver`,
+`cargo`, `clingo`, or `timeout` jobs after the probes.
+
+- `old_levels/on_the_clock`: a new right-column pre-trap frontier is real.
+  From `v>>><^^`, the targeted predicate
+  `cellnotratrect:19,3,web,19,0,19,2` returned branches. Best branch:
+  `v>>><^^v>><^^>>>vvv>>^` at 22 turns, with all 8 rats alive, `(19,3)` no
+  longer web, the top/right rat still at `(19,2)`, 7 explosives, 31 webs,
+  17 triggers, 1 reachable rat, and 8 reachable triggers. This is different
+  from the exhausted P25/P45 family where the rat has already fallen into
+  `(17,5)/(18,5)`.
+- `old_levels/on_the_clock`: the sibling pre-trap target from
+  `>>^>^v<v<vvvv<v`, `cellnotnoratsrect:19,3,web,17,5,18,5`, returned empty.
+  The useful route is therefore currently the shorter `v>>><^^` branch, not
+  the later `>>^>^v<v<vvvv<v` staging line.
+- `old_levels/on_the_clock`: from the 22-turn right-column frontier,
+  both `noratsrect:17,5,18,5` with 4 reachable rats and `reachablege:4` reached
+  the same stronger 31-turn branch:
+  `v>>><^^v>><^^>>>vvv>>^v<<vvvvvv`. Diagnostics: all 8 rats alive,
+  4 reachable rats, 8 reachable triggers, only 3 explosives left, and the old
+  `(17,5)/(18,5)` trap is empty. A direct capped `lookup --goal win` from this
+  31-turn state did not solve, but its best branch reached a 2-rat state. This
+  is the best current `on_the_clock` frontier; continue by preserving the
+  4-reachable-rat shape while using trigger 6/8/9 resources, not by reverting
+  to the old P25/P45 timing route.
+- `tinderrectangle`: from the compact pre-open branch
+  `<<>^^^>>v>vv>>^^^>>vvv^^^<<vvv<<^^^<<<<vv<<<<`, direct corner targets
+  `ratat:0,0` and `ratat:16,0` returned empty with all 16 rats preserved.
+  `rectignite` from the same branch with `--no-canonical` also returned empty.
+  Killing the lower rat with `^^` gives a 15-rat top-pack state at
+  `<<>^^^>>v>vv>>^^^>>vvv^^^<<vvv<<^^^<<<<vv<<<<^^`, but corner targets
+  and top-explosive removal from that stripped state also returned empty. Do
+  not treat P45 as a near-solve unless a new side loop or top-pack gate appears.
+- `release`: a fresh initial `events` scan still only rediscovered ordinary
+  central-trigger families and did not touch `(18,5)`, `(18,6..8)`, or
+  `(19,7)`. Continue only with a new structural target for the isolated
+  `(18,4)` rat; do not deepen trigger-5/6 continuations.
+- `reload_v3`: McClintock's intermediate-station checks returned empty. From
+  `P43=>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v^v`,
+  `ratplayer:2,19,1,19` returned empty; from `P43<`, `ratplayer:1,19,0,19`
+  returned empty. From the initial board, the station-enabling predicates
+  `cellnotplayerat:10,5,web,9,5` and
+  `cellnotplayerat:9,6,explosive,9,5` also returned empty. The helper/fuse and
+  top-station hypotheses are sharper now but still closed under these caps.
+- `old_levels/overstep`: Boole's upper-pocket checks returned empty. From P62,
+  `cellisplayerat:13,5,trigger6,13,6` found no trigger-6 carrier station. From
+  P21, both `cellnotratrect:14,4,wall,14,2,15,3` and
+  `cellnotratrect:15,4,wall,14,2,15,3` returned empty. From P52,
+  `ratrectplayerrect:14,2,15,3,16,4,19,6` returned empty. The upper pocket still
+  looks structurally sealed unless an earlier route changes its topology.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
