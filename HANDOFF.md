@@ -3920,6 +3920,21 @@ New verified win:
     there, `ratsle:3` with `--min-reachable-rats 1` returned empty; relaxed
     `ratsle:3` only reaches 3-rat states with `reachable_rats=0`. Treat this
     as another finite reachability trap, not a cleanup frontier.
+- `old_levels/overstep`: backing up before the P51 trap gives a stronger live
+  line. From P21 `vvvvvv>>>>>>>>>v>><>>`, `reachablege:2` finds
+  `P52=vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^^^^^<<<<^<<<<<vvv<<` with 5 rats,
+  3 explosives, 8 triggers, and 2 reachable rats. `P52` chains to
+  `P62=vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^^^^^<<<<^<<<<<vvv<<>^^<<^^>>>`
+  with 4 rats / 2 reachable, then to
+  `P86=vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^^^^^<<<<^<<<<<vvv<<>^^<<^^>>>v<<<<<<vvv<<vvv>v^<^<><>`
+  with 3 rats / 2 reachable, and then
+  `P88=...v>` with 2 rats / 1 reachable. This is the best current overstep
+  frontier. The remaining blocker is the upper rat: from P88, `ratsle:1`
+  with one reachable survivor is empty, `noratsrect:14,2,16,4` is empty, and
+  `ratgone:14,2` / `ratgone:15,3` only move the upper rat inside the same
+  inaccessible upper pocket. From P62, `noratsrect:14,2,16,4` with 3 rats and
+  2 reachable rats preserved is also empty; direct bounded `lookup --goal win`
+  from P62 hit the node/time cap with the upper rat still isolated.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
