@@ -4406,6 +4406,13 @@ checks found no leftover solver, cargo, clingo, or timeout jobs afterward.
   `cellnotratrect:2,2,web,2,2,2,2` returned empty with all 16 rats reachable.
   The compact P22/P45 family and delayed P135 family are both closed for these
   exact shaft-clear/body-block hypotheses.
+- `release`: local geometry for the isolated `(18,4)` rat is worse than
+  `ai_takeover`. `ratgeom` and `ratdeathgeom` for `(18,4)` printed no synthetic
+  movement/death placements on both the initial board and after the standard
+  opener `v<vv^^>>v`. From that opener, the useful staging target
+  `ratcell:18,5,18,6,explosive` also returned empty with 23 rats and
+  21 reachable rats preserved. This supports treating `(18,5)` web opening as
+  the necessary missing mechanism before any right-rat lure is possible.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
