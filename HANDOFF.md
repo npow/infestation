@@ -5383,8 +5383,10 @@ and the stored-solution replay all pass (`36/36` verified).
   it, but frontier shows the cyborg drifts away before the player can reach
   those stances. Combined geometry checks from Q143 for right-edge/central
   cyborg plus the player already in the killing lane only hit with two rats
-  still alive. Continue Q143 by finding a one-rat branch that lands the player
-  in the killing lane before the last cyborg leaves its death square.
+  still alive. Direct `ratsleplayer` checks from Q143 for row-19 killing-lane
+  cells `(14,19)..(18,19)` all returned empty. Continue Q143 by finding a
+  one-rat branch that lands the player in the killing lane before the last
+  cyborg leaves its death square, or by changing the trigger-2 cut before Q143.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
