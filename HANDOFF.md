@@ -5182,6 +5182,53 @@ safe, relay cell intact" checks; it does not change game rules or scoring.
   to tiny over-approximating local subgoal checks and replay every candidate
   with `target/release/solver verify`.
 
+### OOM-safe continuation - 2026-06-13 twenty-first Codex pass
+
+No new verified win. Process-table checks before and after the probes found no
+leftover `target/release/solver`, `cargo`, `clingo`, or `timeout` jobs. The
+current hard inventory is nine rat-bearing CSVs:
+`cooperation/blocked_v2.csv`, `cooperation/handoff.csv`,
+`cooperation/tug_of_war.csv`, `cyborg_rats/ai_takeover.csv`,
+`old_levels/on_the_clock.csv`, `old_levels/overstep.csv`, `release.csv`,
+`reload_v3.csv`, and `tinderrectangle.csv`. `claude/gauntlet.csv` is absent from
+`final_solutions.json` but has no rats and is not part of the hard set.
+
+- `old_levels/overstep`: rechecked the P47 branch
+  `vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^vvvvvvvvv<<<<<`. Diagnostics: six rats,
+  six explosives, seven webs, 21 triggers, only one reachable rat; rats are
+  `(13,6)`, `(14,11)`, `(0,13)`, `(10,14)`, `(13,15)`, `(0,20)`. A shallow
+  `frontier` with all six rats preserved only produced local
+  trigger/resource-collapse families. Do not continue P47 as a cleanup route
+  unless a new predicate explicitly changes the `(14,11)` or left-sealed-rat
+  geometry before resources are spent.
+- `tinderrectangle`: the P83 safe-side branch remains real:
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^^vvv<<^>>>>^^>>>v>vv>>^^^>>vv>v`.
+  Diagnostics: all 16 rats reachable, all 43 explosives preserved, lower rat
+  `(2,3)`, player `(15,6)`, `(2,4)` still webbed, 23 webs. Follow-ups from P83
+  showed safe right-side movement but no release: `branchdump --goal ratat:0,0`
+  with all rats/explosives preserved returned empty, and
+  `lookup --goal win --depth 160 --secs 38 --maxnodes 300000` returned
+  `NO_SOLUTION`. The missing tactic is still a topology/release change for
+  `(2,4)/(3,4)` after safe-side arrival, not another direct corner-ignition
+  ask.
+- `cyborg_rats/ai_takeover`: the P126 line
+  `^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>v>vv>>vvvvv<<<<<<<<<<<<<<<<^^^<<<`
+  leaves two enemies at `(18,4)` and `(11,9)`, both reachable, no triggers,
+  explosives `(14,12)` and `(15,12)`, and player `(0,16)`. `ratdeathgeom` for
+  sources `(18,4)` and `(11,9)` printed no one-step death placements. The exact
+  lower-right lure predicate
+  `ratrectplayerrect:18,13,19,16,14,18,18,19 --min-rats 2 --depth 80 --secs 22`
+  returned empty from P126, matching earlier P93/P117 failures. One uncapped
+  `ignitions` attempt was killed immediately after it hung; no solver process
+  remained. Continue by backing up before P126 and preserving a second
+  actor/resource, not by retrying the same lower-right lure.
+- `cooperation/blocked_v2`: tested the proposed structural mutation
+  `v<v^v^<^<^<<<^>v` with
+  `cellnotcellis:6,11,explosive,5,11,trigger2 --min-rats 8 --min-reachable-rats 5`;
+  it returned empty. The useful side remains trigger 2 at `(5,11)`, not
+  `(3,14)`. B17/B20/B23 are still finite basins unless a new route proves
+  actor/player access to `(5,11)`.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
