@@ -2661,6 +2661,43 @@ kept the process table clean between probe groups.
   but capped `ratsle:6` / event checks from D101 still found no cleanup branch.
   Continue from Q64 before trigger 2, not from D101 cleanup.
 
+### Latest bounded pass - 2026-06-13
+
+No new verified win. All checks in this pass were run with low concurrency and
+short `timeout`/`ulimit` caps after the previous OOM.
+
+- `cyborg_rats/ai_takeover`: Q64 can reach a better 3-rat triggerless basin:
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<<<<<<<<<<<<<<>>>>>>>>>>>><<<<<<<<<<<<<<^^^<<<`
+  verifies `Playing` at 109 turns with rats/cyborgs at `(18,4)`, `(11,9)`,
+  and `(2,16)`, explosives only at `(14,12)` and `(15,12)`, no triggers, and
+  all 3 rats reachable. However `ratsle:2` from this basin returned no branch
+  in bounded checks, and the local move table shows the left-pocket rat/cyborg
+  immediately constrains cleanup.
+- `cyborg_rats/ai_takeover`: the human mechanism is now clearer. The remote
+  cyborg at `(18,4)` does not start moving until trigger 2 clears the explosive
+  column at `(18,6..8)`, so the known trigger-2 line spends the trap before the
+  cyborg can enter it. A stricter `triggeronlycellnot:2,18,4,cyborg` probe did
+  find 4-rat trigger variants, but the best inspected state had player `(0,17)`,
+  cyborgs at `(1,16)`/`(2,16)`, and no playable successors. Continue searching
+  from Q64 for a pre-trigger structural event, not from the 3- or 4-rat basins.
+- `reload_v3`: the live-rat plank-cutting hypothesis from the trigger-1 family
+  was checked from
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v.<`. The helper rat cleanly cuts
+  plank `(3,18)`, but capped `cellnot:4,17,plank` and
+  `cellnot:4,19,plank` probes with `--min-rats 3` returned no branch. Killing
+  the helper rat is easy and appears to be the wrong objective.
+- `tinderrectangle`: the upper-door sword-latch branch
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv^^^>v^<vvvv^^^^<<vvv<<^^^<<<vvv<^^<^<<>`
+  reaches player `(4,3)` with the lower rat at `(3,3)`. Running right then
+  stepping left (`>>>>><`) safely kills the lower rat and leaves a clean
+  15-top-rat state with player `(8,3)`, but a capped `winready` probe and
+  direct `ratat:0,0` / `ratat:16,0` corner probes returned no branch. This
+  latch is useful evidence, but not a solution route by itself.
+- `old_levels/on_the_clock.csv`, `old_levels/order_of_operations.csv`, and
+  `old_levels/overstep.csv`: quick capped direct A* probes timed out without
+  wins. They remain in the unsolved rat inventory, but are lower priority than
+  the active hard set.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
