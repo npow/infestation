@@ -2041,6 +2041,50 @@ with per-process virtual-memory caps and left no solver process running.
   solution. Continue from a new structural event before safe-7, not from direct
   trigger-6/8 ordering.
 
+### Continuation pass - 2026-06-13 careful bounded follow-up
+
+No new verified wins. Solution artifacts are still unchanged. This pass kept
+solver concurrency low, used only capped 1M-2M node probes, and ended with no
+solver processes running. Reverification of `solver/solutions/final_solutions.json`
+still reports 29 verified wins and 0 failures under the current Rust oracle.
+
+- `release`: a local `ratgeom` clue shows that if a rat is staged at `(18,17)`
+  while the player is at `(19,19)`, the rat can trigger right-side `6` at
+  `(19,18)`. This would leave left `6` as a zap source and could clear the
+  `(0,17)` / `(1,16)` blocker before left trigger 2. However, from the standard
+  opener `v<vv^^>>v`, bounded lookups for `ratat:18,17`, `ratat:19,18`, and the
+  compound `ratplayer:18,17,19,19` all returned no solution. Treat right-6 as a
+  valid final nudge but not a staged plan from the known opener.
+- `reload_v3`: the all-rat 42-turn prefix
+  `^>>>>>>>^^vvvvvv<<<^^<<^^<<<<<<^^^^^^<<^^^` does make trigger 2 reachable,
+  but it is another trap. `triglookup` orders `2,1,3,4,5,6` and `2,3,4,5,6`
+  both collapse to a one-rat bottom-left basin before any next trigger can
+  continue. Stricter branchdumps requiring trigger 1, 3, or 4 to be reachable
+  immediately after `triggeronly:2` all returned empty while preserving all
+  three rats.
+- `tinderrectangle`: the near-miss state with lower rat `(6,6)` / player
+  `(7,6)` is still only one move from the ignition but has no safe separation
+  move. Moving left sacrifices the lower rat and leaves a 15-rat top-only state,
+  but follow-up `win`, `rectready`, and top-corner `ratat:0,0` / `ratat:16,0`
+  probes from that state returned no branch. The solution still needs separation
+  before the lower rat reaches row 6, not a post-contact recovery.
+- `cyborg_rats/ai_takeover`: from the A45 safe-7 frontier, branchdumps for
+  `triggeronly:8`, `triggeronlycellnot:8,2,19,explosive`, and `triggeronly:6`
+  returned empty with rat preservation. `wp` and `lookup` also report the right
+  trigger-8 cell `(18,19)` and right trigger-6 cell `(19,18)` dynamically
+  unreachable from A45. Do not continue direct trigger 6/8 from that frontier.
+- `cooperation/handoff`: exact local geometry for the sealed `(10,6)` rat says
+  `(10,6)->(11,7)` is possible if P2 is staged at `(14,8)`. `wp2` can reach
+  P2 `(14,8)`, but only after consuming all explosives/triggers and leaving
+  `(10,6)` in a size-1 component behind web `(10,5)`. All-rats-preserved
+  branchdumps for the same far-lure target returned empty. The far lure has to
+  happen before the common resource-spending sweep, and no such route is known.
+- `cooperation/tug_of_war`: a bounded independent pass found no top-pocket
+  release. Direct checks for helper-rat `(7,5)->(7,4)`, breaking `(7,2)` /
+  `(8,2)`, clearing `(7,1)` / `(8,1)`, or combining those with the top rat
+  still alive all returned empty under 1.2M-2M node caps. The top rat remains
+  the structural blocker.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
