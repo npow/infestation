@@ -4770,6 +4770,59 @@ leaving machine-level pressure; do not repeat 900k-node branchdumps under the
   empty. Continue `ai_takeover` from P93/P126 by changing the final lure
   geometry before killing `(11,9)`; do not continue P130.
 
+### OOM-safe continuation - 2026-06-13 fourteenth Codex pass
+
+No new verified win. This pass kept solver probes mostly serial under
+`ulimit -v 800000` and external `timeout`; one short `tinderrectangle` pair was
+accidentally launched in parallel, both processes stayed capped and exited
+cleanly. Process checks found no leftover `target/release/solver`, `cargo`,
+`clingo`, or `timeout` jobs. `claude/gauntlet.csv` was confirmed to contain
+zero rats, so it is not part of the rat-bearing hard set.
+
+- `cyborg_rats/ai_takeover`: P93 now has a sharper branch audit. From P93,
+  `ratrectplayerrect:18,5,18,6,16,11,19,19` returned empty, so the right cyborg
+  is not pulled into `(18,5)/(18,6)` while the player remains in the lower-right
+  band. `cellnotnoratsrect:18,6,explosive,18,4,18,4` did return P123-family
+  branches such as
+  `P123=^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>v>vv>>vvvvv<<<<<<<<<<<<<<<<^^^<<<<`,
+  where the right column has detonated after `(18,4)` vacates and the cyborg is
+  at `(18,5)`. However, the player is still in the left-edge cage, simple
+  oscillation still collapses, and `ratsle:2` from P123 returned empty. Treat
+  P123 as a diagnostic improvement over P122, not a cleanup frontier.
+- `release`: repeated earlier-prefix checks did not expose trigger 2 or the
+  isolated `(18,4)` rat's web. From the trigger-5 state
+  `v<vv^^>>vv<>>>^`, bounded probes for `trigger:2`,
+  `triggeronlycellnot:2,18,6,explosive`, `ratat:19,7`, `ratat:0,16`,
+  `cellnot:18,5,spiderweb`, and `ratgone:18,4` all returned empty. The same
+  trigger-2 / web-clear checks from prefixes 7-11 of the standard opener
+  (`v<vv^^>` through `v<vv^^>>vv<`) also returned empty. Continue only with a
+  genuinely new left-carrier or rat-trigger mechanism.
+- `tinderrectangle`: P132/P137 were rechecked around the row-6 ignition trap.
+  From P137
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv><v^>v^<^>v<vv<>^^>vv^^<^^>vv<^^^<<vvv<<^^<^<<vvv<<<<<>>>>>^<<<>>>^^<vv<<<v<<>>`,
+  the only all-rat-preserving local continuation walks the player/rat corridor
+  rightward until `(8,6)`, where continuing dies and backing up kills the lower
+  rat. From P137, `playerat:14,6`, `playerat:13,8`, and right-pocket
+  `ratrectplayerrect` targets preserving all 16 rats returned empty. From P132,
+  `ratrectplayerrect:2,6,8,6,13,6,15,8`, `playerat:14,6`, `rectignite`, and
+  `winready` also returned empty. The missing step is still a pre-release
+  separation change, not more row-6 chase.
+- `reload_v3`: the side-agent R7 hypothesis was closed under guarded caps.
+  `R7=^>>>>>^>>^^^<<<<v<<^<<<<<<<^^^` verifies with all 3 rats alive and
+  trigger 2 reachable, but top trigger 6 remains inaccessible. From R7,
+  `triggeronlycellnot:6,2,21,explosive`,
+  `triggeronlycellnot:6,1,21,web`,
+  `cellisplayerat:9,4,trigger6,9,5`, and
+  `ratcell:9,5,9,4,trigger6` all returned empty. Do not continue the R7
+  top-trigger-6 route without a new actor/resource change.
+- `old_levels/overstep`: P47 local inspection reconfirmed that immediate trigger
+  moves reduce rats by sealing the player away from remaining targets. The
+  side-agent's next useful overstep probes are still untested here:
+  guarded `triggeronlycellnot:1,0,18,explosive`,
+  guarded `triggeronlycellnot:7,2,12,explosive`, and guarded
+  `triggeronlycellnot:3,0,10,explosive` from P47/P49, each requiring escape
+  resources rather than accepting the known one-cell collapse.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
