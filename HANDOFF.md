@@ -3328,6 +3328,23 @@ No new verified win. This pass kept one capped solver process active at a time
   `triggeronlycellnot:8,12,14,rat` from P56 also returned empty. This closes
   the "same bridge, different final cleanup timing" idea; continue before the
   trigger-9 bridge commits the right-component rat to the 12-cell pocket.
+- `old_levels/on_the_clock`: the P23/P24/P25 bottom-right trigger mechanism is
+  now mapped. From P23
+  `v>>><^^v>^^>>>vvv><vvvv`, suffix `v` makes the rat at `(11,12)` fire trigger
+  2, which clears `(16,18)` while preserving all 8 rats. One more `v` moves the
+  bottom-right component rat to `(16,18)` and makes trigger 6 player-reachable,
+  but the next rat wave forces trigger 9 before trigger 6 can be used. Exact
+  P23/P24/P25 checks for `triggeronlycellnot:6,13,19,web` returned empty, even
+  relaxed. The all-rats P25 side branch `^^^>` moves the component rat to
+  `(15,14)`, but it is a contact trap: only `>` survives, and every action from
+  the resulting P30 state is `GameOver`.
+- `old_levels/order_of_operations`: the P35 route
+  `<<<<<<^v^^^^>^^^vvvv^vv^^vvvv>>>>>^` was rechecked with direct cleanup and
+  exact blocker targets. A capped `win` lookup from P35 reached the same
+  two-rat basin and returned `NO_SOLUTION`. Exact `ratgone:9,3` branchdumps
+  from P35 returned empty both with and without the `--min-reachable-rats 3`
+  viability gate, so the top rat is not removable from this frontier in the
+  tested bounds. Continue before P35; do not spend more time on late cleanup.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
