@@ -5838,6 +5838,50 @@ to lower node/address caps. Process checks before/after found no leftover
   is real, but still finite unless pre-station geometry lets an actor cross
   the bottom relay.
 
+### OOM-safe continuation - 2026-06-13 twenty-ninth Codex pass
+
+No new verified win. Work stayed OOM-safe after the prior machine OOM:
+all solver calls used short external `timeout`s, most had `ulimit -v`
+caps, and process checks showed memory headroom stayed high. No broad 900s
+fan-out was relaunched.
+
+- `cyborg_rats/ai_takeover`: the best new constructive branch is a remote
+  trigger-2 cut from the post-trigger-8 state, not the old walk-to-left-trigger
+  bridge. From
+  `AFTER8=^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>v>vv>>vvvv<vv>>>>vvvv>>>>>>>>^^^>>>>>>vvvvvvvv<<<<<<<<`,
+  `cellnotplayerrect:18,6,explosive,3,16,19,19` found
+  `P172=AFTER8+^^^>>>><<<<<<<>>>`. Diagnostics: player `(3,16)`, cyborg
+  `(18,7)`, normal rat `(11,9)`, `rats=2`, `explosives=2`, `webs=19`,
+  `triggers=0`, and both enemies reachable. This proves trigger 2 can be
+  fired while the player is not standing on left trigger 2 `(0,16)`.
+- `cyborg_rats/ai_takeover`: P172 is promising but not solved. From P172,
+  `cyborgkillreadyratlive`, `cyborgsle:0`, and `ratsle:1` returned no branches
+  in bounded checks. A beam run found a one-cyborg near-miss with player
+  `(12,8)` and cyborg `(13,9)`, but exact local checks and `lookup --goal win`
+  to depth 18 found no finish; immediate `v`, `>`, and `.` lose, while the
+  surviving moves only continue a diagonal chase. Treat this one-cyborg state
+  as another trap unless a new killing-lane invariant appears.
+- `cyborg_rats/ai_takeover`: the older fully spent bridge
+  `AFTER8+<<<<<<<<^^^<<<` remains inferior: it leaves the player at `(0,16)`
+  and falls into the known bottom-row shadow. Continue by changing the
+  post-trigger-8 cut around P172, or by finding a cyborg-first geometry before
+  accepting a one-normal-rat reduction.
+- `old_levels/on_the_clock`: the newest P31/P19 suggestions returned empty
+  under caps. From `P31=v>>><^^v>><^^>>>vvv^^^vvvvvvvvv`,
+  `triggeronlycellis:9,10,14,trigger3` found no branch. From
+  `P19=v>>><^^v>><^^>>>vvv`,
+  `ratrectplayerrectcellis:11,14,13,15,9,13,11,15,10,14,trigger3`
+  also found no branch. Do not deepen the P31/P32 trigger-9 acceptance line
+  without a new discriminator.
+- `old_levels/overstep`: the P45/O53 staging check
+  `ratrectplayerrectcellis:13,14,14,15,14,12,15,14,13,13,trigger4`
+  returned no branch under the tested cap. The prior P45 blocker-redirection
+  problem remains.
+- `cooperation/blocked_v2`: the broadened initial carrier-lane check
+  `cellnotratrect:6,11,explosive,0,6,1,8`, preserving all nine rats and six
+  reachable rats, returned no branch. The lower-left carrier mechanism is still
+  unproven.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
@@ -5866,11 +5910,12 @@ to lower node/address caps. Process checks before/after found no leftover
    contact trap. The next useful hypothesis must create a side loop or delayed
    release before `(2,4)` opens, because opening `(2,4)` starts the lower rat
    immediately and the current row-6 route loses the timing race.
-4. **Continue `ai_takeover` from P93/P126, not P130 cleanup.** P93 preserves
-   the right-side trigger/explosive resources with 3 enemies left; P126 proves
-   the right explosive column can be detonated and leaves only `(18,4)` and
-   `(11,9)`. The open problem is final lure geometry before killing `(11,9)`;
-   P130 kills too much too late and strands the final cyborg.
+4. **Continue `ai_takeover` from AFTER8/P172, not old P130/Q143 cleanup.**
+   P172 proves trigger 2 can be fired remotely while the player is off left
+   trigger `(0,16)`, leaving player `(3,16)`, cyborg `(18,7)`, and normal
+   `(11,9)`. The open problem is a cyborg-first or killing-lane geometry before
+   accepting the one-cyborg trap; direct P172 `cyborgkillreadyratlive`,
+   `cyborgsle:0`, and `ratsle:1` checks returned empty under bounded caps.
 5. **For two-player levels, work in `wp2` waypoint pairs.** Start with
    structural access checks (`cellnot` / `playerat`) before trigger
    choreography. `tug_of_war` may be unwinnable as authored because the top

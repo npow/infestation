@@ -67,6 +67,30 @@ fn count_rats(grid: &Grid) -> usize {
     rats
 }
 
+fn count_cyborg_rats(grid: &Grid) -> usize {
+    let mut cyborgs = 0;
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if grid.cell_kind_at(x, y) == CellKind::CyborgRat {
+                cyborgs += 1;
+            }
+        }
+    }
+    cyborgs
+}
+
+fn count_normal_rats(grid: &Grid) -> usize {
+    let mut rats = 0;
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if grid.cell_kind_at(x, y) == CellKind::Rat {
+                rats += 1;
+            }
+        }
+    }
+    rats
+}
+
 /// Player walk-distance BFS: players are blocked by walls, planks,
 /// black holes, and explosives. Webs, empties, triggers, and rat cells
 /// are walkable for heuristic purposes.
@@ -786,6 +810,143 @@ fn heuristic(grid: &Grid) -> i64 {
     }
 }
 
+fn sword_ready_heuristic(grid: &Grid) -> i64 {
+    if win_ready(grid) {
+        return 0;
+    }
+
+    let rats = rat_positions(grid);
+    if rats.is_empty() {
+        return 0;
+    }
+
+    let dist = player_dist_map(grid);
+    let attack_dirs = [(0i32, -1i32), (0, 1), (1, 0), (-1, 0)];
+    let mut nearest_attack = 1_000i64;
+    let mut reachable_attack_targets = 0i64;
+
+    for &(rat_x, rat_y) in &rats {
+        for (dx, dy) in attack_dirs {
+            let x = rat_x + dx;
+            let y = rat_y + dy;
+            if x < 0 || y < 0 || x as usize >= grid.width() || y as usize >= grid.height() {
+                continue;
+            }
+
+            let kind = grid.cell_kind_at(x as usize, y as usize);
+            if matches!(
+                kind,
+                CellKind::Wall
+                    | CellKind::Plank
+                    | CellKind::BlackHole
+                    | CellKind::Explosive
+                    | CellKind::Rat
+                    | CellKind::CyborgRat
+            ) {
+                continue;
+            }
+
+            let d = dist[y as usize][x as usize];
+            if d != i32::MAX {
+                nearest_attack = nearest_attack.min(d as i64);
+                reachable_attack_targets += 1;
+            }
+        }
+    }
+
+    let unreachable_penalty = if reachable_attack_targets == 0 {
+        250_000
+    } else {
+        0
+    };
+    count_rats(grid) as i64 * 1_000_000 + unreachable_penalty + nearest_attack * 1_000
+}
+
+fn dir4_delta(dir: Dir4) -> (i32, i32) {
+    match dir {
+        Dir4::North => (0, -1),
+        Dir4::South => (0, 1),
+        Dir4::East => (1, 0),
+        Dir4::West => (-1, 0),
+    }
+}
+
+fn cyborg_kill_ready(grid: &Grid, direction: Option<Dir4>, require_normal_rat: bool) -> bool {
+    let current_cyborgs = count_cyborg_rats(grid);
+    if current_cyborgs == 0 {
+        return false;
+    }
+    if require_normal_rat && count_normal_rats(grid) == 0 {
+        return false;
+    }
+
+    let player_count = count_players(grid);
+    let directions = [Dir4::North, Dir4::South, Dir4::East, Dir4::West];
+    directions
+        .into_iter()
+        .filter(|&candidate| direction.is_none_or(|wanted| wanted == candidate))
+        .any(|candidate| {
+            let actions = [Action::Move(candidate)];
+            let (next, play_state) = step(grid, &actions);
+            play_state != PlayState::GameOver
+                && count_players(&next) == player_count
+                && count_cyborg_rats(&next) < current_cyborgs
+                && (!require_normal_rat || count_normal_rats(&next) > 0)
+        })
+}
+
+fn cyborg_kill_ready_heuristic(
+    grid: &Grid,
+    direction: Option<Dir4>,
+    require_normal_rat: bool,
+) -> i64 {
+    if cyborg_kill_ready(grid, direction, require_normal_rat) {
+        return 0;
+    }
+
+    let cyborgs = positions_matching(grid, |cell| cell == CellKind::CyborgRat);
+    let dist = player_dist_map(grid);
+    let directions = [Dir4::North, Dir4::South, Dir4::East, Dir4::West];
+    let mut nearest_stance = 1_000i64;
+
+    for &(cyborg_x, cyborg_y) in &cyborgs {
+        for candidate in directions {
+            if direction.is_some_and(|wanted| wanted != candidate) {
+                continue;
+            }
+            let (dx, dy) = dir4_delta(candidate);
+            let stance = (cyborg_x - dx, cyborg_y - dy);
+            if stance.0 < 0
+                || stance.1 < 0
+                || stance.0 as usize >= grid.width()
+                || stance.1 as usize >= grid.height()
+            {
+                continue;
+            }
+
+            let kind = grid.cell_kind_at(stance.0 as usize, stance.1 as usize);
+            if matches!(
+                kind,
+                CellKind::Wall | CellKind::Plank | CellKind::BlackHole | CellKind::Explosive
+            ) {
+                continue;
+            }
+
+            let d = dist[stance.1 as usize][stance.0 as usize];
+            if d != i32::MAX {
+                nearest_stance = nearest_stance.min(d as i64);
+            }
+        }
+    }
+
+    let normal_penalty = if require_normal_rat && count_normal_rats(grid) == 0 {
+        2_000_000
+    } else {
+        0
+    };
+    count_cyborg_rats(grid) as i64 * 1_000_000 + normal_penalty + nearest_stance * 1_000
+}
+
 /// Transition: from a grid state, apply one set of actions, return (next_grid, play_state).
 fn step(grid: &Grid, actions: &[Action]) -> (Grid, PlayState) {
     step_grid(grid, actions)
@@ -909,6 +1070,8 @@ impl TrapConstraints {
 enum LookupGoal {
     Win,
     WinReady,
+    SwordReady,
+    CyborgKillReady(Option<Dir4>, bool),
     RectangleReady,
     RectangleLowerReady,
     RectangleLowerSeparated,
@@ -935,6 +1098,21 @@ enum LookupGoal {
     RatInRectWithPlayerInRect(i32, i32, i32, i32, i32, i32, i32, i32),
     RatInRectWithPlayerInRectAndCellIs(i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, CellKind),
     RatInRectWithCellIs(i32, i32, i32, i32, i32, i32, CellKind),
+    NormalRatInRectWithCyborgInRect(i32, i32, i32, i32, i32, i32, i32, i32),
+    NormalRatInRectWithCyborgInRectAndPlayerInRect(
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+    ),
     RatAtWithPlayerFacing(i32, i32, i32, i32, Dir4),
     RatAtWithCell(i32, i32, i32, i32, CellKind),
     RatGone(i32, i32),
@@ -943,6 +1121,7 @@ enum LookupGoal {
     RatsAtMost(usize),
     ReachableRatsAtLeast(usize),
     AllRatsReachable,
+    CyborgsAtMost(usize),
     TriggersAtMost(usize),
     ExplosivesAtMost(usize),
     WebsAtMost(usize),
@@ -963,6 +1142,11 @@ impl LookupGoal {
             return match input {
                 "win" => Self::Win,
                 "readywin" | "winready" => Self::WinReady,
+                "swordready" | "killready" => Self::SwordReady,
+                "cyborgkillready" | "cyborg-kill-ready" => Self::CyborgKillReady(None, false),
+                "cyborgkillreadyratlive" | "cyborg-kill-ready-rat-live" => {
+                    Self::CyborgKillReady(None, true)
+                }
                 "rectready" | "rectangle-ready" => Self::RectangleReady,
                 "rectlower" | "rectangle-lower" => Self::RectangleLowerReady,
                 "rectsep" | "rectangle-lower-separated" => Self::RectangleLowerSeparated,
@@ -973,6 +1157,12 @@ impl LookupGoal {
             };
         };
         match kind {
+            "cyborgkillready" | "cyborg-kill-ready" => {
+                Self::CyborgKillReady(Some(parse_dir4_name(arg.trim())), false)
+            }
+            "cyborgkillreadyratlive" | "cyborg-kill-ready-rat-live" => {
+                Self::CyborgKillReady(Some(parse_dir4_name(arg.trim())), true)
+            }
             "trigger" => Self::TriggerNumber(arg.parse().expect("trigger number")),
             "triggeronly" | "triggerstrict" | "triggerexact" => {
                 Self::TriggerNumberOnly(arg.parse().expect("trigger number"))
@@ -1363,6 +1553,36 @@ impl LookupGoal {
                     values[0], values[1], values[2], values[3], values[4], values[5], kind,
                 )
             }
+            "normalratrectcyborgrect" | "normal-inrect-cyborg-inrect" => {
+                let values: Vec<i32> = arg
+                    .split(',')
+                    .map(|part| part.trim().parse().expect("coordinate"))
+                    .collect();
+                assert_eq!(
+                    values.len(),
+                    8,
+                    "expected normalx1,normaly1,normalx2,normaly2,cyborgx1,cyborgy1,cyborgx2,cyborgy2"
+                );
+                Self::NormalRatInRectWithCyborgInRect(
+                    values[0], values[1], values[2], values[3], values[4], values[5], values[6],
+                    values[7],
+                )
+            }
+            "normalratrectcyborgrectplayerrect" | "normal-inrect-cyborg-inrect-player-inrect" => {
+                let values: Vec<i32> = arg
+                    .split(',')
+                    .map(|part| part.trim().parse().expect("coordinate"))
+                    .collect();
+                assert_eq!(
+                    values.len(),
+                    12,
+                    "expected normalx1,normaly1,normalx2,normaly2,cyborgx1,cyborgy1,cyborgx2,cyborgy2,playerx1,playery1,playerx2,playery2"
+                );
+                Self::NormalRatInRectWithCyborgInRectAndPlayerInRect(
+                    values[0], values[1], values[2], values[3], values[4], values[5], values[6],
+                    values[7], values[8], values[9], values[10], values[11],
+                )
+            }
             "ratplayerfacing" | "ratplayerdir" => {
                 let mut parts = arg.split(',');
                 let rat_x = parts.next().expect("rat x").trim().parse().expect("rat x");
@@ -1461,6 +1681,9 @@ impl LookupGoal {
             "ratsle" | "ratsatmost" => Self::RatsAtMost(arg.parse().expect("rat count")),
             "reachablege" | "reachableratsge" => {
                 Self::ReachableRatsAtLeast(arg.parse().expect("reachable rat count"))
+            }
+            "cyborgsle" | "cyborgsatmost" => {
+                Self::CyborgsAtMost(arg.parse().expect("cyborg rat count"))
             }
             "triggersle" | "triggersatmost" => {
                 Self::TriggersAtMost(arg.parse().expect("trigger count"))
@@ -1760,6 +1983,10 @@ fn lookup_goal_reached(
     match goal {
         LookupGoal::Win => play_state == PlayState::Won,
         LookupGoal::WinReady => play_state == PlayState::Won || win_ready(current),
+        LookupGoal::SwordReady => play_state == PlayState::Won || win_ready(current),
+        LookupGoal::CyborgKillReady(direction, require_normal_rat) => {
+            cyborg_kill_ready(current, direction, require_normal_rat)
+        }
         LookupGoal::RectangleReady => play_state == PlayState::Won || win_ready(current),
         LookupGoal::RectangleLowerReady => {
             play_state == PlayState::Won || rectangle_lower_ready(current)
@@ -1870,6 +2097,47 @@ fn lookup_goal_reached(
                 .any(|&point| point_in_rect(point, rx1, ry1, rx2, ry2))
                 && current.cell_kind_at(cell_x as usize, cell_y as usize) == kind
         }
+        LookupGoal::NormalRatInRectWithCyborgInRect(
+            normal_x1,
+            normal_y1,
+            normal_x2,
+            normal_y2,
+            cyborg_x1,
+            cyborg_y1,
+            cyborg_x2,
+            cyborg_y2,
+        ) => {
+            normal_rat_positions(current)
+                .iter()
+                .any(|&point| point_in_rect(point, normal_x1, normal_y1, normal_x2, normal_y2))
+                && cyborg_rat_positions(current)
+                    .iter()
+                    .any(|&point| point_in_rect(point, cyborg_x1, cyborg_y1, cyborg_x2, cyborg_y2))
+        }
+        LookupGoal::NormalRatInRectWithCyborgInRectAndPlayerInRect(
+            normal_x1,
+            normal_y1,
+            normal_x2,
+            normal_y2,
+            cyborg_x1,
+            cyborg_y1,
+            cyborg_x2,
+            cyborg_y2,
+            player_x1,
+            player_y1,
+            player_x2,
+            player_y2,
+        ) => {
+            normal_rat_positions(current)
+                .iter()
+                .any(|&point| point_in_rect(point, normal_x1, normal_y1, normal_x2, normal_y2))
+                && cyborg_rat_positions(current)
+                    .iter()
+                    .any(|&point| point_in_rect(point, cyborg_x1, cyborg_y1, cyborg_x2, cyborg_y2))
+                && positions_matching(current, |cell| cell == CellKind::Player)
+                    .iter()
+                    .any(|&point| point_in_rect(point, player_x1, player_y1, player_x2, player_y2))
+        }
         LookupGoal::RatAtWithPlayerFacing(rat_x, rat_y, player_x, player_y, dir) => {
             rat_at(current, (rat_x, rat_y)) && player_facing(current, (player_x, player_y), dir)
         }
@@ -1887,6 +2155,7 @@ fn lookup_goal_reached(
         LookupGoal::RatsAtMost(count) => count_rats(current) <= count,
         LookupGoal::ReachableRatsAtLeast(count) => reachable_rat_count(current) >= count,
         LookupGoal::AllRatsReachable => reachable_rat_count(current) == count_rats(current),
+        LookupGoal::CyborgsAtMost(count) => count_cyborg_rats(current) <= count,
         LookupGoal::TriggersAtMost(count) => Features::from_grid(current).triggers <= count,
         LookupGoal::ExplosivesAtMost(count) => Features::from_grid(current).explosives <= count,
         LookupGoal::WebsAtMost(count) => Features::from_grid(current).webs <= count,
@@ -1953,6 +2222,10 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             } else {
                 heuristic(current)
             }
+        }
+        LookupGoal::SwordReady => sword_ready_heuristic(current),
+        LookupGoal::CyborgKillReady(direction, require_normal_rat) => {
+            cyborg_kill_ready_heuristic(current, direction, require_normal_rat)
         }
         LookupGoal::RectangleReady => {
             rectangle_winready_heuristic(current, count_rats(initial), count_explosives(initial))
@@ -2158,6 +2431,46 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
                 + cell_penalty
                 + heuristic(current) / 1_000
         }
+        LookupGoal::NormalRatInRectWithCyborgInRect(
+            normal_x1,
+            normal_y1,
+            normal_x2,
+            normal_y2,
+            cyborg_x1,
+            cyborg_y1,
+            cyborg_x2,
+            cyborg_y2,
+        ) => {
+            let normal_rats = normal_rat_positions(current);
+            let cyborgs = cyborg_rat_positions(current);
+            nearest_rect_distance(&normal_rats, normal_x1, normal_y1, normal_x2, normal_y2) * 1_000
+                + nearest_rect_distance(&cyborgs, cyborg_x1, cyborg_y1, cyborg_x2, cyborg_y2)
+                    * 1_000
+                + heuristic(current) / 1_000
+        }
+        LookupGoal::NormalRatInRectWithCyborgInRectAndPlayerInRect(
+            normal_x1,
+            normal_y1,
+            normal_x2,
+            normal_y2,
+            cyborg_x1,
+            cyborg_y1,
+            cyborg_x2,
+            cyborg_y2,
+            player_x1,
+            player_y1,
+            player_x2,
+            player_y2,
+        ) => {
+            let normal_rats = normal_rat_positions(current);
+            let cyborgs = cyborg_rat_positions(current);
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            nearest_rect_distance(&normal_rats, normal_x1, normal_y1, normal_x2, normal_y2) * 1_000
+                + nearest_rect_distance(&cyborgs, cyborg_x1, cyborg_y1, cyborg_x2, cyborg_y2)
+                    * 1_000
+                + nearest_rect_distance(&players, player_x1, player_y1, player_x2, player_y2)
+                + heuristic(current) / 1_000
+        }
         LookupGoal::RatAtWithPlayerFacing(rat_x, rat_y, player_x, player_y, _) => {
             let rats = rat_positions(current);
             let players = positions_matching(current, |cell| cell == CellKind::Player);
@@ -2208,6 +2521,16 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         LookupGoal::AllRatsReachable => {
             count_rats(current).saturating_sub(reachable_rat_count(current)) as i64 * 1_000_000
                 + count_rats(current) as i64 * 1_000
+        }
+        LookupGoal::CyborgsAtMost(count) => {
+            let cyborg_penalty =
+                count_cyborg_rats(current).saturating_sub(count) as i64 * 1_000_000;
+            let helper_loss_penalty = if cyborg_penalty > 0 {
+                count_rats(initial).saturating_sub(count_rats(current)) as i64 * 500_000
+            } else {
+                0
+            };
+            cyborg_penalty + helper_loss_penalty + heuristic(current) / 1_000
         }
         LookupGoal::TriggersAtMost(count) => {
             Features::from_grid(current).triggers.saturating_sub(count) as i64 * 1_000_000
@@ -2344,6 +2667,10 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
             count_rats(current) as i64 * 1_000_000
                 + Features::from_grid(current).explosives as i64 * 100
                 + Features::from_grid(current).webs as i64
+        }
+        LookupGoal::SwordReady => sword_ready_heuristic(current),
+        LookupGoal::CyborgKillReady(direction, require_normal_rat) => {
+            cyborg_kill_ready_heuristic(current, direction, require_normal_rat)
         }
         LookupGoal::RectangleReady => {
             rectangle_winready_heuristic(current, count_rats(initial), count_explosives(initial))
@@ -2496,6 +2823,59 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
                 (current.cell_kind_at(cell_x as usize, cell_y as usize) != kind) as i64;
             rat_missing * 1_000 + cell_missing * 1_000_000
         }
+        LookupGoal::NormalRatInRectWithCyborgInRect(
+            normal_x1,
+            normal_y1,
+            normal_x2,
+            normal_y2,
+            cyborg_x1,
+            cyborg_y1,
+            cyborg_x2,
+            cyborg_y2,
+        ) => {
+            let normal_rats = normal_rat_positions(current);
+            let cyborgs = cyborg_rat_positions(current);
+            let normal_missing = !normal_rats
+                .iter()
+                .any(|&point| point_in_rect(point, normal_x1, normal_y1, normal_x2, normal_y2))
+                as i64;
+            let cyborg_missing = !cyborgs
+                .iter()
+                .any(|&point| point_in_rect(point, cyborg_x1, cyborg_y1, cyborg_x2, cyborg_y2))
+                as i64;
+            normal_missing * 1_000 + cyborg_missing
+        }
+        LookupGoal::NormalRatInRectWithCyborgInRectAndPlayerInRect(
+            normal_x1,
+            normal_y1,
+            normal_x2,
+            normal_y2,
+            cyborg_x1,
+            cyborg_y1,
+            cyborg_x2,
+            cyborg_y2,
+            player_x1,
+            player_y1,
+            player_x2,
+            player_y2,
+        ) => {
+            let normal_rats = normal_rat_positions(current);
+            let cyborgs = cyborg_rat_positions(current);
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let normal_missing = !normal_rats
+                .iter()
+                .any(|&point| point_in_rect(point, normal_x1, normal_y1, normal_x2, normal_y2))
+                as i64;
+            let cyborg_missing = !cyborgs
+                .iter()
+                .any(|&point| point_in_rect(point, cyborg_x1, cyborg_y1, cyborg_x2, cyborg_y2))
+                as i64;
+            let player_missing = !players
+                .iter()
+                .any(|&point| point_in_rect(point, player_x1, player_y1, player_x2, player_y2))
+                as i64;
+            normal_missing * 1_000 + cyborg_missing * 1_000 + player_missing
+        }
         LookupGoal::RatAtWithPlayerFacing(rat_x, rat_y, player_x, player_y, dir) => {
             let facing_missing = !player_facing(current, (player_x, player_y), dir) as i64;
             (!rat_at(current, (rat_x, rat_y)) as i64) + facing_missing
@@ -2520,6 +2900,7 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
         LookupGoal::AllRatsReachable => {
             count_rats(current).saturating_sub(reachable_rat_count(current)) as i64
         }
+        LookupGoal::CyborgsAtMost(count) => count_cyborg_rats(current).saturating_sub(count) as i64,
         LookupGoal::TriggersAtMost(count) => {
             Features::from_grid(current).triggers.saturating_sub(count) as i64
         }
@@ -6319,6 +6700,14 @@ fn rat_positions(grid: &Grid) -> Vec<(i32, i32)> {
         }
     }
     rats
+}
+
+fn normal_rat_positions(grid: &Grid) -> Vec<(i32, i32)> {
+    positions_matching(grid, |cell| cell == CellKind::Rat)
+}
+
+fn cyborg_rat_positions(grid: &Grid) -> Vec<(i32, i32)> {
+    positions_matching(grid, |cell| cell == CellKind::CyborgRat)
 }
 
 fn tinder_lure_rat_positions(grid: &Grid) -> Vec<(i32, i32)> {
