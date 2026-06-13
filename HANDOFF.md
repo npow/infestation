@@ -2929,6 +2929,47 @@ checks showed no `solver`, `timeout`, or `clingo` processes.
   A side explorer was started for `blocked_v2` but did not return before the
   safety cutoff and was closed; no visible solver process was left behind.
 
+### OOM-safe continuation - 2026-06-13
+
+No new verified win. This pass again used only capped local probes
+(`ulimit -v 800000` plus `timeout`) and ended with no solver processes active.
+
+- `old_levels/on_the_clock`: the 45-turn all-reachable frontier is confirmed as
+  a forced trigger-9 collapse. Enumerating every immediate legal action from
+  `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvvvvvvv` shows that all surviving
+  moves consume trigger 9 on the next rat step, leaving `triggers=0`,
+  `reachable_rats=5/8`, and three trapped rats. The next viable idea has to
+  change timing before this 45-turn state; no local rescue exists at that
+  state.
+- `old_levels/overstep`: the initial event scan found a better early lever
+  than the previous long branch: `>>>` preserves all 6 rats and most resources
+  (`rats=6`, `explosives=6`, `webs=6`, `triggers=20`), but capped
+  `reachablege:1` / `allreachable` probes from `>>>` returned no branch.
+  A macro run found a stronger-looking 68-turn state
+  `v<<^^^^^^>>>>>>>v>>>^^<<v<<<<<vv><v<<<vvv>vvvv<<vv^^>>^^^^>^>>>^v^.v`
+  with 3 rats, 1 explosive, 1 web, and 5 triggers, but diagnostics show the
+  player has only 3 reachable cells and no rats reachable. The only local
+  follow-up is trigger 4 (`^^`), which spends the last explosive/web and still
+  leaves all 3 rats unreachable. Treat both `>>>` and the macro 3-rat basin as
+  diagnostic dead ends unless a different first event opens rat reachability.
+- `old_levels/order_of_operations`: the top rat blocker was tested earlier than
+  the known two-rat residue. From
+  `P1=<<<<<<^v^^^^>^^vv^vv^vv^^^vvvv`, `playerat:9,4` is dynamically
+  unreachable, and both preserved and relaxed `ratgone:9,3` checks from the
+  initial board and P1 returned no branch. The top rat is statically
+  player-reachable in diagnostics, but current route families cannot actually
+  remove it before the trigger terrain seals the map.
+- `release`: an initial-board `events` scan mostly rediscovers central trigger
+  variants and local rat movements; it did not expose a first event that touches
+  `(18,5)`, left trigger 2, or trigger 6. Continue only from a hypothesis that
+  changes the right-pocket dependency before the standard 3/4/5 family.
+- `cooperation/blocked_v2`: the trigger-4-first frontier
+  `v< v^ v^ <^ <^ << <^ >v` verifies with 8 rats, 15 explosives, 25 webs, and
+  14 triggers, but its structural event scan only produced immediate top-pack
+  rat drops. A short `dropchain` from that frontier drops to 3 rats while
+  reducing reachable rats from 6 to 0; it does not touch the lower-left
+  trigger-2 gate. Do not continue cleanup-first from this frontier.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
