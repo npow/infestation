@@ -1,7 +1,7 @@
 # Infestation solving campaign — HANDOFF
 
-Resume doc for continuing the effort on another machine. **Goal: solve the 10
-remaining rat-bearing CSV levels.** 35 verified solutions are recorded in
+Resume doc for continuing the effort on another machine. **Goal: solve the 9
+remaining rat-bearing CSV levels.** 36 verified solutions are recorded in
 `solver/solutions/final_solutions.json`.
 
 ---
@@ -70,13 +70,15 @@ so every result is exactly what the shipped game does. Binary: `target/release/s
 
 ## 3. Status
 
-### Solved - 29/36 non-Claude levels + 5 new (all oracle-verified `result=Won`)
+### Solved - 36 saved solutions (all oracle-verified `result=Won`)
 Move strings: **`solver/solutions/SOLUTIONS.md`** (machine-readable: `final_solutions.json`).
 Browser auto-player: `solver/solutions/autoplay.js`. New puzzles: `levels/claude/`.
 
-`HANDOFF.md` used to say 11 remained, but `solver/solutions/SOLUTIONS.md`
-now includes verified wins for `tinderbox`, `no_retreat`, `lock_in`, and
-`limited2`; the latest pass also adds `chase`.
+Older notes in this file mention `chase`, `world`, and `order_of_operations`
+as active work, but those are now in `final_solutions.json` and verify against
+the current oracle. As of 2026-06-13, the unsolved rat-bearing inventory is the
+9-level set below. `levels/claude/gauntlet.csv` has zero rats and is not counted
+as a rat puzzle.
 
 ### UNSOLVED - primary hard set
 
@@ -91,8 +93,7 @@ now includes verified wins for `tinderbox`, `no_retreat`, `lock_in`, and
 | 7 | `cooperation/blocked_v2` | 2 | one player blocked | Keep the previous warning: one rat may be permanently unreachable behind effectively indestructible structure. Before spending human-solving time, prove or disprove winnability with targeted reachability/exhaustive checks. |
 
 Additional unsolved old-level CSVs in the current inventory:
-`old_levels/on_the_clock.csv`, `old_levels/order_of_operations.csv`, and
-`old_levels/overstep.csv`.
+`old_levels/on_the_clock.csv` and `old_levels/overstep.csv`.
 
 ### Approach update - 2026-06-11
 
@@ -4864,6 +4865,157 @@ external `timeout`; process checks found no leftover `target/release/solver`,
   can move the lower rat rightward, but continuing down/right ignites and kills
   the player, while backing up kills the lower rat. The missing mechanism is
   still a pre-release separation/topology change before T58/P132/P137.
+
+### OOM-safe continuation - 2026-06-13 sixteenth Codex pass
+
+No new verified win. Work stayed bounded with `ulimit -v 800000`, external
+`timeout`, and process-table checks before/after heavyweight probes. One
+sidecar probe briefly overlapped a local capped probe; no leftover solver,
+`cargo`, `clingo`, or `timeout` process remained after the checks.
+
+- `tinderrectangle`: found a new mid-left baffle state before `(2,4)` opens:
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<`.
+  It has all 16 rats reachable, all 43 explosives preserved, `(5,4)` opened,
+  and the lower rat staged at `(2,3)` while `(2,4)` is still webbed. This is
+  useful evidence and is different from the closed row-6 contact trap. However,
+  bounded follow-ups from that prefix returned empty/no branch for `win`,
+  `rectignite`, and `rectsep` under depth 70-80, 120k-150k nodes, preserving
+  all 16 rats and 43 explosives. Do not discard the baffle idea, but it is not
+  an immediate finish; it still needs another topology change or delayed
+  separation mechanism.
+- `old_levels/overstep`: Hypatia's new P47/P49/P95 probes are now closed.
+  From P95, guarded `ratgone:14,11` returned empty. From P47, guarded
+  `ratslecellnot:5,14,15,explosive` returned empty. From P49, guarded
+  `ratcell:0,12,0,10,explosive` and
+  `cellnotnoratsrect:0,18,explosive,0,13,1,17` both returned empty. This
+  closes the local `(14,11)` fuse/staging ideas and the live bottom-left fuse
+  branch under current predicates.
+- `cyborg_rats/ai_takeover`: sidecar found no full route. The useful new
+  state is P107
+  `^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>><^<<^^<>vvv>>>`,
+  a right-side reset with player `(16,11)`, two enemies, eight explosives, and
+  seven triggers, but only one enemy reachable. Follow-ups from P93/P107 for
+  right-column detonation, right cyborg parking, and two-enemy/right-open
+  states with reachable resources returned empty.
+- `cooperation/handoff` and `cooperation/tug_of_war`: sidecar found no wins.
+  `handoff` direct `cellnot:10,5,web` preserving all five rats and a reachable
+  trigger returned empty. `tug_of_war` direct top-plank mutations
+  `cellnot:7,2,plank` and `cellnot:8,2,plank` preserving all seven rats and
+  six reachable rats returned empty. Next sharper predicates are
+  `handoff` `cellnotratrect:10,5,web,10,6,11,7 --min-rats 4 --next-trigger 2`
+  and `tug_of_war` `cellnotratrect:7,1,web,7,0,8,0` /
+  `cellnotratrect:8,1,web,7,0,8,0`. These sharper predicates were also run
+  locally and returned empty under depth 45, 150k-node caps. This makes the
+  `tug_of_war` top pocket look increasingly unwinnable as authored unless a
+  non-obvious actor/resource mutation can affect the pocket indirectly.
+- `reload_v3` / `old_levels/on_the_clock`: sidecar found no wins. New
+  `on_the_clock` P16 probe
+  `cellnotcellis:14,15,web,10,14,trigger3` preserving all eight rats and at
+  least four reachable triggers returned empty. Next useful direction is to
+  back up before P16 and test central-rat cleanup while preserving the
+  lower-right door, e.g. `ratslecellis:6,10,14,trigger3`.
+- ASP/clingo route: the `clingo` binary is not on PATH and default `python3`
+  cannot import `clingo`, but the old venv
+  `/tmp/infestation-clingo-venv/bin/python` exists and has `clingo 5.8.0`.
+  ASP may still be useful for small inverse subproblems, but it should remain
+  a bounded invariant-check tool unless it is verified against the Rust oracle.
+- `release`: sidecar found a new basin
+  `v<vv^^^^^v^vvvvv>>><^`. Diagnostics: trigger 3/4 consumed, 23 rats,
+  5 explosives, 25 webs, 7 triggers; player `(9,12)`; lower-left rat survives
+  at `(5,12)`; `(18,5)` is still web; `(0,16)` is still trigger 2; 20/23 rats
+  are reachable. This is a real timing change from the old `v<vv^^>>v` opener.
+  Follow-ups from that prefix returned empty under OOM-safe caps:
+  `cellnot:18,5,web` with at least 22 rats and 20 reachable rats, guarded
+  `triggeronly:6` with at least 22 rats and 18 reachable rats, and relaxed
+  `triggeronly:6`. Synthetic `ignitions` shows right-column detonation would be
+  possible from placements near `(19,6)`, `(19,8)`, `(17,17)`, `(19,17)`, or
+  `(19,19)`, but quick station lookups did not reach those placements from the
+  basin. Keep this basin as a lead, but the next useful predicate must change
+  station/access geometry, not merely ask for trigger 6 or direct `(18,5)`
+  clearance.
+- `tinderrectangle`: targeted `tinderbeam` from the mid-left baffle prefix
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<` improved the frontier but did
+  not solve. Best staged prefix:
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^<vv<<v>>>^>>>^^>>>vvv>>^.^^v.^>>vvvvv<>>^^^^<^<<vvv<<v`
+  (98 turns) has all 16 rats reachable, all 43 explosives preserved, only
+  18 webs left, player `(10,6)`, and lower rat still `(2,3)`. From P98,
+  `rectsep` remained empty with and without the explosive-preservation guard.
+  The safe first reduction `P98+^^^<<<<<<<<` drops to 15 rats while preserving
+  all explosives/reachability, but a bounded beam from that 15-rat state stayed
+  stuck at score `15000002` through depth 150. Treat "kill the lower rat first"
+  as a dead simplification; the useful route still needs lower-rat topology,
+  not cleanup.
+- `cyborg_rats/ai_takeover`: P107/P117 made real progress but still no win.
+  P107
+  `^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>><^<<^^<>vvv>>>`
+  has two enemies. Trigger 8 from P107 returned empty. Trigger 6 reaches P117:
+  `P107+v>vv>>vvvv`, still two enemies, six explosives, four triggers, and
+  left trigger 2 reachable. Manually taking trigger 2 via
+  `v<<<<<<<<<<<<<<<<^^^<<<` reaches a one-cyborg state with `(18,4)` now
+  reachable, but final lure searches fall into a one-cyborg right-edge trap.
+  A close state `P140+>>v>vv>>>>>>>>>>>>>>>>^` has player `(19,18)` and cyborg
+  `(19,16)`; pulling upward reaches P166 with player `(19,15)` and cyborg
+  `(18,14)`, adjacent to a black hole. `ratdeathgeom` shows synthetic wins if
+  the player could be on row 19 while the cyborg remains `(18,14)`, but exact
+  staging `ratrectplayerrect:18,14,18,14,14,19,18,19` from P166 returned empty.
+  `dropchain` from P117 also timed out into the same one-cyborg trap. Next
+  useful predicate should preserve a second actor/resource for the final lure,
+  not just force trigger 2 then mop up.
+
+### OOM-safe continuation - 2026-06-13 seventeenth Codex pass
+
+No new verified win. Work stayed OOM-safe with one local capped solver process
+at a time, process-table checks, `ulimit -v 800000`, and external `timeout`.
+Stored solutions still contain 36 entries and all 36 replay as `result=Won`
+under the current Rust oracle.
+
+- `tinderrectangle`: confirmed the mid-left baffle prefix
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<`.
+  State: all 16 rats reachable, all 43 explosives preserved, `(5,4)` opened,
+  lower rat at `(2,3)`, and `(2,4)` still webbed. From this prefix, exact
+  `ratplayer:2,3,14,7` and looser
+  `ratrectplayerrect:2,3,2,3,14,6,15,8` returned no branches under depth 95 /
+  180k-node caps. From the stronger 135-turn prepared-safe state
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^^^^^<<<vvv<<^^^<<<vv<<v<<<^>>^^>>>>>v>vv>>^^^>>vvvv`,
+  `rectsep --no-canonical` returned empty. `events` from that 135-turn state
+  found only lower-rat kill branches or the row-3 latch `^^^^<<vvv<<^^^<<<<<<<`.
+  Short frontier from that latch shows the only all-rats-preserved continuation
+  is a one-cell east chase until the wall at `(11,3)`. Treat row-3 latch as
+  closed. The baffle remains a lead only if a different separation loop appears
+  before release.
+- `release`: a sidecar proposed trigger 6, then left trigger 2. In theory,
+  trigger 6 zaps `(0,18)`, detonates `(0,17)` then `(1,16)`, and opens the
+  lower-left gate; the bottom rat would then be lured onto left trigger 2
+  `(0,16)`, causing right trigger 2 `(19,7)` to zap/detonate the right column
+  `(18,6..8)` and clear `(18,5)`. Tested P24
+  `v<vv^^^^^v^vvvvv>>><^v<<`: state has 23 rats, all 5 remaining explosives,
+  both trigger-2 cells, player `(7,13)`, and bottom actor `(7,19)`.
+  `lookup --goal ratrectplayerrect:2,18,4,19,7,12,9,14 --min-rats 23 --min-triggers 7 --min-explosives 5 --next-trigger 6`
+  returned `NO_SOLUTION`. Looser
+  `branchdump --goal ratrectplayerrect:2,18,5,19,5,11,10,14` also returned
+  empty with the same guards. Direct
+  `branchdump --goal triggeronlycellnot:6,1,16,explosive` from P24 also returned
+  empty. Mechanism is still plausible, but P24 does not stage it.
+- `old_levels/on_the_clock`: P16 `v>>><^^v>><^^>>>` with
+  `branchdump --goal ratslecellis:6,10,14,trigger3 --min-rats 6 --min-reachable-triggers 3`
+  returned empty. Backing up to P9 `v>>><^^v>` and using the same predicate with
+  `--min-reachable-triggers 4` also returned empty. `events` from P9 found many
+  trigger/explosive trades, but they all keep 8 rats and do not improve the
+  lower-right door. The "central cleanup while `(10,14)` remains trigger 3"
+  idea is unavailable from P9/P16 under tested bounds. Need earlier timing or a
+  redirect of the lower-right rat before trigger 3 walls the door.
+- `reload_v3`: the plausible intended mechanism remains the bottom chain
+  `1 -> 2 -> 3 -> 4 -> 5 -> top 6`, not trigger 7. Tested prefix
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v>><`; `cellnot:2,21,explosive --min-rats 2`
+  returned empty, and
+  `cellnotcellis:9,6,explosive,2,21,explosive --min-rats 3` returned empty.
+  Variant `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v><` with
+  `cellnot:2,21,explosive --min-rats 2` also returned empty. Avoid top-trigger-7
+  and trigger-2-first basins; find a bottom-chain prefix preserving roaming
+  rat/access.
+- `chase`: a small amount of cheap read-only time was accidentally spent before
+  rechecking the inventory. `chase.csv` is solved and in
+  `final_solutions.json`; do not continue unless upstream invalidates it again.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
