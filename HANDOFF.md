@@ -2970,6 +2970,69 @@ No new verified win. This pass again used only capped local probes
   reducing reachable rats from 6 to 0; it does not touch the lower-left
   trigger-2 gate. Do not continue cleanup-first from this frontier.
 
+### Guarded mechanism pass - 2026-06-13
+
+No new verified win. This pass was deliberately OOM-safe after the prior
+machine OOM: before/after solver runs, check
+`ps -eo pid,ppid,comm,stat,pcpu,pmem,rss,etime,args | awk '$3=="solver" || $3=="timeout" || $3=="clingo" {print}'`.
+Run local solver probes as `ulimit -v 800000; timeout <N>s
+target/release/solver ...`, and keep concurrency to one or two bounded solver
+processes. All probes below ended with no visible `solver` / `timeout` /
+`clingo` processes.
+
+- `solver`: `lure` and `geomlure` now accept `--maxnodes`. On timeout or node
+  limit they print the best path/state seen so the search can be stopped before
+  it grows into the memory cap. This is a diagnostic guard only; it does not
+  change game rules.
+- `tinderrectangle`: a short independent audit found a clean left-column latch:
+  `<^^^vvv<<<<<<` verifies `Playing` with all 16 rats alive, player `(1,6)`,
+  and lower rat `(1,4)`. This is a useful human-readable reproduction of the
+  row-6 contact trap: from the latch, `>` carries the lower rat through
+  `(2,6)` ... `(6,6)`, but the player remains one cell ahead; `^` has only the
+  safe all-rats continuation `v`, and `rectsep` from the latch returned no
+  branch under the cap. The row-3 chase `<^^^<<<<>>` also moves the lower rat
+  cleanly, but opening upward lets the top pack drop and kills the player.
+- `tinderrectangle`: the exact local mechanism is now clear. `ratgeom` says the
+  pinned lower rat can step `(2,3)->(1,4)` only with the player at `(1,5)` or
+  `(1,6)`; no one-step `(2,3)->(1,3)`, `(2,4)`, or `(3,4)` geometry exists.
+  Actual branchdumps from both `<^^^` and the 58-turn safe-pocket frontier
+  failed to reach those lure squares while preserving all rats, so the next
+  useful idea must create a new side loop or top-pack blocker before release.
+- `reload_v3`: the live-rat plank station from
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v` is real, and both `^v` / `v^`
+  variants verify with 3 rats alive. However, exact preserved-resource probes
+  from both variants returned no branch for the helper rat firing trigger 1
+  (`ratcell:4,18,9,22,empty`) or for changing the lower-left blocker
+  (`ratcell:3,20,2,21,explosive` / `cellnot:2,21,explosive`). Park this plank
+  station unless a different pre-station event changes the delivery geometry.
+- `cooperation/blocked_v2`: from trigger-4-first
+  `v< v^ v^ <^ <^ << <^ >v`, exact checks for
+  `triggeronlycellnot:2,1,15,web`, `triggeronlycellnot:2,2,15,explosive`,
+  `cellnot:6,11,explosive`, and resource-preserving `ratgone:0,15` all
+  returned empty. The alternate staged prefix
+  `^< ^^ v^ ^^ v> v> v> vv vv ^v ^v ^< ^v` also failed
+  `triggeronlycellnot:2,1,15,web`. Current frontiers still do not provide
+  trigger-2 access or a lower-left bypass.
+- `cyborg_rats/ai_takeover`: Q64 still verifies, but right-middle
+  cyborg-specific structural probes returned empty for `cellnot:17,8,plank`
+  and `cellnot:16,8,web` while preserving at least 12 rats and a trigger.
+  A stricter non-collapsing trigger-7 check,
+  `triggeronlycellnot:7,18,6,explosive` with trigger 2 still reachable, also
+  returned empty. Continue from a pre-Q64 structural event, not D101 cleanup.
+- `release`: from the standard opener `v<vv^^>>v`, the left-trigger-2/right-web
+  formulation `triggeronlycellnot:2,18,5,web` returned empty under resource
+  gates. The standard opener still does not turn trigger 2 into the isolated
+  `(18,4)` fix.
+- `old_levels/on_the_clock`: the proposed timing point
+  `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^` verifies at 35 turns, but diagnostics
+  show `reachable_rats=0` even before the known P45 all-reachable/trigger-9
+  collapse. A local frontier from that point only varies terrain collapse and
+  rat drift; it does not create a rescue. Back up earlier than this timing
+  family.
+- `claude/gauntlet.csv`: this is a zero-rat empty room / portal-hub style level.
+  Empty replay is `Playing`, and bounded `lookup` returns `NO_SOLUTION`
+  immediately. Do not count it with the rat-bearing hard puzzles.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.

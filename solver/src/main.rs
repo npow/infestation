@@ -4027,6 +4027,25 @@ fn geom_lure_heuristic(
     }
 }
 
+fn print_best_search_state(
+    label: &str,
+    reason: &str,
+    expansions: u64,
+    best_h_seen: i64,
+    nodes: &[Node],
+    best_idx_seen: usize,
+) {
+    let best_path = reconstruct(nodes, best_idx_seen);
+    eprintln!(
+        "  [{label} {reason} after {expansions} expansions, best_h={}, nodes={}]",
+        best_h_seen,
+        nodes.len()
+    );
+    eprintln!("  BEST_ARROWS {}", format_path(&best_path));
+    eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
+    eprintln!("  BEST_STATE:\n{}", nodes[best_idx_seen].grid.to_csv());
+}
+
 #[must_use]
 fn solve_lure(
     grid: &Grid,
@@ -4035,6 +4054,7 @@ fn solve_lure(
     preserve_rats: bool,
     max_depth: usize,
     time_limit_secs: f64,
+    max_nodes: usize,
     strategy: &str,
     weight: i64,
 ) -> Option<Vec<Vec<Action>>> {
@@ -4064,16 +4084,14 @@ fn solve_lure(
     while let Some(item) = pq.pop() {
         expansions += 1;
         if expansions % 20_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
-            let best_path = reconstruct(&nodes, best_idx_seen);
-            eprintln!(
-                "  [lure timeout after {} expansions, best_h={}, nodes={}]",
+            print_best_search_state(
+                "lure",
+                "timeout",
                 expansions,
                 best_h_seen,
-                nodes.len()
+                &nodes,
+                best_idx_seen,
             );
-            eprintln!("  BEST_ARROWS {}", format_path(&best_path));
-            eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
-            eprintln!("  BEST_STATE:\n{}", nodes[best_idx_seen].grid.to_csv());
             return None;
         }
 
@@ -4109,6 +4127,17 @@ fn solve_lure(
                 && previous_depth <= next_depth
             {
                 continue;
+            }
+            if nodes.len() >= max_nodes {
+                print_best_search_state(
+                    "lure",
+                    "node-limit",
+                    expansions,
+                    best_h_seen,
+                    &nodes,
+                    best_idx_seen,
+                );
+                return None;
             }
 
             let node_idx = nodes.len();
@@ -4156,6 +4185,7 @@ fn solve_geom_lure(
     preserve_rats: bool,
     max_depth: usize,
     time_limit_secs: f64,
+    max_nodes: usize,
     strategy: &str,
     weight: i64,
 ) -> Option<Vec<Vec<Action>>> {
@@ -4193,16 +4223,14 @@ fn solve_geom_lure(
     while let Some(item) = pq.pop() {
         expansions += 1;
         if expansions % 20_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
-            let best_path = reconstruct(&nodes, best_idx_seen);
-            eprintln!(
-                "  [geomlure timeout after {} expansions, best_h={}, nodes={}]",
+            print_best_search_state(
+                "geomlure",
+                "timeout",
                 expansions,
                 best_h_seen,
-                nodes.len()
+                &nodes,
+                best_idx_seen,
             );
-            eprintln!("  BEST_ARROWS {}", format_path(&best_path));
-            eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
-            eprintln!("  BEST_STATE:\n{}", nodes[best_idx_seen].grid.to_csv());
             return None;
         }
 
@@ -4223,6 +4251,17 @@ fn solve_geom_lure(
             let (next_grid, play_state) = step(&cur_grid, actions);
             if play_state == PlayState::GameOver {
                 continue;
+            }
+            if nodes.len() >= max_nodes {
+                print_best_search_state(
+                    "geomlure",
+                    "node-limit",
+                    expansions,
+                    best_h_seen,
+                    &nodes,
+                    best_idx_seen,
+                );
+                return None;
             }
             let node_idx = nodes.len();
             let next_depth = nodes[idx].depth + 1;
@@ -6553,7 +6592,7 @@ fn main() {
 
     if mode == "lure" {
         // solver lure <csv> --rat x,y [--safe x,y;x,y] [--preserve-rats]
-        //                  [--prefix MOVES] [--depth N] [--secs S]
+        //                  [--prefix MOVES] [--depth N] [--secs S] [--maxnodes N]
         //                  [--strategy gbfs|astar] [--weight W]
         let mut rat_target = None;
         let mut safe_targets = Vec::new();
@@ -6561,6 +6600,7 @@ fn main() {
         let mut prefix_str = String::new();
         let mut depth = 200usize;
         let mut secs = 60.0;
+        let mut max_nodes = 500_000usize;
         let mut strategy = "astar".to_string();
         let mut weight = 2i64;
         let mut i = 3;
@@ -6595,6 +6635,10 @@ fn main() {
                     secs = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--maxnodes" => {
+                    max_nodes = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
                 "--strategy" => {
                     strategy = args[i + 1].clone();
                     i += 2;
@@ -6620,7 +6664,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "lure solve: players={} prefix={} rat_target={:?} safe_targets={:?} preserve_rats={} strategy={} depth={} secs={} weight={}",
+            "lure solve: players={} prefix={} rat_target={:?} safe_targets={:?} preserve_rats={} strategy={} depth={} secs={} maxnodes={} weight={}",
             nplayers,
             prefix.len(),
             rat_target,
@@ -6629,6 +6673,7 @@ fn main() {
             strategy,
             depth,
             secs,
+            max_nodes,
             weight
         );
         let t0 = Instant::now();
@@ -6639,6 +6684,7 @@ fn main() {
             preserve_rats,
             depth,
             secs,
+            max_nodes,
             &strategy,
             weight,
         ) {
@@ -6660,7 +6706,7 @@ fn main() {
 
     if mode == "geomlure" {
         // solver geomlure <csv> --rats x,y;... --safe x,y;... [--preserve-rats]
-        //                      [--prefix MOVES] [--depth N] [--secs S]
+        //                      [--prefix MOVES] [--depth N] [--secs S] [--maxnodes N]
         //                      [--strategy gbfs|astar] [--weight W]
         let mut rat_targets = Vec::new();
         let mut safe_targets = Vec::new();
@@ -6668,6 +6714,7 @@ fn main() {
         let mut prefix_str = String::new();
         let mut depth = 200usize;
         let mut secs = 60.0;
+        let mut max_nodes = 500_000usize;
         let mut strategy = "astar".to_string();
         let mut weight = 2i64;
         let mut i = 3;
@@ -6697,6 +6744,10 @@ fn main() {
                     secs = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--maxnodes" => {
+                    max_nodes = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
                 "--strategy" => {
                     strategy = args[i + 1].clone();
                     i += 2;
@@ -6723,7 +6774,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "geomlure solve: players={} prefix={} rat_targets={:?} safe_targets={:?} preserve_rats={} strategy={} depth={} secs={} weight={}",
+            "geomlure solve: players={} prefix={} rat_targets={:?} safe_targets={:?} preserve_rats={} strategy={} depth={} secs={} maxnodes={} weight={}",
             nplayers,
             prefix.len(),
             rat_targets,
@@ -6732,6 +6783,7 @@ fn main() {
             strategy,
             depth,
             secs,
+            max_nodes,
             weight
         );
         let t0 = Instant::now();
@@ -6742,6 +6794,7 @@ fn main() {
             preserve_rats,
             depth,
             secs,
+            max_nodes,
             &strategy,
             weight,
         ) {
