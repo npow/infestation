@@ -3981,6 +3981,64 @@ New verified win:
   `ratrectplayerrect:0,0,0,0,1,3,6,3` and
   `ratrectplayerrect:16,0,16,0,10,3,15,3` returned empty.
 
+### OOM-safe continuation - 2026-06-13 sidecar probe pass
+
+No new verified wins. This pass kept solver work serial with `ulimit -v
+800000`; parallelism was limited to read-only side audits. Process-table checks
+before and after the solver queue found no leftover `target/release/solver`,
+`cargo`, `clingo`, or `timeout` jobs.
+
+- `release`: two fresh inverse checks from the side audits returned empty.
+  Initial-board `ratcell:18,5,18,6,explosive` under 22-rat / 5-trigger /
+  2-explosive gates found no branch, so the isolated right rat could not be
+  staged in the door while preserving the adjacent trap. From
+  `v<vv^^>>vv<>>>^vv<<<<.<<^^^<<<`,
+  `ratrectplayerrect:1,16,2,16,0,15,1,17` also returned empty under the same
+  resource shape. This weakens the lower-left carrier idea: the carrier still
+  cannot be converted into controlled left-trigger-2 setup before it is lost.
+- `cyborg_rats/ai_takeover`: Q64 is now even tighter. From
+  `Q64=^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<`,
+  a preserved-rat frontier has only the immediate `<` child before the
+  all-15-enemy state space stops. The concrete collar target
+  `ratcell:13,11,14,12,explosive` returned empty. The safe-trigger-7 prefix
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>^>^^` verifies as a distinct
+  14-enemy state with trigger 6/8 reachable and trigger 2 unreachable, but
+  `ratcell:18,5,18,6,explosive` from that state returned empty. Continue before
+  Q64/Q45 only if the target changes the local cyborg offset or right-middle
+  structure before the trigger-2/6/8 choice.
+- `tinderrectangle`: the compact safe-side check
+  `<<>^^^>>v>vv>>^^^>>vvv` with
+  `cellnotratrect:1,5,web,2,3,2,3` was a false target: `(1,5)` is already
+  non-web there, so branchdump only returned trivial one-step continuations.
+  The meaningful long-latch row-2 gate check from
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv^^^>v^<vvvv^^^^<<vvv<<^^^<<<vvv<^^<^<<>`
+  for `cellnotplayerrect:12,2,web,14,6,15,8` returned empty with all 16 rats
+  preserved. The latch still does not expose a top-pack gate while returning
+  the player to the safe pocket.
+- `reload_v3`: the top/station reload-order hypothesis was checked directly
+  from the initial board. All three guarded station probes returned empty:
+  `triggeronlycellnot:1,9,22,explosive` requiring trigger 2 still reachable,
+  `triggeronlycellnot:3,15,22,explosive` requiring trigger 4 still reachable,
+  and `triggeronlycellnot:4,18,22,explosive` requiring trigger 5 still
+  reachable. This keeps the current interpretation: simple station-first
+  reload events are not enough unless an earlier setup changes which actor or
+  route survives.
+- Two-player side probes also returned empty. `blocked_v2` from the extended
+  B20/P2-east staging failed `ratrectplayerrect:8,12,8,15,11,13,11,15` with
+  three rats and two reachable rats preserved. `handoff` from
+  `v^ >^ >^ >^ >^ >^ ^^ vv ^v .> .> .> v> v< <<` failed
+  `ratslecellnot:2,10,5,web`, so the guarded cleanup still cannot change the
+  sealed `(10,6)` web. `tug_of_war` from `.< v^ <^ >^ <^ <^ >^ <^` failed
+  both relaxed top-gate targets `ratslecellnot:2,7,1,web` and
+  `ratslecellnot:2,8,1,web`; even allowing rat losses did not produce a real
+  top-pocket web mutation.
+- `old_levels/overstep`: from P21 `vvvvvv>>>>>>>>>v>><>>`, a direct upper
+  boundary check for `cellnot:13,2,wall` returned empty. The attempted
+  `cellnot:14,2,rat` target was malformed as an inverse proof because `(14,2)`
+  is already not a rat at P21 and only produced trivial one-step branches.
+  The useful overstep frontier remains P52/P62/P88, with the upper pocket still
+  the blocker.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
