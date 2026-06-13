@@ -3852,6 +3852,15 @@ the normal solver objective.
   least 20 rats, 2 triggers, 1 explosive, and one reachable rat. This rules out
   the simple "open the right pocket while a lower-left carrier is staged"
   inversion under the checked bounds.
+- `cooperation/blocked_v2`: the same compound helper found no initial-board
+  path that changes the lower-left barrier while a rat remains in the lower
+  pocket `(0..4,15)`. Empty targets under 8-rat / 5-reachable-rat / 4-trigger /
+  8-explosive gates: `cellnotratrect:1,15,web,0,15,4,15`,
+  `cellnotratrect:4,15,web,0,15,4,15`,
+  `cellnotratrect:2,15,explosive,0,15,4,15`, and
+  `cellnotratrect:3,15,explosive,0,15,4,15`. This is stronger evidence that
+  the lower-left rat requires a qualitatively different pre-B20 actor/trigger
+  route, not a wider cleanup or local barrier search.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
