@@ -5063,6 +5063,64 @@ trigger 3 is still intact"; it is not puzzle-specific.
   resources. This closes the direct P21 carrier staging predicates; do not
   retry them without a new prefix that changes the lower-left actor timing.
 
+### OOM-safe continuation - 2026-06-13 nineteenth Codex pass
+
+No new verified win. Solver work stayed serial: one `target/release/solver`
+process at a time, wrapped with `ulimit -v 800000` and external `timeout`.
+Read-only side agents were used only for mechanism analysis. Process checks
+after the run found no leftover solver/cargo/clingo/timeout jobs.
+
+- `reload_v3`: the bottom-relay hypothesis produced a real first-station
+  branch. From P40
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<`, strict trigger 1 succeeds with
+  suffix `v>`:
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v>`. State: 3 rats, 5 explosives,
+  16 webs, 12 triggers, helper rat `(4,18)`, player `(2,18)`, and bottom-left
+  rat `(0,21)` still sealed. This is genuine progress over the earlier P44
+  station attempt, but the local continuation appears sealed: `triggeronly:2`,
+  `cellnotcellis:12,22,explosive,15,21,trigger3`, player-crossing
+  `cellnotplayerrect:9,22,explosive,5,18,12,22`, helper-crossing
+  `cellnotratrect:9,22,explosive,5,18,12,22`, and a 60s `cont` from P42 all
+  returned no solution/progress. Treat station 1 as confirmed, but find an
+  earlier geometry that lets either player/helper cross after station 1.
+- `release`: the sidecar's inverse "gate-first" variant was tested from P15,
+  P18, and P21. The predicate
+  `cellnotcellis:2,17,web,0,16,trigger2 --min-rats 23 --min-triggers 7 --min-explosives 3 --next-trigger 6`
+  returned empty from all three prefixes. This closes the P15/P18/P21
+  gate-first timing family in addition to the earlier carrier-first checks.
+- `tinderrectangle`: from the mid-left baffle prefix
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<`,
+  `cellnotratrect:4,4,web,2,3,2,3` succeeds while preserving all 16 rats and all
+  43 explosives. Best branches include
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^` and
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<vv<<^>^`. However, `rectsep`
+  from both returned empty, and sibling `cellnotratrect:3,4,web,2,3,2,3`
+  returned empty. The `(4,4)` topology change is real but not enough by itself.
+- `cooperation/handoff`: the sharper sealed-rat rescue checks returned empty
+  from the initial state: `cellnotratat:10,5,web,10,6` with all 5 rats and
+  useful triggers, `ratat:11,7` with all 4 triggers still present, and
+  `triggeronlycellnot:2,10,5,web`. This further weakens the pre-trigger
+  `(10,6)` rescue / remote-trigger-2 hypothesis.
+- `cooperation/tug_of_war`: top-pocket blocker checks returned empty from the
+  initial state: `cellnot:7,1,web`, `cellnot:8,1,web`, `cellnot:7,2,plank`,
+  `cellnot:8,2,plank` while preserving all 7 rats, and
+  `noratsrect:7,0,8,0` while preserving 6 rats. The top two-cell pocket still
+  looks structurally unreachable as authored.
+- `cooperation/blocked_v2`: from the 22-turn frontier
+  `^< ^^ <^ <^ <v <^ v> .> <> vv ^v .v <v ^v v^ vv >v ^> ^> v< v> ^<`,
+  strict `triggeronlycellnot:2,1,15,web` and `playerat:6,12` both returned
+  empty. The lower-left trigger-2 access problem remains the blocker.
+- `old_levels/overstep`: the P33/P45/P47 upper-rat extraction remains a real
+  mechanism, but this pass did not find a new continuation. The suggested
+  `cellnot:14,15,explosive` from P33 was already true and therefore too weak;
+  P47 strict `triggeronly:3` preserving all six rats returned empty.
+- `cyborg_rats/ai_takeover`: sidecar predicates returned empty. From Q54,
+  `cellnotnoratsrect:16,8,web,15,9,18,12 --min-rats 14 --min-triggers 2 --min-explosives 5`
+  did not find the safe trigger-7 corridor shape. From both P117 and P93,
+  `ratrectplayerrect:18,13,19,16,14,18,18,19 --min-rats 2 --min-triggers 1`
+  returned empty. Continue looking for a different final lure/resource
+  preservation pattern rather than retrying P117/P93 bottom-row staging.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
