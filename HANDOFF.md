@@ -3772,6 +3772,59 @@ No new verified wins. New evidence to avoid repeating:
   `ratrectplayerrect:3,3,3,3,14,6,15,8`, and
   `ratrectplayerrect:3,2,4,3,14,6,15,8`.
 
+### OOM-safe continuation - 2026-06-13 late pass
+
+No new verified win. This pass kept local solver work serial and capped with
+`ulimit -v 800000`; parallelism was limited to read-only audits. A side audit
+briefly launched short capped solver probes despite the intended read-only
+constraint, so that agent was shut down and process-table checks confirmed no
+leftover `solver` / `timeout` / `clingo` jobs before continuing.
+
+- `old_levels/on_the_clock`: the new P26 timing variant
+  `v>>><^^v>^^>>>vvv><vvvvv<v` is now classified. From P26, `^^^` moves the
+  sealed-component rat to `(15,14)`, but the state is a forced contact trap:
+  only `>` survives, then only another `>` survives, and every action from that
+  P31 contact state is `GameOver`. Bounded checks from P26+`^^^` returned empty
+  for `cellnot:14,15,web`, `ratat:14,15`, viable `ratsle:7`, and
+  `triggeronlycellnot:6,12,19,explosive`.
+- `old_levels/on_the_clock`: the trigger-5 sibling from P26,
+  either `^^>>>` or the commuted `>>^^>`, is legal and moves the right-component
+  rat to `(13,14)`. Cleaning the two local rats with `^><` drops to 6 rats, but
+  diagnostics show only 1 reachable rat and 5 trapped rats. Continuing to
+  trigger 8 (`<<<<<v<vvvvv`) or trigger 6 (`<<<<<^<<<<v`) changes bottom-left
+  resources but still leaves the right component sealed. From the more flexible
+  7-rat child P26+`^^>>>>>`, bounded `ratsle:6` with 2 reachable rats and
+  relaxed `cellnot:14,15,web` both returned empty. Do not widen this P26 family
+  unless a new mechanism changes `(14,15)` before trigger-5 cleanup.
+- `reload_v3`: re-read the P41 helper station
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v`. Trace confirms the helper rat
+  can chew nearby planks around `(4,17)/(4,19)` and cycle through
+  `(3,18)/(4,17)/(4,19)`, but it does not have one-step explosive/black-hole
+  death geometry for `(2,21)`, and prior capped `cellnot:2,21,explosive` checks
+  from P41+`^` remain the relevant negative evidence. The human interpretation
+  is now "finite local station"; it needs a different earlier setup, not a
+  longer hold pattern.
+- ASP/clingo assessment: do not reimplement the game in ASP as the next main
+  solver. `clingo` is absent here (`clingo` binary and Python module both
+  missing), and a full encoding would duplicate the hardest bug-prone semantics
+  that the Rust oracle already handles exactly: simultaneous player movement,
+  sword/facing deaths, cyborg Dijkstra tie-breaks, rat ordering, trigger zaps,
+  and explosion chains. A useful ASP layer, if installed later, should only
+  compose oracle-observed event frontiers and resource predicates, then feed
+  candidate skeletons back into `lookup` / `branchdump` / `wp` / `verify`.
+- `cyborg_rats/ai_takeover`: the Q64 wider-offset trigger-2 branch is now
+  bounded more tightly. The 93-turn state
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvv^^vvv<<<<<<>>>><<<<<<<<<<<<<<^^^<<<`
+  verifies with 11 enemies, no triggers, 2 explosives, all 11 enemies
+  reachable, and player at `(0,16)`. However, `lookup` / `branchdump` for
+  `ratsle:10` returned empty immediately from Q93 and from its safe immediate
+  children. A `frontier` shows the local state is nearly forced: repeated `<`
+  keeps the player alive while the remote cyborg walks from `(18,5)` around the
+  right/bottom corridors back to `(7,19)`, but the enemy count never drops and
+  the state repeats as an 11-enemy trap. Do not deepen Q93 cleanup; continue
+  before trigger 2 with a structural target that changes the right-middle
+  explosives/webs or gives a different local cyborg offset.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
