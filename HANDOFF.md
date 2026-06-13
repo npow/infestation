@@ -4665,6 +4665,63 @@ the process table was confirmed clear afterward.
   This strengthens the conclusion that `(18,5)` is not opened by a simple
   pre-trigger-5 player route.
 
+### OOM-safe continuation - 2026-06-13 twelfth Codex pass
+
+No new verified win. This pass kept heavy solver work serial, capped with
+`ulimit -v 800000` plus external `timeout`; process checks after probe groups
+found no leftover `target/release/solver`, `cargo`, `clingo`, or `timeout`
+jobs. Three read-only side agents supplied mechanism hypotheses; only bounded
+oracle checks were run locally.
+
+- `old_levels/on_the_clock`: P25 is now sharper as a trap. From
+  `P25=v>>><^^v>><^^>>>vvvvvvvvv`, a local `frontier` with all 8 rats
+  preserved found only 27 distinct signatures within depth 14. Every legal
+  first move or stall immediately drops trigger count from 17 to 12 because a
+  rat fires trigger 9; P25 is not a waitable staging state. From post-trigger-9
+  `P25+^`, guarded `trigger:3` returned empty. From P19
+  `v>>><^^v>><^^>>>vvv`, the side-agent probes
+  `ratslecellis:6,10,14,trigger3`, `ratplayer:16,18,1,7`, and from P22
+  `cellnotratrect:14,15,web,16,18,16,19` all returned empty under the safe caps.
+  Continue by backing up before P19 with a new lower-right release mechanism;
+  do not deepen P25/P31/P51/P100.
+- `tinderrectangle`: the long delayed P135 state
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv^^^>vv<vv<>>^^^^^<<<vvv<<^^^<<<vv<<v<<<^>>^^>>>>>v>vv>>^^^>>vvvv`
+  already has the wider row-6 lane open: `(4,6)` is not a web, with player
+  `(14,7)`, lower rat `(2,3)`, all 16 rats reachable, 43 explosives, and
+  18 webs. The useful remaining choke is still around `(2,4)` / `(3,4)`.
+  A preserved side-door probe for `cellnotratrect:3,4,web,2,3,2,3` returned
+  empty. This rules out the latest "pre-clear a wider lower lane, then release"
+  variant from P135 under the tested gates.
+- `reload_v3`: side-agent helper/fuse checks returned empty. From
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v^`, both
+  `ratcell:3,21,2,21,explosive` and
+  `cellnotcellis:3,21,web,2,22,trigger6` returned empty with all 3 rats and at
+  least 10 triggers preserved. From the initial board,
+  `cellnotcellis:10,5,web,9,5,trigger5` with trigger 6 reachable also returned
+  empty. The live helper rat near `(4,17)` is not reaching the bottom-left fuse
+  corridor in the checked bounds, and the non-dead top trigger-5/6 side-door
+  route remains closed.
+- `cyborg_rats/ai_takeover`: unlike `release`, `(18,5)` starts open, but the
+  no-trigger preserved check `ratat:18,5` returned empty with all 24 enemies and
+  at least 14 triggers. A quick `events` scan only found ordinary central
+  trigger variants. The distinct trigger-7 corridor hypothesis
+  `triggeronlycellnot:7,15,10,web` also returned empty while preserving at
+  least 20 enemies, 11 triggers, and reachability of `(18,4)`. Treat the open
+  `(18,5)` geometry as not sufficient by itself; Q54/P68 still need a new
+  station/lure idea.
+- `release`: the fresh physical web-clear predicates returned empty. From the
+  initial board, `cellnotratrect:18,5,web,18,4,18,5` with at least 20 rats and
+  reachable `(18,4)` found no branch. The guarded early-trigger-6 predicate
+  `triggeronlycellnot:6,1,16,explosive` with trigger 2 still reachable also
+  returned empty. This further closes the coherent "fire trigger 6, then left
+  trigger 2 detonates the right column" route under conservative caps.
+- `cooperation/blocked_v2`: the most constructive two-player side-agent route
+  also failed under reduced safe caps. From prefix `^< ^^ v^ ^^ vv ^v`,
+  preserved `triggeronlycellnot:3,6,10,spiderweb` returned empty, and both
+  `wp2` assignments `4,11|13,4;5,11|13,4` and `13,4|4,11;13,4|5,11` reported
+  waypoint-pair 0 unreachable. The upper-trigger-3 / useful-trigger-2
+  choreography is not viable from that prefix.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
