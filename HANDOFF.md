@@ -3074,6 +3074,18 @@ read-only subagent reasoning and shell reads.
   returned empty. `noratsrect:12,14,17,19` from P23 also returned empty. The
   route is a near-solution but needs an earlier way to kill/displace the
   bottom-right component rat before the trigger-9/trigger-8 cleanup sequence.
+- `old_levels/on_the_clock`: follow-up bottom-right timing checks from P23
+  showed the component rat can move to `(16,18)`, but only after the `(16,17)`
+  explosive has already been spent. The exact pre-blast timing target
+  `ratcell:16,18,16,17,explosive` returned empty. Backing the component-empty
+  goal to `v>>><^^` with `noratsrect:12,14,17,19` also returned empty with
+  either 8 or 7 rats preserved, but that rectangle is broad enough to include a
+  separate bottom rat at `(14,19)`, so do not over-interpret it.
+- `cyborg_rats/ai_takeover`: Q64 and Q58 both failed the concrete enemy-stage
+  targets `ratat:1,16` and `ratat:2,16` while preserving trigger resources.
+  Q58 also failed the mid-collar target `cellnot:16,12,web` with trigger 2
+  reachable. This weakens the "enemy fires left trigger 2 from the Q64 family"
+  idea; back up before Q58 if continuing that hypothesis.
 - `old_levels/on_the_clock`: the stale 35-turn timing family is confirmed
   misleading. Two shim variants
   `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvvvvvv<>v` and
