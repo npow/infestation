@@ -5881,6 +5881,34 @@ fan-out was relaunched.
   `cellnotratrect:6,11,explosive,0,6,1,8`, preserving all nine rats and six
   reachable rats, returned no branch. The lower-left carrier mechanism is still
   unproven.
+- `tinderrectangle`: Arendt's P84/P113 audit says P113 is already too late
+  unless topology changed earlier; direct one-move inspection from P113 either
+  loses, kills the lower rat, or falls into the known contact chase against the
+  `(9,6)` wall. The suggested earlier P84 topology checks also returned empty:
+  `ratrectplayerrectcellis:2,3,2,3,14,6,15,8,3,4,empty` and row-2 notch
+  checks `cellnotplayerrect:{4,5,6},2,web,14,6,15,8` with all 16 rats
+  preserved. Continue by changing topology before P84, not by adding suffixes
+  to P113.
+- `cyborg_rats/ai_takeover`: Meitner's source-rule audit explains why the
+  trigger-2 remote cut is not itself a cyborg kill: cyborg pathfinding treats
+  live explosives as non-traversable, so the `(18,4)` cyborg cannot enter
+  `(18,5)` before trigger 2 removes the `(18,6..8)` explosive column. Boundary
+  traces confirm this: `AFTER8+<<<<<<<<^^^>>>><<<<<<` leaves player `(1,16)`
+  and cyborg `(18,4)` with five explosives / two triggers; the next `<` fires
+  trigger 2 and still leaves the cyborg at `(18,4)`; only after `>>>` does it
+  move down to `(18,7)`. Follow-up discriminators from AFTER8/P172 were empty:
+  `cellis:18,5,cyborg` while preserving trigger 2 and five explosives,
+  `ratslecellis:1,11,9,cyborg`, and
+  `normalratrectcyborgrect:11,9,11,9,11,8,12,8`.
+- `reload_v3`: Erdos's proposed `remote 5 -> clear (10,5) -> central rat steps
+  on top 6 -> bottom-left opens` remains the most human-looking mechanism, but
+  the concrete staged prefix `^^^^^<<<<<<^^<^^^^^vv^^` did not realize it under
+  caps. That prefix verifies as player `(6,4)`, central rat `(11,4)`, and
+  `(10,5)` still web. From it, compound
+  `ratrectplayerrectcellis:11,4,11,4,6,4,6,4,10,5,empty`, split
+  `triggeronlycellnot:5,10,5,web`, and bottom-left
+  `cellnotratat:1,21,web,0,21` all returned empty. If revisiting this idea,
+  decompose the remote-5 setup earlier; do not hammer direct trigger 6.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
