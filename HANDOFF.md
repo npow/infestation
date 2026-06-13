@@ -2417,6 +2417,57 @@ It ended with no `solver`/`timeout`/`clingo` processes running.
   `NO_SOLUTION` under depth-40 caps. Treat B75 as a better diagnostic trap, not
   a cleanup route.
 
+### Continuation pass - 2026-06-13 bounded probe cleanup
+
+No new verified win. This pass deliberately kept solver searches short after a
+machine OOM warning. One accidental four-way `ratgeom` diagnostic fan-out on
+`blocked_v2` was stopped after roughly 30s; RSS was tiny, but future probes
+should still wrap even `ratgeom` in `timeout` when the target may be unreachable.
+The pass ended with no `solver`/`timeout`/`clingo` processes running.
+
+- `tinderrectangle`: T106 was retested with the concrete lower-ready staging
+  goal. `branchdump --goal rectlower` from
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv`
+  returned no branch under depth 80 / 20s / 120k nodes. From the P137 sidecar,
+  the safe `>` continuation reaches player `(4,6)` and lower rat `(3,6)`;
+  walking the pair right to rat `(7,6)` is easy, but it pins the player at
+  `(8,6)`. A direct escape probe for `playerat:14,8` from the row-6 walking
+  state returned no branch. The lower route still needs a separation mechanism
+  before the rat reaches the row-6 fuse lane.
+- `release`: the P37 carrier state is now more clearly a diagnostic dead end.
+  `ratgeom` says a synthetic player on the upper/right side can make the row-17
+  carrier step east, but from actual P37 a capped `ratat:14,17` branchdump
+  returned empty. Capped checks for changing the upper plank `(13,11)` from both
+  P25 and P37 also returned empty, and nearby upper rats do not have one-step
+  geometry into that plank. The likely issue is earlier routing/access, not just
+  choosing a better suffix from P37. Local continuations explain why: `P37>`,
+  `P37.`, `P37^`, and `P37^^` all leave the carrier parked at `(13,17)`;
+  `P37<` makes it retreat to `(12,17)`; `P37v` is `GameOver`. The plank at
+  `(16,17)` is not the immediate rules blocker because rats can traverse planks;
+  the immediate blocker is getting the player east of the carrier without first
+  losing the carrier position.
+- `reload_v3`: trigger 7 first is reachable and produces several preserved-rat
+  branches, for example
+  `^>>>>>^>>^^^<<<<v<<^<<<<<<<^^^`, but a follow-up `triggeronly:2` probe from
+  that branch returned empty under depth 60 / 15s / 80k nodes. This reinforces
+  that immediate 7-then-2 is not the missing reload order; any useful 7-first
+  route must change access to a different trigger or actor before aiming at 2.
+- `cooperation/blocked_v2`: the trigger-4-first state was inspected directly.
+  The lower-left trigger-2 cells remain player-unreachable, so the plausible
+  next mechanism is rat activation rather than player activation. An attempted
+  `ratgeom` fan-out for rats near `(9,13)/(9,14)/(0,15)/(15,16)` toward the
+  trigger-2 cells did not finish quickly and was killed; rerun only as separate
+  timed diagnostics or replace it with a purpose-built bounded goal.
+- `cooperation/handoff`: pre-trigger geometry confirms the sealed `(10,6)` rat
+  would move to `(11,7)` if a player could stand southeast of it, but the
+  reachable pre-trigger player area does not include such a lure cell. A capped
+  `ratat:11,7` branchdump under depth 20 / 11s / 60k nodes returned no branch.
+  The safe staging prefix `v. >. >. >. >. >. v. >.` verifies `Playing` at 8
+  turns and puts P1 at `(9,8)` with all 5 rats and all triggers preserved, but
+  it still does not move the sealed rat or change web `(10,5)`. Do not continue
+  staging toward `(9,8)` unless it is paired with a new way to reach a true
+  southeast lure cell.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
