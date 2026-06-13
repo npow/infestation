@@ -5125,6 +5125,55 @@ after the run found no leftover solver/cargo/clingo/timeout jobs.
   returned empty. Continue looking for a different final lure/resource
   preservation pattern rather than retrying P117/P93 bottom-row staging.
 
+### OOM-safe continuation - 2026-06-13 twentieth Codex pass
+
+No new verified win. Work stayed serial with one capped local solver process at
+a time. Added lookup/branchdump goal
+`ratrectplayerrectcellis:rx1,ry1,rx2,ry2,px1,py1,px2,py2,cx,cy,kind`, which
+requires a rat in a rectangle, a player in a rectangle, and a specified cell
+still matching `kind`. This is a diagnostic predicate for "helper staged, player
+safe, relay cell intact" checks; it does not change game rules or scoring.
+
+- `reload_v3`: the lower-helper staging predicate now has a clean positive. From
+  P40 `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<`,
+  `ratplayer:2,19,1,19 --min-rats 3 --min-triggers 14 --min-explosives 6`
+  finds branches such as
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<vvv<`, with all three rats, all six
+  explosives, all fourteen triggers, player `(1,19)`, helper `(2,19)`, and two
+  planks chewed. However, shallow frontier shows this is a corner trap: the only
+  all-rats-preserving move is left, and both
+  `triggeronlycellnot:1,9,22,explosive` from that lower-helper state and
+  `ratrectplayerrectcellis:2,19,3,20,3,17,5,18,4,18,trigger1` from the earlier
+  P38 posture returned empty. The useful invariant is therefore stronger:
+  helper lower and player near trigger 1 must be achieved together, not by first
+  parking the helper in the lower-left corner.
+- `release`: a sidecar right-side carrier hypothesis was checked. From `v<vv^^`
+  and `v<vv^^>>`, both `ratrectcellis:17,18,19,19,19,18,trigger6` and
+  `ratrectcellis:19,6,19,8,19,7,trigger2` returned no solution under bounded
+  A* probes while preserving the relevant rat/trigger/explosive counts. This
+  closes the "keep the lower-right roamer on the right as trigger-6/trigger-2
+  carrier" version under the tested caps; continue `release` only with a new
+  way to handle `(18,4)` before the top sweep or a different route to open
+  `(18,5)`.
+- `tinderrectangle`: from the `(4,4)` topology branch
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^`, a new safe-side
+  separation lead succeeds:
+  `ratrectplayerrect:2,3,2,3,13,6,15,8 --min-rats 16 --min-explosives 43`
+  finds branches such as
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^^vvv<<^>>>>^^>>>v>vv>>^^^>>vv>v`.
+  State: all 16 rats reachable, all 43 explosives preserved, lower rat still
+  `(2,3)`, player `(15,6)`, and `(2,4)` still webbed. Follow-ups
+  `cellnotplayerrect:2,4,web,13,6,15,8` from that P83 state and directly from
+  the B4 topology branch returned empty, as did `rectsep` from P83. This is a
+  better pre-release staging proof than the old contact branches, but the
+  missing move is still opening the lower web after reaching the safe side.
+- ASP/clingo assessment: do not build a full ASP clone of the game. A faithful
+  model would need exact player/facing resolution, sequential rat/cyborg
+  movement, Dijkstra tie-breaks, trigger sibling-zap semantics, and explosion
+  waves, all of which the Rust oracle already provides. If ASP is used, keep it
+  to tiny over-approximating local subgoal checks and replay every candidate
+  with `target/release/solver verify`.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
