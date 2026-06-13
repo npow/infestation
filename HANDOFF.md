@@ -5567,6 +5567,61 @@ external `timeout`); no background solver jobs were left running.
   `(14,11)` rat must be redirected before P45 or by a different upper-rat
   extraction route.
 
+### OOM-safe continuation - 2026-06-13 twenty-eighth Codex pass
+
+No new verified win. Work stayed serial and capped (`ulimit -v 800000` plus
+external `timeout`); process checks before/after found no leftover
+`target/release/solver`, `cargo`, `clingo`, or `timeout` jobs. Inventory still
+shows nine rat-bearing CSVs absent from `solver/solutions/final_solutions.json`:
+`blocked_v2`, `handoff`, `tug_of_war`, `ai_takeover`, `on_the_clock`,
+`overstep`, `release`, `reload_v3`, and `tinderrectangle`.
+
+- `reload_v3`: the in-flight R42 relaxed trigger-7 probe was rerun safely and
+  classified as a trap. From
+  `R42=^>>>>>>>^^vvvvvv<<<^^<<^^<<<<^<<<<<<<<v<v>`, relaxed
+  `triggeronly:7` branches exist, but every returned branch had
+  `reachable_rats=0`. Representative diagnostics leave the player at `(7,8)`
+  with only trigger 2 reachable and all remaining rats unreachable. Guarded
+  `triggeronly:2` and `triggeronly:7` checks from R42 requiring at least one
+  reachable rat afterward both returned empty. This means R42 cannot simply
+  spend trigger 2 or 7 next.
+- `reload_v3`: the helper-slip and bottom-runway hypotheses from the R42
+  read-only audit returned empty. From R42,
+  `ratrectplayerrect:1,17,2,19,4,16,8,20` found no way to get the player east
+  of a parked helper while preserving all three rats/resources, and
+  `ratrectplayerrectcellis:1,17,3,19,4,20,10,22,12,21,trigger2` found no bottom
+  runway staging with trigger 2 intact. A smaller bottom-fuse check
+  `ratrectplayerrect:3,20,4,21,0,18,5,21` was also empty. The human conclusion
+  is that the R42 helper is a local cage, not yet a mobile bottom fuse.
+- `reload_v3`: from R41
+  `^>>>>>>>^^vvvvvv<<<^^<<^^<<<<^<<<<<<<<v<v`, trigger 1 can be fired three
+  one-turn ways (`>`, `<`, or `.`), all preserving three rats, five explosives,
+  sixteen webs, and twelve triggers. The `<` variant puts the player at
+  `(1,18)`, but guarded follow-ups for `triggeronly:2` and `triggeronly:7`
+  still returned empty with at least one reachable rat required. The trigger-1
+  station is real, but the one-turn R41 trigger-1 family appears finite unless
+  an earlier setup changes the helper/player geometry.
+- `release`: Hooke's read-only alternatives from P8 `v<vv^^>>` closed under
+  caps. The pre-trigger-4 bottom-actor reroute
+  `ratrectplayerrectcellis:2,18,5,19,7,10,10,13,9,12,trigger4`, the lower-right
+  ignition-station access
+  `ratrectplayerrectcellis:0,0,19,19,17,17,19,19,18,5,web`, and x=17 side-door
+  mutations `cellnotratat:17,5,wall,18,4` / `cellnotratat:17,6,wall,18,4` all
+  returned empty while preserving the high-rat/high-resource floors. Do not
+  repeat direct `(18,5)` web clearing, right-trigger-2, right-trigger-6 carrier,
+  or these P8 side-door probes without a new discriminator.
+- `tinderrectangle`: Cicero's earlier-state separation checks closed three
+  more variants before the known P77/P81 trap. From T22
+  `<<>^^^>>v>vv>>^^^>>vvv`, both row-6 fuse-stopper predicates
+  `ratrectplayerrectcellis:2,6,2,6,14,6,14,8,3,6,web` and
+  `ratrectplayerrectcellis:3,6,3,6,14,6,14,8,4,6,web` returned empty with all
+  16 rats reachable and all 43 explosives preserved. From B4
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^`, the left-column
+  latch plus escape-door predicate
+  `ratrectplayerrectcellis:1,4,1,4,1,5,1,6,3,3,empty` also returned empty.
+  P77/P81 are still likely too late, but the tested row-6 stopper and
+  left-latch mechanisms are not the missing separation route.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
