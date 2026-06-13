@@ -2715,6 +2715,23 @@ short `timeout`/`ulimit` caps after the previous OOM.
 - `old_levels/overstep.csv` and `old_levels/order_of_operations.csv`:
   capped `dropchain` probes found partial rat drops but timed out without a
   verified win. No solver/timeout processes were left running afterward.
+- `release`: a bounded macro/event probe found a new-looking 13-rat state
+  `^^^^^^v^vvvvvvv>>>vv^^^^vv<^v<<<<<^^^<<<<.<>>>>vvv^v^^^^^^^^^<<<^`
+  with player `(1,4)`, 13 rats, 5 explosives, 9 triggers, and static distances
+  to trigger-6 cells `(17,16)` / `(19,18)`. Dynamic `wp` to both trigger-6
+  cells from this exact prefix returned `UNREACHABLE`, and capped
+  `triggeronly:6` / `cellnot:18,5,web` branchdumps returned no branch. Treat
+  this macro state as another sealed trigger-6 mirage unless a new route changes
+  the rat/player timing before the top sweep.
+- `old_levels/on_the_clock.csv`: trigger-order search produced a 2-rat partial
+  `^>>vv>vvv<<<v^^^^^>>>^^>>^^^^^^^^^^>vvvv.vv>>><vvv<<^^^>>>><<vvv<<<<v<vvvv>>><<<<<<>>>^^^^^^>^^>>>>>>>vvvv>>>>>>>vv<<<<<<<<<v`
+  with no explosives/triggers left. It leaves rat `(16,6)` in a size-1
+  unreachable component and rat `(10,14)` adjacent to the player, so it is a
+  dead basin, not a continuation frontier.
+- Long capped background solves on `release`, `reload_v3`,
+  `tinderrectangle`, and `cyborg_rats/ai_takeover` found no verified wins.
+  `tinderrectangle` hit its per-process `ulimit` and aborted safely; the
+  process table and system memory were clean afterward.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
