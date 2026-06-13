@@ -5456,9 +5456,13 @@ stored-solution replay all pass (`36/36` verified).
   from this branch `cellnot:7,1,web`, `cellnot:8,1,web`,
   `cellnotratrect:7,2,plank,7,3,8,4`,
   `cellnotratrect:8,2,plank,7,3,8,4`, plus the inverse lure-station predicates
-  with player in `(7..8,1)` all returned empty. The helper can be parked under
-  the pocket, but no tested state lets it chew or lure upward through the
-  plank/web gate.
+  with player in `(7..8,1)` all returned empty. Follow-up delayed trigger-3
+  checks `triggeronlycellnot:3,7,2,plank` and
+  `triggeronlycellnot:3,8,2,plank` also returned empty, as did true pocket
+  escape checks `cellnotnoratsrect:7,2,plank,7,0,8,0` and
+  `cellnotnoratsrect:8,2,plank,7,0,8,0`. The helper can be parked under the
+  pocket, but no tested state lets it chew, lure, trigger, or escape upward
+  through the plank/web gate.
 - `tinderrectangle`: the safe-side staging branch is real, but the tested
   bypass-door variants are not discriminating. From B4
   `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^`,
