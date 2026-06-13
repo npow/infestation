@@ -3935,6 +3935,13 @@ New verified win:
   inaccessible upper pocket. From P62, `noratsrect:14,2,16,4` with 3 rats and
   2 reachable rats preserved is also empty; direct bounded `lookup --goal win`
   from P62 hit the node/time cap with the upper rat still isolated.
+- `reload_v3`: two broad structural checks from the initial board returned
+  empty under `ulimit -v 800000`: `reachablege:2` preserving all 3 rats, at
+  least 8 triggers, and at least 4 explosives; and `ratsle:2` requiring both
+  remaining rats reachable under the same trigger/explosive gates. This
+  supports the existing map: reload's tempting 2-rat states still strand the
+  lower-left rat, and no bounded all-rats route has made a second rat reachable
+  without a sharper mechanism around `(1,21)` / `(2,21)`.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
