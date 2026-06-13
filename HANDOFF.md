@@ -2318,6 +2318,64 @@ and ended with no `solver`, `timeout`, or `clingo` processes running.
   extend the P113/P135/PBUF family unless a new gate gives the player right-side
   separation before the lower rat enters `(2,6)`.
 
+### Continuation pass - 2026-06-13 mechanism split
+
+No new verified win. This pass kept solver concurrency low, used
+`ulimit -v 1500000` for bounded searches, and ended with no
+`solver`/`timeout`/`clingo` processes running.
+
+- `reload_v3`: the trigger-2-first basin is now more tightly bounded. From
+  `>>>^>>>>.>>.<.<<<<.^`, diagnostics show two rats left at `(14,5)` and
+  `(0,21)`, with the player able to reach only the two trigger-7 cells. Capped
+  raw mechanism checks found no branch for `triggeronly:6`, `reachable:9,4`,
+  `cellnot:10,5,web`, or `cellnot:9,6,explosive`. Guarded trigger-7 probes that
+  required either `(9,4)` or `(1,21)` to stay reachable also returned empty.
+  Backing up to the 18-turn three-rat prefix did not recover `triggeronly:6` or
+  the `(10,5)` gate. Treat this trigger-2-first route as a dead basin unless a
+  different pre-trigger-2 event leaves a new actor/resource.
+- `tinderrectangle`: a `rectsep` lookup produced a cleaner staged-safe lead even
+  though it did not solve:
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv`.
+  It verifies as `Playing` at 58 turns with all 16 rats and all 43 explosives
+  preserved, lower rat `(2,3)`, and player already in the right safe pocket at
+  `(14,6)`. From this state, capped `rectsep` continuation found no branch. A
+  direct `cellnot:2,4,web` branch is possible, but all returned branches put the
+  player back around `(2,4)` with the rat still at `(2,3)`, losing the very
+  separation this lead was meant to preserve. Next useful work is a door-opening
+  mechanism that changes `(2,4)` or `(3,4)` while the player can remain or return
+  to the right pocket before the lower rat starts moving.
+- `cyborg_rats/ai_takeover`: an independent pass found a better trigger chain
+  than the old 113-turn three-rat basin:
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>v>vv>>vvvvv<<<<<<<<<<<<<<<<^^^<<<`.
+  It verifies as `Playing` at 75 turns with 16/16 rats reachable, two
+  explosives left at `(14,12)` and `(15,12)`, and no triggers. The immediate
+  suffix `v` is safe and moves the player to `(0,17)`, but the pocket has no
+  shallow payoff: `events` from `B75 + v` returned `NO_EVENTS`, and bounded
+  checks for `ratsle:14` or changing `(14,12)` returned empty. Pure stalling
+  walks the upper cyborg past `(14,12)` / `(15,12)` rather than onto them. This
+  is a better frontier than the old dead basin, but still lacks a cleanup
+  mechanism.
+- `release`: the row-17 carrier lead remains blocked at plank `(16,17)`.
+  `P37 = v<vv^^>>vv><<v<<<^<^^<<>>>vvv>>>>>>>>` verifies as `Playing` with
+  player `(13,14)` and carrier rat `(13,17)`. From both `P37` and the earlier
+  `P25 = v<vv^^>>vv><<v<<<^<^^<<><`, raw-state capped branchdumps for
+  `cellnot:16,17,plank` returned empty while preserving at least 20 rats. The
+  intended local mechanism is still plausible, but the current blocker is
+  routing a player/lure to the top-row side before the carrier path is fixed.
+- `cooperation/tug_of_war`: the top pocket remains structurally suspicious. The
+  real invariant is not `ratgone:7,0`; the rat can shuffle between `(7,0)` and
+  `(8,0)`. The important blockers are webs `(7,1)` and `(8,1)`. Capped checks
+  for changing either web, or for `norats2:7,0,8,0`, returned empty. Unless a
+  hidden mechanism changes one of those exits, the authored level may be missing
+  a release for the top rat.
+- `cooperation/blocked_v2`: an independent pass found a better first event than
+  the older trigger-1 line:
+  `v< v^ v^ <^ <^ << <^ >v` fires trigger 4 first and leaves 8 rats, 15
+  explosives, 25 webs, 14 triggers, 6/8 rats reachable, and no trapped
+  unreachable rats. Follow-up checks for the lower-left mechanism,
+  `cell:1,15` and `cell:2,15`, returned empty. This trigger-4-first line is a
+  better frontier to compare against the previous 20-turn trigger-1/3 frontier.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
