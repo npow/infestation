@@ -2555,10 +2555,66 @@ PID after ~30s. The final process table was clear before committing.
   directly below at `(0,16)`, but capped checks for `ratgone:0,15` and
   `ratsle:2` from that state returned no branch. Do not assume the black hole
   is enough without a reachable lure.
-- `clingo`: no `clingo` CLI or Python module is installed in this environment.
-  An ASP route would first need a bounded subproblem to encode; the new
-  `frontier` command is currently the lower-risk way to get finite local proofs
-  from the real Rust oracle.
+- `clingo`: no global `clingo` CLI or Python module is installed in this
+  environment. A temporary venv at `/tmp/infestation-clingo-venv` can provide
+  Python `clingo`, but an ASP route should still start from a bounded subproblem;
+  the new `frontier` command is currently the lower-risk way to get finite local
+  proofs from the real Rust oracle.
+
+### Continuation pass - 2026-06-13 bounded parallel sweep
+
+No new verified win. This pass used two read-only side agents plus local capped
+probes, kept solver runs under `timeout` / `ulimit`, and ended with no
+`solver`, `timeout`, or `clingo` processes running.
+
+- Solution catalog sanity: all 35 entries in
+  `solver/solutions/final_solutions.json` still verify as `result=Won` against
+  the current binary. The active hard set remains the 7 normal rat puzzles in
+  section 3. `levels/claude/gauntlet.csv` is a zero-rat portal hub; direct
+  `solver verify` reports `Playing` because zero-rat levels only become `Won`
+  if the level started with rats. The five gauntlet sublevels still verify.
+- `tinderrectangle`: the T106 upper-door latch lead is real but finite. From
+  the latch state with player `(4,3)` and lower rat `(3,3)`, preserving all 16
+  rats, `frontier` only finds the player walking right while the rat shadows on
+  row 3; direct descent is contact death and `rectsep` returned no branch. From
+  the pre-latch `(3,3)` / `(2,3)` state the all-rats frontier is the same
+  rightward shadow path. The right-safe P84 top-pack hypothesis also failed in
+  capped checks: no branch opened row-2 webs `(13,2)`, `(14,2)`, or `(15,2)`
+  while returning the player to `(15,7)` with all rats preserved. Do not keep
+  extending T106/P84 unless a different staging state changes the release
+  timing.
+- `reload_v3`: the stronger trigger-2 prefix
+  `vvv<<<<<<vvv><^^^>>>>>>>>>>>>>^^^^^v<<v<^` is now bounded with `frontier`.
+  It has only three all-rats local states: the carrier at `(17,14)`, `(17,15)`,
+  or `(17,16)`. Capped raw checks still found no branch changing `(2,21)` from
+  explosive. This confirms the 41-turn trigger-2 choreography is another tiny
+  dead basin unless a different pre-trigger-2 event changes the lower-left
+  pocket.
+- `release`: a side pass retested early cage opening, alternate opener
+  `v<vv^^>>>>v`, and staged prefix `v<vv^^>>vv>^<<v<<<^^`. No branch changed
+  `(18,5)` web, moved the isolated `(18,4)` rat to `(18,5)`, reached trigger 6
+  via `(19,18)`, or staged `ratplayer:18,17,19,19` under the caps. The solution
+  still needs a setup before the known central-trigger family that either opens
+  `(18,5)` or gives the isolated rat useful motion.
+- `cyborg_rats/ai_takeover`: the lower safe-7/8 route
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvvvv<`
+  is still the better frontier than old B75. It can reach trigger 2 with suffix
+  `<<<<<<<<<>>>>>>>><<<<<<<<<<<<<<^^^<<<`, producing C97: 8 rats, 2 explosives,
+  0 triggers, all 8 rats reachable. But capped `ratsle:7` from C97 returned no
+  branch, and B75 follow-ups for `ratsle:14` / changing `(14,12)` explosive also
+  returned no branch. Treat both as cleanup basins, not solutions.
+- `cooperation/tug_of_war`: capped checks from the initial state and the
+  trigger-1 scaffold found no branch opening pocket webs `(7,1)` / `(8,1)` or
+  breaking planks `(7,2)` / `(8,2)` while preserving the required rats. The
+  top-pocket release via central-rat / trigger-1 staging is ruled out more
+  sharply in the tested bounds.
+- `cooperation/handoff`: from the initial state and the prefix
+  `v^ >^ >^ >^ >^ >^ ^^`, capped checks found no branch moving sealed rat
+  `(10,6)` to `(11,7)`, clearing `(10,5)`, or making `(10,6)` reachable.
+- `cooperation/blocked_v2`: from initial, 9-turn, 16-turn, and 20-turn basins,
+  capped checks still found no trigger-2 event and no change to lower-left gate
+  cells `(1,15)` / `(2,15)`. The 20-turn three-rat frontier remains the best
+  diagnostic start, but not a solved path.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
