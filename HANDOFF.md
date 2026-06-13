@@ -4625,6 +4625,46 @@ confirmed clear before continuing serially.
   only with a mechanism that changes access to the lower-right `(12,14)`
   component before the trigger-8/6/7 collapse; do not deepen P100 as a mop-up.
 
+### OOM-safe continuation - 2026-06-13 eleventh Codex pass
+
+No new verified win. This pass kept heavyweight lookup probes serial, capped
+with `ulimit -v 800000` and external `timeout`; one pair of short P19 checks
+was accidentally launched in parallel, both returned quickly under caps, and
+the process table was confirmed clear afterward.
+
+- Solver tooling: added a diagnostic lookup goal
+  `cellnotcellis:x,y,notkind,otherx,othery,otherkind`. It succeeds when the
+  first cell is no longer `notkind` while the second cell is still
+  `otherkind`. This is useful for order checks such as "trigger 2 changed while
+  trigger 3 is still intact" without adding a puzzle-specific mode.
+- `old_levels/on_the_clock`: the earlier P31/P51/P100 dead basin is now
+  explained more concretely. The final blocker rat is the original `(16,19)`
+  rat. In the P31 family it is released by trigger 2 only after trigger 3 has
+  already walled the `(10,14)/(11,14)` door, then normal upper-right movement
+  lures it through `(16,16) -> (16,15) -> (15,14) -> (14,14) -> (13,14) ->
+  (12,14)`, where it becomes unreachable.
+- `old_levels/on_the_clock`: a new pre-trigger-3 ordering exists. From P19
+  `v>>><^^v>><^^>>>vvv`, the paired-cell goal
+  `cellnotcellis:17,17,trigger2,10,14,trigger3` immediately finds
+  `P25=v>>><^^v>><^^>>>vvvvvvvvv`. P25 has trigger 2 and trigger 4 consumed,
+  trigger 3 at `(10,14)` still intact, all 8 rats alive, 4 explosives, 28 webs,
+  17 triggers, and the right-side rat at `(16,18)`.
+- `old_levels/on_the_clock`: P25 appears to be another trap under the tested
+  conditions. From P25, `trigger:3`, `trigger:8`,
+  `cellnotcellis:4,13,trigger8,10,14,trigger3`,
+  `ratslecellis:6,10,14,trigger3`, and `reachable:12,14` all returned empty
+  immediately or within the safe caps. Manually applying the old left/down
+  trigger-8 suffix from P25 dies at turn 27 because the central rats catch the
+  player. Continue only if a new idea handles those two central rats without
+  sealing trigger 3, or backs up before P19.
+- `release`: paired-cell probes from the P8 standard opener
+  `v<vv^^>>` did not find a way to open the isolated `(18,4)` rat's web.
+  `cellnotcellis:18,5,web,18,6,explosive` with 22 rats, 20 reachable rats,
+  7 triggers, and 5 explosives preserved timed out empty at 30s; relaxed
+  `cellnot:18,5,web` with the same rat/trigger floor also timed out empty.
+  This strengthens the conclusion that `(18,5)` is not opened by a simple
+  pre-trigger-5 player route.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current

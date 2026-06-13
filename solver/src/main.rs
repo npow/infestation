@@ -920,6 +920,7 @@ enum LookupGoal {
     CellIs(i32, i32, CellKind),
     CellIsWithPlayerAt(i32, i32, CellKind, i32, i32),
     CellNot(i32, i32, CellKind),
+    CellNotWithCellIs(i32, i32, CellKind, i32, i32, CellKind),
     CellNotAndRatAt(i32, i32, CellKind, i32, i32),
     CellNotWithPlayerAt(i32, i32, CellKind, i32, i32),
     CellNotWithPlayerInRect(i32, i32, CellKind, i32, i32, i32, i32),
@@ -1037,6 +1038,48 @@ impl LookupGoal {
             "cellnot" => {
                 let (point, kind) = parse_point_and_cell_kind(arg);
                 Self::CellNot(point.0, point.1, kind)
+            }
+            "cellnotcellis" | "cellnot-and-cellis" => {
+                let mut parts = arg.split(',');
+                let x = parts
+                    .next()
+                    .expect("cell x")
+                    .trim()
+                    .parse()
+                    .expect("cell x");
+                let y = parts
+                    .next()
+                    .expect("cell y")
+                    .trim()
+                    .parse()
+                    .expect("cell y");
+                let not_kind = parts
+                    .next()
+                    .map(str::trim)
+                    .map(parse_cell_kind_name)
+                    .expect("cell kind");
+                let other_x = parts
+                    .next()
+                    .expect("other cell x")
+                    .trim()
+                    .parse()
+                    .expect("other cell x");
+                let other_y = parts
+                    .next()
+                    .expect("other cell y")
+                    .trim()
+                    .parse()
+                    .expect("other cell y");
+                let other_kind = parts
+                    .next()
+                    .map(str::trim)
+                    .map(parse_cell_kind_name)
+                    .expect("other cell kind");
+                assert!(
+                    parts.next().is_none(),
+                    "expected cellx,celly,notkind,otherx,othery,otherkind"
+                );
+                Self::CellNotWithCellIs(x, y, not_kind, other_x, other_y, other_kind)
             }
             "cellnotratat" | "cellnot-and-ratat" => {
                 let mut parts = arg.split(',');
@@ -1655,6 +1698,10 @@ fn lookup_goal_reached(
                     .contains(&(player_x, player_y))
         }
         LookupGoal::CellNot(x, y, kind) => current.cell_kind_at(x as usize, y as usize) != kind,
+        LookupGoal::CellNotWithCellIs(x, y, not_kind, other_x, other_y, other_kind) => {
+            current.cell_kind_at(x as usize, y as usize) != not_kind
+                && current.cell_kind_at(other_x as usize, other_y as usize) == other_kind
+        }
         LookupGoal::CellNotAndRatAt(x, y, kind, rat_x, rat_y) => {
             current.cell_kind_at(x as usize, y as usize) != kind && rat_at(current, (rat_x, rat_y))
         }
@@ -1813,6 +1860,21 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         LookupGoal::CellIs(x, y, _) | LookupGoal::CellNot(x, y, _) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::CellNotWithCellIs(x, y, not_kind, other_x, other_y, other_kind) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let cell_penalty = if current.cell_kind_at(x as usize, y as usize) != not_kind {
+                0
+            } else {
+                nearest_target_distance(&players, &[(x, y)]) * 50 + 100_000
+            };
+            let other_penalty =
+                if current.cell_kind_at(other_x as usize, other_y as usize) == other_kind {
+                    0
+                } else {
+                    500_000
+                };
+            cell_penalty + other_penalty + heuristic(current) / 1_000
         }
         LookupGoal::CellIsWithPlayerAt(x, y, kind, player_x, player_y) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
@@ -2099,6 +2161,12 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
         }
         LookupGoal::CellNot(x, y, kind) => {
             (current.cell_kind_at(x as usize, y as usize) == kind) as i64
+        }
+        LookupGoal::CellNotWithCellIs(x, y, not_kind, other_x, other_y, other_kind) => {
+            let cell_missing = (current.cell_kind_at(x as usize, y as usize) == not_kind) as i64;
+            let other_missing =
+                (current.cell_kind_at(other_x as usize, other_y as usize) != other_kind) as i64;
+            cell_missing * 1_000 + other_missing * 1_000_000
         }
         LookupGoal::CellNotAndRatAt(x, y, kind, rat_x, rat_y) => {
             let cell_missing = (current.cell_kind_at(x as usize, y as usize) == kind) as i64;
