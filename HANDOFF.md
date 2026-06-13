@@ -1,8 +1,8 @@
 # Infestation solving campaign — HANDOFF
 
-Resume doc for continuing the effort on another machine. **Goal: solve the 7
-remaining hard levels.** 29/36 non-Claude playable CSV levels + 5 new puzzles
-are already solved & shipped.
+Resume doc for continuing the effort on another machine. **Goal: solve the 10
+remaining rat-bearing CSV levels.** 35 verified solutions are recorded in
+`solver/solutions/final_solutions.json`.
 
 ---
 
@@ -78,7 +78,7 @@ Browser auto-player: `solver/solutions/autoplay.js`. New puzzles: `levels/claude
 now includes verified wins for `tinderbox`, `no_retreat`, `lock_in`, and
 `limited2`; the latest pass also adds `chase`.
 
-### UNSOLVED - the 7 (this is the job)
+### UNSOLVED - primary hard set
 
 | # | Level | Players | Name-hint / trick | Best lead / recommended attack |
 |---|---|---|---|---|
@@ -89,6 +89,10 @@ now includes verified wins for `tinderbox`, `no_retreat`, `lock_in`, and
 | 5 | `cooperation/tug_of_war` | 2 | mirror-symmetric tug | Needs paired role choreography with `wp2`: mirrored trigger pairs 1/2/3, side rats, then central rat. Avoid generic 2p search until the waypoint pairs encode the intended symmetry. |
 | 6 | `cooperation/handoff` | 2 | baton pass | Small enough to hand-reason. P1 cannot simply reach trigger 1 first. P1 can reach trigger 2 first, but then trigger 1 is no longer useful/reachable; likely P1 opens the handoff and P2 finishes on the remote side. |
 | 7 | `cooperation/blocked_v2` | 2 | one player blocked | Keep the previous warning: one rat may be permanently unreachable behind effectively indestructible structure. Before spending human-solving time, prove or disprove winnability with targeted reachability/exhaustive checks. |
+
+Additional unsolved old-level CSVs in the current inventory:
+`old_levels/on_the_clock.csv`, `old_levels/order_of_operations.csv`, and
+`old_levels/overstep.csv`.
 
 ### Approach update - 2026-06-11
 
@@ -2783,6 +2787,46 @@ short `timeout`/`ulimit` caps after the previous OOM.
   `^^^^^<<<<<<^^^` at 14 turns. It verifies `Playing`, but diagnostics show
   only 1 of 3 rats reachable and 0 of 12 remaining triggers reachable, so this
   is a dead macro family, not a continuation frontier.
+
+### Current run notes - 2026-06-13
+
+No new verified wins. The session used low-concurrency capped probes after a
+prior machine OOM: every solver run was wrapped with `ulimit -v` plus `timeout`,
+and process-table checks confirmed no lingering `solver` / `timeout` / `clingo`
+processes before and after batches.
+
+- Current inventory check: `solver/solutions/final_solutions.json` has 35
+  entries, and all 35 replay as `result=Won` under `target/release/solver
+  verify`. The unsolved rat-bearing CSVs are:
+  `cooperation/blocked_v2.csv`, `cooperation/handoff.csv`,
+  `cooperation/tug_of_war.csv`, `cyborg_rats/ai_takeover.csv`,
+  `old_levels/on_the_clock.csv`, `old_levels/order_of_operations.csv`,
+  `old_levels/overstep.csv`, `release.csv`, `reload_v3.csv`, and
+  `tinderrectangle.csv`.
+- `old_levels/order_of_operations`: continued from the trigger-1/3 top-column
+  family. The promising prefix
+  `B=<<<<<<^v^^^^>^^vv^vv^vv^^^vvvv^^^^^^^^^^^>>^>>vvvvvv<vv<`
+  reaches a 4-rat state with all rats/triggers reachable. From `B`, bounded
+  `ratsle:3` finds a clean drop to
+  `D=<<<<<<^v^^^^>^^vv^vv^vv^^^vvvv^^^^^^^^^^^>>^>>vvvvvv<vv<v>vv>>>>>>^^^^vv>>`
+  with rats `(9,3)`, `(10,11)`, `(17,18)`, all reachable. From `D`, one step
+  `v` gives
+  `E=<<<<<<^v^^^^>^^vv^vv^vv^^^vvvv^^^^^^^^^^^>>^>>vvvvvv<vv<v>vv>>>>>>^^^^vv>>v`,
+  a 2-rat state with rats `(9,3)` and `(17,18)`, all triggers still reachable.
+- `old_levels/order_of_operations`: the `B/D/E` family is probably a dead
+  branch. From `D` and `E`, capped `playerat:9,4`, `playerat:9,6`,
+  `playerat:8,6`, and `ratplayerfacing:9,3,9,4,north` all returned empty.
+  From `E`, `trigger:7`, `trigger:8`, and `trigger:2` are reachable while
+  preserving both rats, but they do not make `(9,4)` usable and do not produce a
+  `ratsle:1` cleanup. Killing the right rat first via `>>>>>>vv` strands the
+  top rat with `reachable_rats=0`. A static shortest path to the top route
+  steps through trigger terrain and walls off the map, leaving the player near
+  `(14,14)` rather than at the top rat.
+- `old_levels/order_of_operations`: broader capped checks from
+  `P1=<<<<<<^v^^^^>^^vv^vv^vv^^^vvvv` for `playerat:9,4` with 4 rats preserved
+  and `ratsleplayer:3,9,4` also returned empty. Do not repeat the `P1 -> B/D/E`
+  route unless a new idea changes the lower-pair disposal before the trigger
+  terrain seals the route.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
