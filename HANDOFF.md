@@ -2827,6 +2827,22 @@ processes before and after batches.
   and `ratsleplayer:3,9,4` also returned empty. Do not repeat the `P1 -> B/D/E`
   route unless a new idea changes the lower-pair disposal before the trigger
   terrain seals the route.
+- `tinderrectangle`: rechecked the two tempting local frontiers with strict
+  caps. At
+  `P137=<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv><v^>v^<^>v<vv<>^^>vv^^<^^>vv<^^^<<vvv<<^^<^<<vvv<<<<<>>>>>^<<<>>>^^<vv<<<v<<>>`,
+  the all-rats-preserving frontier is forced: repeated `>` walks player/rat
+  along row 6 until `P137+>>>>>` has player `(8,6)` and lower rat `(7,6)`.
+  Every next move (`>`, `^`, `v`, `.`, etc.) is `GameOver` because `(9,6)` is a
+  wall and the rat catches the player. This is a local forced contact trap, not
+  a search-width issue.
+- `tinderrectangle`: at the earlier contact-release state
+  `P132=T106+^^^><<<vvv<<^^^<<<<<v<v<<^` (player `(2,4)`, lower rat `(2,3)`),
+  `^` kills the lower rat and enters the 15-top-rat branch; `v` / `.v` preserve
+  all 16 rats but keep the lower rat directly behind the player; horizontal
+  escape dies immediately. Bounded `rectsep` and `ratfar:2,5,3` checks from
+  P132 returned empty. From the lower-rat-killed branch `P132+^`, bounded
+  `winready`, `ratat:0,0`, and `ratat:16,0` checks also returned empty. Treat
+  P132/P137 as exhausted unless an earlier route changes the release spacing.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
