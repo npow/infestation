@@ -4503,6 +4503,27 @@ clingo, or timeout jobs.
   means the strict trigger-6 line is a better diagnostic branch than P95, but
   it still needs a mechanism for the left sealed rats before the reachable pair
   is cleaned up.
+- `old_levels/overstep`: direct capped `lookup --goal win` from P49 returned
+  `NO_SOLUTION` after 120k expansions / 38.6s. Do not spend broad search on
+  P49 without a new predicate for `(0,13)` / `(1,17)` or a way to keep the
+  left-side explosive resources live longer.
+- `release`: Socrates identified P8 `v<vv^^>>` as the last useful pre-seal
+  checkpoint before the standard opener loses trigger resources. Four bounded
+  predicates from P8/initial returned empty: strict
+  `triggeronlycellnot:6,18,6,explosive` while requiring trigger 2 reachable;
+  `cellnotnoratsrect:18,6,explosive,18,4,19,7`; initial
+  `cellisplayerat:0,16,trigger2,2,16`; and
+  `ratrectplayerrect:18,5,19,7,16,13,19,16`. This closes the current P8
+  pre-seal hypotheses for opening `(18,5)` / detonating `(18,6..8)` without
+  repeating the spent trigger-5/6 family.
+- `reload_v3`: strict trigger setup checks from the initial board returned
+  empty. `triggeronlycellnot:7,10,5,web` and
+  `triggeronlycellnot:7,9,6,explosive` found no clean trigger-7 route that
+  opens the top trigger-5/6 gate while preserving all 3 rats. Initial
+  `triggeronly:5` also returned empty with all 3 rats preserved. This reinforces
+  that neither trigger 7 nor trigger 5 is the first clean gate event; a route
+  must change access to trigger 6 or the bottom-left pocket by another
+  mechanism.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
