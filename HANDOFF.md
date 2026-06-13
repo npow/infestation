@@ -3175,6 +3175,42 @@ read-only subagent reasoning and shell reads.
   `cellnot:10,8,explosive` and `cellnot:11,8,explosive` returned empty with
   trigger 2 preserved. Park the P2 sweep/courier family.
 
+### OOM-safe follow-up - 2026-06-13 later pass
+
+No new verified win. This pass kept one capped solver process active at a time
+(`ulimit -v 800000; timeout ...`) and ended each foreground probe with no
+`solver` / `timeout` / `clingo` processes active.
+
+- `old_levels/on_the_clock`: the bridge route has a new diagnostic frontier.
+  From P23 `v>>><^^v>^^>>>vvv><vvvv`, suffix `^^^vvvvv` fires trigger 4
+  after walking the sealed-component rat upward/leftward. The resulting P31
+  `v>>><^^v>^^>>>vvv><vvvv^^^vvvvv` has all 8 rats alive, the former
+  bottom-right component rat at `(13,14)`, 3 reachable rats, and triggers 6/7/8
+  still present. However, from P31, `cellnot:14,15,web` and `ratat:14,15`
+  returned empty. A ratdrop branch
+  `v>>><^^v>^^>>>vvv><vvvv^^^vvvvv^^>>>>^` reaches 7 rats with the component
+  rat at `(12,14)`, but follow-up `ratsle:6`, `triggeronly:6`, and
+  `triggeronly:8` returned empty under reachability gates.
+- `old_levels/on_the_clock`: the early-trigger-9 route also has a sharper map.
+  Prefix `>>>v>vv^^^<^^>>>vvvvvvvvv` puts the lower-right component rat at
+  `(13,14)` before cleanup, avoiding the old `(16,19)` sealed pocket. Firing
+  trigger 3 immediately with suffix `^^^` gives all 8 rats alive and 5 reachable
+  rats, but the top/right rat remains parked at `(17,5)`. From that trigger-3
+  state, `triggeronly:6` and `triggeronly:8` returned empty. Backing up to
+  `>>v>>^^`, preserved-trigger staging targets `ratat:19,6` and `ratat:19,7`
+  both returned empty.
+- `release`: the post-5 prefix `v<vv^^>>vv<>>>^` still looks structurally
+  useful but did not produce the left-trigger-2 carrier. From that state,
+  `cellnotratat:1,16,explosive,3,17` and relaxed
+  `cellnot:1,16,explosive` both returned empty while preserving the right-side
+  explosive column and useful rat/resource counts.
+- `cyborg_rats/ai_takeover`: Q41
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>` has the upper trigger-7 cluster
+  live and high player reachability. The intended alternate "enemy upper-7"
+  checks `cellnotratat:16,12,web,15,9` and
+  `cellnotratat:16,12,web,16,9` both returned empty. The bottom-actor staging
+  target `ratcell:4,19,2,19,explosive` also returned empty under resource gates.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current 7.
