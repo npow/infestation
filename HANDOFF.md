@@ -3318,6 +3318,16 @@ No new verified win. This pass kept one capped solver process active at a time
   `noratsrect:12,14,17,19` and `cellnot:14,15,web` returned empty, even when
   rat preservation was relaxed. The bridge route is still the best near-solve,
   but the right-component rat has to be displaced or killed earlier than P69.
+- `old_levels/on_the_clock`: a side analysis found a sharper P66/P69 failure
+  mode. From P66
+  `v>>><^^v>^^>>>vvv><vvvvvv^^>>>>^^^vvv><<<<<<<^<<<<v^>>>>v>>>>>>vvv`,
+  `ratslecellnot:5,13,14,rat` can avoid the exact P69 parking cell, but every
+  returned branch spends all triggers/explosives and still leaves the right
+  component rat sealed (for example at `(14,14)`). Requiring `--min-triggers 1`
+  makes that target empty. The companion trigger-8 inversion target
+  `triggeronlycellnot:8,12,14,rat` from P56 also returned empty. This closes
+  the "same bridge, different final cleanup timing" idea; continue before the
+  trigger-9 bridge commits the right-component rat to the 12-cell pocket.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
