@@ -4823,6 +4823,48 @@ zero rats, so it is not part of the rat-bearing hard set.
   `triggeronlycellnot:3,0,10,explosive` from P47/P49, each requiring escape
   resources rather than accepting the known one-cell collapse.
 
+### OOM-safe continuation - 2026-06-13 fifteenth Codex pass
+
+No new verified win. Solver work stayed serial under `ulimit -v 800000` and
+external `timeout`; process checks found no leftover `target/release/solver`,
+`cargo`, `clingo`, or `timeout` jobs. The current authoritative inventory is
+10 unsolved CSVs, 9 rat-bearing; `claude/gauntlet.csv` is a zero-rat hub.
+
+- `old_levels/overstep`: the guarded side-agent probes are now mostly closed.
+  From P47
+  `vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^vvvvvvvvv<<<<<`,
+  `triggeronlycellnot:1,0,18,explosive` with all 6 rats, at least 80 reachable
+  cells, and at least 3 reachable triggers returned empty. From P49 (`P47+v^`),
+  `triggeronlycellnot:7,2,12,explosive` did return P83-family branches such as
+  `vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^vvvvvvvvv<<<<<v^v^>>>^>^>^^^^^^^^^^^<<<<<<<<<vvv<<`,
+  but P83 has 5 rats, 5 explosives, 5 webs, 12 triggers, 193 reachable cells,
+  8 reachable triggers, and **0 reachable rats**. Follow-up checks from P83 for
+  `reachablege:1`, strict trigger 1 with a reachable rat, and strict trigger 3
+  with a reachable rat all returned empty. From P47,
+  guarded `triggeronlycellnot:3,0,10,explosive` with trigger 1 still reachable
+  also returned empty. The trigger-7 branch is diagnostic, not progress.
+- `old_levels/on_the_clock`: the latest side-agent predicates returned empty.
+  From P19 `v>>><^^v>><^^>>>vvv`,
+  `cellnotcellis:14,15,web,10,14,trigger3` with all 8 rats and at least
+  15 triggers preserved returned empty, and `noratsrect:3,8,3,9` with all
+  8 rats and 17 triggers preserved also returned empty. From P31
+  `v>>><^^v>><^^>>>vvv>>^v<<vvvvvv`,
+  `cellnotcellis:13,19,web,12,19,explosive` with all 8 rats, 4 reachable rats,
+  and at least 10 triggers preserved returned empty. Continue this puzzle only
+  by backing up to a different lower-right access mechanism.
+- `tinderrectangle`: the T58 top-pack side-loop hypothesis returned empty.
+  From T58
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv`,
+  all of `cellnotplayerrect:7,2,web,14,6,15,8`,
+  `cellnotplayerrect:8,2,web,14,6,15,8`,
+  `ratrectplayerrect:7,2,10,3,14,6,15,8`,
+  `cellnotratrect:7,2,web,7,1,9,1`, and
+  `cellnotratrect:8,2,web,7,1,9,1` returned empty while preserving all
+  16 rats. Manual trace checks from P137 reconfirm the row-6 trap: the corridor
+  can move the lower rat rightward, but continuing down/right ignites and kills
+  the player, while backing up kills the lower rat. The missing mechanism is
+  still a pre-release separation/topology change before T58/P132/P137.
+
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
   400-500, long budgets) solved several levels but stalled on the current
