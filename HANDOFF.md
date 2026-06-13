@@ -3911,6 +3911,15 @@ New verified win:
     `v^ >^ >^ >^ >^ >^ ^^`, both
     `ratrectplayerrect:10,6,11,7,14,7,14,8` and
     `cellnotratat:12,6,explosive,10,6` returned empty.
+  - `old_levels/overstep`: a second first-reachable-rat route
+    `vvvvvv>>>>>>>>>v>><>>` is better than the stale `>>>` branch: it keeps all
+    6 rats, 6 explosives, 7 webs, 21 triggers, and exposes one reachable rat.
+    Chaining to
+    `vvvvvv>>>>>>>>>v>><>>>^>^>^^^^^^^^^^^<<<<<<<<<vvv<<` reaches 4 rats with
+    3 explosives and 11 triggers, but only one rat remains reachable. From
+    there, `ratsle:3` with `--min-reachable-rats 1` returned empty; relaxed
+    `ratsle:3` only reaches 3-rat states with `reachable_rats=0`. Treat this
+    as another finite reachability trap, not a cleanup frontier.
 
 ### Methods already tried (do not repeat blindly)
 - Generic heuristic search (gbfs/astar, weights 1-10, `PROGRESS_H`, depth
