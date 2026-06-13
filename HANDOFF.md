@@ -6010,6 +6010,17 @@ were left running.
   for `cellnotratrect:18,5,web,16,4,19,8` also returned no branch. Treat these
   as another dead form of the opener family unless a new line handles `(18,4)`
   before the top sweep.
+- `release`: latest capped trigger-order/early-fork pass found no verified win.
+  The best trigger-order line still starts with the known dead opener
+  `v<vv^^>>v`, and the strongest continuation again leaves only `(18,4)` alive
+  with `(18,5)` still webbed:
+  `v<vv^^><vvv<<^<^^vv^^^^^^^^<<<v^v^v^v^v^^^^>>>>>>><><>>>>>>>vv>v>vvvvvvvvv>>>vvvv`.
+  Materially new but unsolved early prefixes to inspect later are `v>v`
+  (trigger 4 first), `v>>>v` (trigger 5 first), `v<vv^^>` (after first release
+  event before the known `>>v` seal), `v<vv^^>>>..^` (moves rats into the
+  upper/right corridor while `(18,5)` remains webbed), and `v<vv^^>>.<><^`
+  (gets a rat near `(16,6)` / the `(18,6..8)` explosive column, but still does
+  not open `(18,5)`).
 - `reload_v3`: strict lower-left checks for `cellnot:1,21,web` and
   `cellnot:2,21,explosive` with all 3 rats preserved either hit the process
   memory cap or returned no branch under 500k nodes. The unresolved mechanism is
