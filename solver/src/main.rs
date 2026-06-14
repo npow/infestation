@@ -5970,6 +5970,7 @@ fn solve_trigger_order_lookup(
     segment_nodes: usize,
     segment_results: usize,
     beam: usize,
+    min_rats: Option<usize>,
     mop_secs: f64,
     mop_strategy: &str,
     mop_weight: i64,
@@ -6017,7 +6018,7 @@ fn solve_trigger_order_lookup(
                 segment_nodes,
                 goal,
                 segment_results,
-                None,
+                min_rats,
                 trap_constraints,
                 true,
             );
@@ -6130,6 +6131,7 @@ fn solve_any_trigger_order_lookup(
     segment_nodes: usize,
     segment_results: usize,
     beam: usize,
+    min_rats: Option<usize>,
     mop_secs: f64,
     mop_strategy: &str,
     mop_weight: i64,
@@ -6173,7 +6175,7 @@ fn solve_any_trigger_order_lookup(
                     segment_nodes,
                     LookupGoal::TriggerNumber(number),
                     segment_results,
-                    None,
+                    min_rats,
                     trap_constraints,
                     true,
                 );
@@ -9064,7 +9066,7 @@ fn main() {
     if mode == "triglookup" {
         // solver triglookup <csv> [--order "1,2,3"] [--segdepth N]
         //                         [--segsecs S] [--segnodes N] [--results N]
-        //                         [--beam N] [--mopsecs S] [--strict]
+        //                         [--beam N] [--mopsecs S] [--min-rats N] [--strict]
         let mut prefix_str = String::new();
         let mut order: Option<Vec<u8>> = None;
         let mut segment_depth = 120usize;
@@ -9078,6 +9080,7 @@ fn main() {
         let mut depth = 400usize;
         let mut strict_trigger_order = false;
         let mut trap_constraints = TrapConstraints::default();
+        let mut min_rats: Option<usize> = None;
         let mut i = 3;
         while i < args.len() {
             if let Some(next_i) = parse_trap_constraint_arg(&args, i, &mut trap_constraints) {
@@ -9127,6 +9130,10 @@ fn main() {
                 }
                 "--depth" => {
                     depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--min-rats" => {
+                    min_rats = Some(args[i + 1].parse().unwrap());
                     i += 2;
                 }
                 "--min-reachable-rats" | "--min-reachable" => {
@@ -9189,6 +9196,7 @@ fn main() {
             segment_nodes,
             segment_results,
             beam,
+            min_rats,
             mop_secs,
             &mop_strategy,
             mop_weight,
@@ -9215,7 +9223,7 @@ fn main() {
     if mode == "triganylookup" {
         // solver triganylookup <csv> [--steps N] [--segdepth N]
         //                            [--segsecs S] [--segnodes N] [--results N]
-        //                            [--beam N] [--mopsecs S]
+        //                            [--beam N] [--mopsecs S] [--min-rats N]
         let mut prefix_str = String::new();
         let mut steps = trigger_numbers(&grid).len().max(1);
         let mut segment_depth = 120usize;
@@ -9228,6 +9236,7 @@ fn main() {
         let mut mop_weight = 5i64;
         let mut depth = 400usize;
         let mut trap_constraints = TrapConstraints::default();
+        let mut min_rats: Option<usize> = None;
         let mut i = 3;
         while i < args.len() {
             if let Some(next_i) = parse_trap_constraint_arg(&args, i, &mut trap_constraints) {
@@ -9277,6 +9286,10 @@ fn main() {
                 }
                 "--depth" => {
                     depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--min-rats" => {
+                    min_rats = Some(args[i + 1].parse().unwrap());
                     i += 2;
                 }
                 "--min-reachable-rats" | "--min-reachable" => {
@@ -9333,6 +9346,7 @@ fn main() {
             segment_nodes,
             segment_results,
             beam,
+            min_rats,
             mop_secs,
             &mop_strategy,
             mop_weight,

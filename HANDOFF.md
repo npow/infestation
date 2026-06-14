@@ -6878,6 +6878,82 @@ default `frontier` behavior is unchanged. `cargo check -p solver` and
   `(15,9)`, `(16,9)`, and `(16,11)` returned no solution even without
   rat-preservation gates.
 
+### Guarded trigger and exact-slice pass - 2026-06-14 forty-second Codex pass
+
+No new verified win. Current inventory remains 9 rat-bearing CSVs missing from
+`solver/solutions/final_solutions.json`; all 36 saved solutions still verify
+with `target/release/solver verify`. Solver processes were kept foreground and
+capped with `timeout 25s` plus `ulimit -v 650000`.
+
+- `solver`: fixed `triglookup` and `triganylookup` so `--min-rats N` is passed
+  into each trigger segment search. Before this fix, trigger-order probes could
+  silently accept low-rat dead basins even when the CLI included `--min-rats`.
+  `cargo check -p solver` and `cargo build -p solver --release` passed after
+  the change.
+- Exact-method feasibility: `clingo`, Python `clingo`, OR-Tools, Z3, and PySAT
+  are not installed in this environment. A full ASP/CP-SAT model is not a quick
+  win because exact transition details include sequential rat resolution,
+  sword blocking, trigger/zap terrain mutation, explosion waves, and cyborg
+  path-distance rules. The smallest useful exact slice is `tinderrectangle`
+  only: single player, normal rats, webs, explosives, fixed depth, no triggers,
+  no planks, no cyborgs.
+- `tinderrectangle`: a sidecar found an all-rat "held lower rat" latch:
+  `<<<<<>^>^>>^>>v>vv>>^^^>>vvvv^^^^<<vvv<<^^^<<<<<<vv<<<`.
+  At turn 54 it has player `(1,5)`, lower rat `(1,4)`, all 16 rats alive, and
+  `(2,4)` still web. Local continuation is dead: `^` kills the lower rat, `<`,
+  `>`, and `.` lose immediately, and the only all-rat-preserving move `v`
+  shifts contact to player `(1,6)` / rat `(1,5)` with no escape. The tighter
+  missing predicate
+  `ratrectplayerrectcellis:1,4,1,4,3,5,15,8,2,4,web --min-rats 16` returned
+  empty under the cap, as did direct `(0,0)` corner staging and `rectready`
+  preserving all 16 rats.
+- `tinderrectangle`: top-lane `geomlure` found a new all-rat diagnostic best
+  state, not a solution:
+  `<^^^<<<v>>v<<<v>>><<<<>^>^^>>>>>><v^>vvv>>^^^>>vvv>v<v><<>^^^^^><v>^<vv>^^<<<vvv<<^^^<<<<<<vv<v<^>>^^<`.
+  Diagnostics: all 16 rats alive, player `(3,3)`, pulled rat `(2,3)`, 17 webs
+  left. This is another contact basin: one-step `ratgeom` found no move from
+  `(2,3)` to `(1,2)` or `(1,3)`, `ratdeathgeom` found no immediate explosive
+  death, and follow-ups for `rectready`, `ratat:0,0`, or separating the rat
+  left while the player moves right all returned empty preserving 16 rats.
+- `old_levels/on_the_clock`: from
+  `>>>^^>>>^^^^^vvv><vvvvvv`, `frontier --mechanisms` shows the immediate
+  trigger-9 event suffix `^` preserves 8 rats but drops reachable triggers from
+  8 to 3. Guarded `triggeronly:9` and `triganylookup` did not find a win or a
+  better preserved trigger chain under caps.
+- `old_levels/overstep`: found a better all-rat diagnostic branch
+  `vvvvvv>>>>>>>>>v>><>>>`, which preserves all 6 rats and 21 triggers and
+  gives `reachable_rats=1/6` with player `(16,13)`. Follow-up
+  `reachablege:2` preserving all 6 rats returned empty. After the `--min-rats`
+  fix, `triganylookup --min-rats 6` found another all-rat trigger branch
+  `v<<^^^^^^^>>>>>>>>>>>>><>>><<<^^` with 6 rats, 6 explosives, 5 webs, 15
+  triggers, and `reachable_rats=1/6`; this is a diagnostic sibling, not a
+  solution.
+- `release`: from delayed top-4 staging
+  `v<vv^^>>>..^>>vvv><^<v<<^v<<`, compound checks for opening `(18,5)` while
+  preserving the isolated `(18,4)` rat or staging a right-side actor/player
+  combination returned empty. `frontier --mechanisms` from this prefix mostly
+  shows rat-motion-only variations and early low-value rat losses; do not
+  deepen this exact P28 continuation.
+- `cooperation/tug_of_war`: `^v` remains a real top-pocket mutation
+  `(7,0)->(8,0)` with all resources intact, but direct checks for consuming
+  trigger 1 while keeping that rat displaced and opening either adjacent web
+  returned empty. First trigger/resource signatures from `^v` collapse to
+  `reachable_rats=0` / `trapped=4`.
+- `cooperation/handoff`: all-5-rat mechanism frontier to depth 10 only moves
+  exterior rats; sealed `(10,6)` remains. `reachablege:2` while preserving all
+  5 rats, all 4 triggers, and all 29 explosives returned empty. A trigger-1
+  landmark
+  `v^ >^ >^ >^ >^ >^ ^^ .v .v .> .> .> v> v< <<`
+  leaves 4 rats, 5 explosives, two trigger-2 cells, `reachable_rats=2/4`, and
+  `trapped=2`, but follow-up trigger-2 checks to reduce trapped rats returned
+  empty.
+- `cooperation/blocked_v2`: rechecked the B4 branch
+  `^< ^^ v^ ^^ v> v> v> vv vv ^^ ^v ^v ^v ^v vv ^> v> ^<`.
+  It has 4 rats, 15 explosives, 10 webs, 9 triggers, `reachable_rats=2/4`, and
+  `trapped=0`. B4+`v<` moves the lower-right rat to `(13,16)` with resources
+  unchanged, but `reachablege:3` and `triggeronly:2` returned empty from both
+  B4 and B4+`v<`.
+
 ---
 
 ## 4. Planned next steps (start here)
