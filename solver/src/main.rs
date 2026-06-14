@@ -10148,7 +10148,7 @@ fn main() {
     if mode == "frontier" {
         // solver frontier <csv> [--prefix MOVES] [--depth N] [--secs S]
         //                       [--maxnodes N] [--limit N] [--min-rats N]
-        //                       [--states] [--no-canonical]
+        //                       [--states] [--mechanisms] [--no-canonical]
         //
         // Enumerate first paths to distinct local configurations. This is a
         // bounded diagnostic for hand-solving, not a global solver.
@@ -10159,6 +10159,7 @@ fn main() {
         let mut limit = 80usize;
         let mut min_rats: Option<usize> = None;
         let mut print_states = false;
+        let mut mechanisms_only = false;
         let mut canonical = true;
         let mut i = 3;
         while i < args.len() {
@@ -10189,6 +10190,10 @@ fn main() {
                 }
                 "--states" => {
                     print_states = true;
+                    i += 1;
+                }
+                "--mechanisms" | "--mechanism-signatures" => {
+                    mechanisms_only = true;
                     i += 1;
                 }
                 "--no-canonical" => {
@@ -10223,22 +10228,30 @@ fn main() {
         };
         let signature = |state: &Grid| {
             let features = Features::from_grid(state);
-            format!(
-                "r{} x{} w{} t{} p{} players=[{}] rats=[{}] reachable_rats={} reachable_triggers={}",
+            let mechanism = format!(
+                "r{} x{} w{} t{} p{} rats=[{}] reachable_rats={} reachable_triggers={}",
                 features.rats,
                 features.explosives,
                 features.webs,
                 features.triggers,
                 features.planks,
-                positions_key(state, player_cell),
                 positions_key(state, rat_or_cyborg),
                 reachable_rat_count(state),
                 reachable_trigger_count(state)
-            )
+            );
+            if mechanisms_only {
+                mechanism
+            } else {
+                format!(
+                    "players=[{}] {}",
+                    positions_key(state, player_cell),
+                    mechanism
+                )
+            }
         };
 
         eprintln!(
-            "frontier: players={} prefix={} depth={} secs={} maxnodes={} limit={} min_rats={:?} canonical={}",
+            "frontier: players={} prefix={} depth={} secs={} maxnodes={} limit={} min_rats={:?} mechanisms_only={} canonical={}",
             nplayers,
             prefix.len(),
             depth,
@@ -10246,6 +10259,7 @@ fn main() {
             max_nodes,
             limit,
             min_rats,
+            mechanisms_only,
             canonical
         );
 

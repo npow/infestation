@@ -6847,6 +6847,37 @@ process check was clean.
   while keeping that rat displaced. A `macro` run timed out without a usable
   event-chain summary.
 
+### Mechanism-frontier tooling pass - 2026-06-14 forty-first Codex pass
+
+No new verified win. Added `solver frontier --mechanisms` (alias
+`--mechanism-signatures`) so `frontier` reports structural signatures without
+printing every player-position variation. This is a diagnostic-only option; the
+default `frontier` behavior is unchanged. `cargo check -p solver` and
+`cargo build -p solver --release` both passed.
+
+- `cooperation/blocked_v2`: `frontier --mechanisms` from the 4-rat branch above
+  showed an untested one-step structural variant: suffix `v>` spends resources,
+  moves the lower-right rat from `(14,17)` to `(15,16)`, and leaves 4 rats, 9
+  explosives, 9 webs, 7 triggers, and reachable rats `2/4`. Direct diagnostics
+  confirm triggers 2 remain unreachable. Follow-ups from this variant for
+  `triggeronly:2`, `ratsle:3`, and direct `win` produced only the same immediate
+  3-rat basin with rats `(9,13)`, `(9,14)`, `(0,15)`; no route opened the
+  lower-left mouth.
+- `reload_v3`: `frontier --mechanisms` from the alternate P43 station is tiny:
+  the only all-3-rat structural movement is helper `(3,18)->(2,18)->(1,18)`,
+  after which no useful event is available. This supports closing the P43
+  helper-at-`(3,18)` family unless an earlier route changes the station before
+  trigger 1.
+- `cyborg_rats/ai_takeover`: `frontier --mechanisms` exposed a trigger-5 branch
+  from the high-reachability 14-move event: prefix
+  `v<vv^^<vv>>><^^>>v` has 23 rats, 9 explosives, 32 webs, 10 triggers, and
+  reachable rats `22/23`. It is not the missing trigger-7 mechanism. From that
+  exact state, `triganylookup` reported no reachable next trigger, `trigger:7`,
+  `triggeropen:7,50`, `triggeronly:6`, `triggeronly:8`, and direct `win` all
+  returned no branch, and direct `playerat` checks for trigger-7 cells
+  `(15,9)`, `(16,9)`, and `(16,11)` returned no solution even without
+  rat-preservation gates.
+
 ---
 
 ## 4. Planned next steps (start here)
