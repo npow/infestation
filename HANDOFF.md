@@ -7529,6 +7529,39 @@ the event level instead of only ranking old prefixes.
   station-family `reload_v3` states. Check that run directory for late wins
   before launching another wave.
 
+### Transfer-scored follow-up wave - 2026-06-14
+
+No new verified win. This pass did validate the transfer-learning plumbing and
+added useful negative evidence:
+
+- Inline transfer event generation:
+  `/tmp/infestation-runs/event_seeds_20260614T_inline_transfer.jsonl`.
+  It scored 82 event successors from 28 hard-set parent prefixes with the
+  frozen `AlignmentResearch/learned-planner/drc11/eue6pax7/cp_2002944000`
+  prior and a small linear Infestation head trained on 444 oracle examples.
+  The selected exact candidates were 2 `blocked_v2`, 1 `on_the_clock`,
+  3 `release`, 3 `reload_v3`, and 3 `tinderrectangle` states. Current guards
+  produced no useful `handoff` or `ai_takeover` event successors.
+- Exact transfer-scored wave:
+  `/tmp/infestation-runs/20260614T_inline_transfer_wave/`. It ran 36 jobs with
+  8 workers, 2.4 GB per child, and 240s per job. There were no `SOLVED` or
+  `result=Won` markers. The higher cap prevented the lookup memory-cap failures
+  seen in `/tmp/infestation-runs/20260614T_refined2_event_wave`, but the selected
+  states still timed out or returned `NO_SOLUTION`.
+- Obligation predicate follow-up:
+  `/tmp/infestation-runs/20260614T_obligation_predicates_transfer_followup/`.
+  All 14 bounded human-obligation probes returned `NO_BRANCH`, including
+  `handoff_open_10_5_web`, `handoff_move_10_6_rat`,
+  `ai_takeover_trigger7_only`, `ai_takeover_open_16_8`,
+  `release_open_18_5_left_route`, `release_open_18_5_right_route`,
+  `reload_v3_station_open_1_21`, `reload_v3_alt_open_1_21`,
+  `on_the_clock_reachable_5`, and the two `tinderrectangle` lower-rat
+  separation/lure checks.
+- Next implication: do not just rerun the same transfer-ranked candidates.
+  Either relax/rewrite the failed obligation predicates into earlier subgoals,
+  or add new structural event families so `handoff` and `ai_takeover` can enter
+  the transfer-ranked event set.
+
 ---
 
 ## 4. Planned next steps (start here)
