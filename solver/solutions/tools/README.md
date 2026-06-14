@@ -32,7 +32,7 @@ paths; check before reusing those.
   scores each irreversible successor before writing it. This is the bridge from
   "score this prefix" to "score the next trigger/web/rat-release event"; it
   keeps level-specific resource/reachability guards and does not reimplement
-  game rules.
+  game rules. Unscored event successors sort behind transfer-scored successors.
 - `transfer_ranker.py` — transfer-guided seed ranker. It loads the public
   pretrained Sokoban checkpoint
   `AlignmentResearch/learned-planner/drc11/eue6pax7/cp_2002944000`, decodes the
@@ -42,7 +42,8 @@ paths; check before reusing those.
   intentionally transfer learning, not from-scratch RL: the expensive
   representation comes from the pretrained board-planning model, while the local
   fit is only a small calibration/ranking head. This is not a second game engine
-  and does not prove a solution.
+  and does not prove a solution. Ranked JSONL uses `learned_score` for the raw
+  frozen-probe sigmoid and `rank_score` for the penalty-adjusted search priority.
 - `obligation_labels.jsonl` — human-style supervision for the hard set. Each
   row labels a prefix as satisfying, staging for, or violating a level-specific
   access/resource obligation such as "open this web before spending that
@@ -118,6 +119,11 @@ python3 solver/solutions/tools/obligation_predicate_wave.py \
   --jobs 6 --mem-mb 1200 \
   --out-dir /tmp/infestation-runs/obligation_predicates_wave
 ```
+
+When using transfer-ranked JSONL, `go_explore_portfolio.py --rank-key score`
+orders by `rank_score` when present, falling back to `learned_score` and then
+the oracle event score. Keep both score fields in generated seeds so model
+confidence and hard-obligation penalties can be inspected separately.
 
 The solver binary also exposes JSON oracle modes for ML/data work:
 

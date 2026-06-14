@@ -227,7 +227,8 @@ def level_obligation_penalty(level: str, prefix: str, snapshot: dict[str, Any]) 
             penalty += 0.25
     elif level.endswith("cooperation/blocked_v2.csv"):
         unreachable = int(features["rats"]) - int(reach["rats"])
-        if turn >= 10 and unreachable >= 2:
+        trapped = int(reach["trapped_unreachable_rats"])
+        if turn >= 10 and unreachable >= 2 and (int(reach["rats"]) == 0 or trapped > 0):
             penalty += 0.30
         if turn >= 20 and unreachable >= 1 and int(reach["triggers"]) == 0:
             penalty += 0.35
@@ -612,7 +613,7 @@ def train_model(
     return model.eval(), mean, std
 
 
-def score_snapshot(
+def learned_score_snapshot(
     model: TransferRanker,
     mean: np.ndarray,
     std: np.ndarray,
@@ -625,7 +626,30 @@ def score_snapshot(
     macro = torch.tensor(((macro - mean) / std)[None, :], dtype=torch.float32)
     with torch.no_grad():
         score = torch.sigmoid(model(board, macro)).item()
-    return float(score - snapshot_badness(example.snapshot, example.level, example.prefix))
+    return float(score)
+
+
+def rank_score_snapshot(
+    model: TransferRanker,
+    mean: np.ndarray,
+    std: np.ndarray,
+    example: SnapshotExample,
+    height: int,
+    width: int,
+) -> float:
+    learned_score = learned_score_snapshot(model, mean, std, example, height, width)
+    return float(learned_score - snapshot_badness(example.snapshot, example.level, example.prefix))
+
+
+def score_snapshot(
+    model: TransferRanker,
+    mean: np.ndarray,
+    std: np.ndarray,
+    example: SnapshotExample,
+    height: int,
+    width: int,
+) -> float:
+    return rank_score_snapshot(model, mean, std, example, height, width)
 
 
 def parse_args() -> argparse.Namespace:
@@ -716,28 +740,33 @@ def main() -> int:
     )
     ranked = sorted(
         (
-            (score_snapshot(model, mean, std, example, height, width), example)
+            (
+                learned_score_snapshot(model, mean, std, example, height, width),
+                rank_score_snapshot(model, mean, std, example, height, width),
+                example,
+            )
             for example in candidate_examples
         ),
-        key=lambda row: row[0],
+        key=lambda row: row[1],
         reverse=True,
     )
 
-    by_level: dict[str, list[tuple[float, SnapshotExample]]] = defaultdict(list)
+    by_level: dict[str, list[tuple[float, float, SnapshotExample]]] = defaultdict(list)
     for row in ranked:
-        by_level[row[1].level].append(row)
+        by_level[row[2].level].append(row)
 
     args.jsonl_out.parent.mkdir(parents=True, exist_ok=True)
     selected = []
     with args.jsonl_out.open("w", encoding="utf-8") as out:
         for level in sorted(by_level):
-            for score, example in by_level[level][: args.top]:
-                selected.append((score, example))
+            for learned_score, rank_score, example in by_level[level][: args.top]:
+                selected.append((rank_score, example))
                 record = {
                     "level": f"levels/{example.level}",
                     "prefix": example.prefix,
                     "source": example.source,
-                    "learned_score": score,
+                    "learned_score": learned_score,
+                    "rank_score": rank_score,
                     "transfer": {
                         "repo": args.pretrained_repo,
                         "checkpoint": args.pretrained_checkpoint,

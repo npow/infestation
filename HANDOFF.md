@@ -7562,6 +7562,55 @@ added useful negative evidence:
   or add new structural event families so `handoff` and `ai_takeover` can enter
   the transfer-ranked event set.
 
+### Split-score transfer follow-up - 2026-06-14
+
+No new verified win. This pass tightened the transfer loop and added another
+round of exact negative evidence.
+
+- Tooling change: transfer-ranked JSONL now separates raw `learned_score` from
+  penalty-adjusted `rank_score`. `go_explore_portfolio.py --rank-key score`
+  consumes `rank_score` first, and `event_seed_builder.py --transfer-rank`
+  writes both fields while sorting unscored events behind scored events.
+- Label update: demoted exact dead basins including handoff P20/P35,
+  on-the-clock P19, tinderrectangle P57/P58-style near misses, release
+  trigger-4/no-trigger event successors, reload_v3 bottom-station dead
+  continuations, and the ai_takeover release skeleton. Kept early staging rows
+  where the current evidence only disproves one obligation rather than the
+  prefix itself.
+- Human-obligation wave:
+  `/tmp/infestation-runs/20260614T214005Z_human_obligation_wave2/`.
+  It ran 27 jobs with 6 workers and 1.6 GB per child. There were no win markers.
+  Useful results:
+  - `release`: no branch moved/removed `(18,4)` or opened `(18,5)` under the
+    resource guards.
+  - `reload_v3`: no branch opened `(1,21)`, cleared `(2,21)`, or reached
+    `(12,21)` while preserving all 14 triggers.
+  - `ai_takeover`: no branch reached `(18,4)` or opened right-gate webs
+    `(15,10)` / `(14,11)` under early guards.
+  - `blocked_v2`: early lower-left gate/player/corridor probes returned empty.
+  - `on_the_clock`: the only web-opening branches were exactly P19 and still
+    had only 4/8 reachable rats.
+  - `handoff`: P35 trigger-2 branches consume the remaining explosives/triggers
+    and leave 2 rats with 0 reachable rats.
+- Rerank artifacts:
+  - `/tmp/infestation-runs/transfer_rank_20260614T_after_wave2.jsonl`
+  - `/tmp/infestation-runs/event_seeds_20260614T_after_wave2.jsonl`
+  - `/tmp/infestation-runs/20260614T214804Z_go_explore/`
+  - `/tmp/infestation-runs/archive_after_wave2_go_explore_20260614.jsonl`
+  - `/tmp/infestation-runs/triage_after_wave2_go_explore_20260614.jsonl`
+  - `/tmp/infestation-runs/seeds_after_wave2_go_explore_20260614.jsonl`
+- Exact follow-up from the split-score event seeds selected only blocked_v2 and
+  ai_takeover events. It ran 16 capped jobs with 6 workers and 1.8 GB per child.
+  No solved job was found. ai_takeover frontiers stayed in the same
+  23-rat/22-reachable topology with `(18,4)` still unreachable; blocked_v2
+  trigger-4 event children timed out in FESS/dropchain and lookup returned no
+  win.
+- `claude/gauntlet.csv` is a portal hub, not a rat-clearing puzzle under the
+  current solver. `verify` loads only the CSV, ignores `gauntlet.json` portal
+  metadata, and the zero-rat grid remains `Playing`. Do not add a fake empty
+  move string to `final_solutions.json`; handle it separately unless a
+  metadata-aware hub verifier is implemented.
+
 ---
 
 ## 4. Planned next steps (start here)

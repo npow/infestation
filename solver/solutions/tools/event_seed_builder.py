@@ -257,7 +257,11 @@ def load_candidates(args: argparse.Namespace) -> list[Candidate]:
     return unique_best(candidates, args.per_level, args.rank_key)
 
 
-def seed_record(seed: EventSeed, learned_score: float | None = None) -> dict[str, Any]:
+def seed_record(
+    seed: EventSeed,
+    learned_score: float | None = None,
+    rank_score: float | None = None,
+) -> dict[str, Any]:
     diag: dict[str, Any] = {}
     if seed.snapshot is not None:
         diag = {
@@ -290,6 +294,8 @@ def seed_record(seed: EventSeed, learned_score: float | None = None) -> dict[str
     }
     if learned_score is not None:
         record["learned_score"] = learned_score
+    if rank_score is not None:
+        record["rank_score"] = rank_score
     return record
 
 
@@ -315,7 +321,7 @@ def dedupe_events(events: Iterable[EventSeed]) -> list[EventSeed]:
     return list(by_key.values())
 
 
-def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[tuple[str, str], float]:
+def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[tuple[str, str], tuple[float, float]]:
     if not args.transfer_rank:
         return {}
     if args.no_snapshots:
@@ -331,7 +337,8 @@ def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[t
             load_pretrained_params,
             load_solved_examples,
             load_triage_examples,
-            score_snapshot,
+            learned_score_snapshot,
+            rank_score_snapshot,
             train_model,
         )
     except ImportError as error:
@@ -384,8 +391,10 @@ def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[t
         max(int(example.snapshot["width"]) for example in train_examples),
         max(int(example.snapshot["width"]) for example in candidate_examples),
     )
-    scores = {
-        (canonical_level(example.level), example.prefix): score_snapshot(
+    scores = {}
+    for example in candidate_examples:
+        key = (canonical_level(example.level), example.prefix)
+        learned_score = learned_score_snapshot(
             model,
             mean,
             std,
@@ -393,8 +402,8 @@ def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[t
             height,
             width,
         )
-        for example in candidate_examples
-    }
+        rank_score = rank_score_snapshot(model, mean, std, example, height, width)
+        scores[key] = (learned_score, rank_score)
     print(
         f"transfer_rank pretrained={pretrained_repo}/{pretrained_checkpoint} "
         f"head={args.head} frozen_prior={not args.fine_tune_prior} "
@@ -406,11 +415,16 @@ def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[t
     return scores
 
 
-def event_sort_key(event: EventSeed, learned_scores: dict[tuple[str, str], float]) -> tuple[float, ...]:
-    learned_score = learned_scores.get((canonical_level(event.parent.level), event.prefix))
-    if learned_score is not None:
+def event_sort_key(
+    event: EventSeed,
+    learned_scores: dict[tuple[str, str], tuple[float, float]],
+) -> tuple[float, ...]:
+    scores = learned_scores.get((canonical_level(event.parent.level), event.prefix))
+    if scores is not None:
+        _learned_score, rank_score = scores
         return (
-            -learned_score,
+            0.0,
+            -rank_score,
             event.trapped,
             event.features["rats"],
             -event.reachable_rats,
@@ -418,6 +432,7 @@ def event_sort_key(event: EventSeed, learned_scores: dict[tuple[str, str], float
             len(event.prefix.replace(" ", "")),
         )
     return (
+        1.0,
         0.0,
         event.trapped,
         event.features["rats"],
@@ -514,8 +529,18 @@ def main() -> int:
                 key=lambda event: event_sort_key(event, learned_scores),
             )
             for event in ranked:
-                score = learned_scores.get((canonical_level(event.parent.level), event.prefix))
-                out.write(json.dumps(seed_record(event, score), sort_keys=True) + "\n")
+                scores = learned_scores.get((canonical_level(event.parent.level), event.prefix))
+                learned_score = None
+                rank_score = None
+                if scores is not None:
+                    learned_score, rank_score = scores
+                out.write(
+                    json.dumps(
+                        seed_record(event, learned_score=learned_score, rank_score=rank_score),
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )
                 written += 1
 
     print(

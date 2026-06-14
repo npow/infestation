@@ -276,9 +276,12 @@ def seed_file_candidates(seed_file: pathlib.Path) -> list[Candidate]:
             raise SystemExit(f"{seed_file}:{line_number}: expected level and prefix strings")
         diag = record.get("diag") if isinstance(record.get("diag"), dict) else {}
         features = diag.get("features") if isinstance(diag.get("features"), dict) else {}
+        rank_score = record.get("rank_score")
         learned_score = record.get("learned_score")
         score = int(record.get("score", 0))
-        if isinstance(learned_score, int | float):
+        if isinstance(rank_score, int | float):
+            score = int(-1_000_000 * float(rank_score))
+        elif isinstance(learned_score, int | float):
             score = int(-1_000_000 * float(learned_score))
         candidates.append(
             Candidate(
