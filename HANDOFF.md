@@ -6478,6 +6478,37 @@ Bounded probes with `ulimit -v 850000` and foreground `timeout`s:
 There were no leftover infestation-local `target/release/solver`, `clingo`, or
 `timeout` jobs after the probes.
 
+### Current-engine `ai_takeover` correction - 2026-06-14 thirty-eighth Codex pass
+
+No new verified win. This pass changed the `ai_takeover` work from stale-anchor
+cleanup to current-engine mechanism checks.
+
+- The documented `P172=AFTER8+^^^>>>><<<<<<<>>>` replay is stale under the
+  current rules. Replaying it now gives player `(11,19)`, two trigger-2 cells
+  still live, rats/cyborgs `(18,4)` and `(11,9)`, and only 1/2 enemies
+  player-reachable. Do not continue treating old P172 notes as a no-trigger
+  two-enemy state.
+- From current P106
+  `^^^^^^v^vvvvvvv>>>vv^^<>vv<<<>v>>>>^^^^vv^^v^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^vv^^v>>>v>vv>>vvvv<v<`,
+  guarded `branchdump --goal triggeronly:2 --all-rats-reachable --min-rats 2
+  --min-explosives 2` found real current-engine branches. Best:
+  `A140=...<<<<<<<<<<<<<<<<^^^>>>>>><<<<<<<<<`, with player `(0,16)`,
+  enemies `(18,4)` cyborg and `(11,9)` normal rat, no triggers, two explosives
+  `(14,12)/(15,12)`, and 2/2 enemies player-reachable.
+- From A140, direct `lookup --goal win`, `cyborgkillreadyratlive
+  --all-rats-reachable`, and `ratsle:1 --all-rats-reachable` did not solve
+  under 30s / 160k-node caps. This reinforces the human invariant: killing the
+  normal rat first is likely wrong because the lone cyborg has no remaining
+  trigger resource.
+- A more useful human-style staging branch from A140 is
+  `>>v>>>>v^v<.^v^v^v`, producing player `(5,17)`, normal `(11,9)`, cyborg
+  `(15,11)`, and explosives `(14,12)/(15,12)`. The cyborg is adjacent to both
+  explosives and remains in blast range after one step, but the normal rat has
+  not yet been routed into the detonator. Immediate detonation and nearby
+  normal-rat rectangle probes from that state returned empty. Continue by
+  moving the normal rat toward `(14,12)/(15,12)` while keeping the cyborg near
+  `(15,11)/(16,12)`, not by broad cleanup from A140 or stale P172.
+
 ---
 
 ## 4. Planned next steps (start here)
