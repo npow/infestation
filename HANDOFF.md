@@ -6443,6 +6443,41 @@ work needs either an inverse proof/solver for the exact intended event skeleton
 or a new predicate that searches for "all remaining rats reachable after the
 irreversible event" rather than separate local mutations.
 
+### Accessibility-guard solver update - 2026-06-14 thirty-seventh Codex pass
+
+No new verified win. This pass converted one of the repeated human-style checks
+into a reusable solver guard: `lookup`, `branchdump`, `triglookup`, and
+`triganylookup` now accept `--all-rats-reachable`, which only accepts a local
+goal state when every surviving rat/cyborg is reachable by the player
+reachability map. This is stricter than `--max-trapped-rats 0`: it rejects any
+survivor outside the player-accessible component even if that survivor's
+component has some theoretical local death geometry.
+
+Verification:
+
+- `cargo check -p solver` passed.
+- `cargo build --release -p solver` passed.
+- `cargo test -p solver` passed.
+
+Bounded probes with `ulimit -v 850000` and foreground `timeout`s:
+
+- `release`: from `P21=v<vv^^^^^v^vvvvv>>><^`,
+  `lookup --goal cellnot:18,5,web --all-rats-reachable --min-rats 20
+  --min-explosives 3` timed out after 30s / 102k nodes with no accepted state.
+  This reinforces that the P21 family still opens/moves toward the right-side
+  web without solving the isolated `(18,4)` reachability problem.
+- `cyborg_rats/ai_takeover`: from the P172-class state, guarded
+  `cyborgkillreadyratlive --all-rats-reachable` timed out after 30s / 27k nodes
+  with no accepted kill-lane setup. Best state remained in the two-enemy chase
+  basin, not a faced cyborg kill geometry.
+- `cooperation/handoff`: initial-board `branchdump --goal cellnot:10,5,web
+  --all-rats-reachable --min-rats 4` returned no candidates quickly. This
+  supports the existing warning that directly opening `(10,5)` is not enough
+  unless the sealed `(10,6)` rat is addressed by a different event order.
+
+There were no leftover infestation-local `target/release/solver`, `clingo`, or
+`timeout` jobs after the probes.
+
 ---
 
 ## 4. Planned next steps (start here)

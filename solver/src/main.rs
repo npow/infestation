@@ -1023,6 +1023,7 @@ impl LookupOrder {
 #[derive(Clone, Copy, Debug, Default)]
 struct TrapConstraints {
     min_reachable_rats: Option<usize>,
+    all_rats_reachable: bool,
     max_trapped_rats: Option<usize>,
     min_reachable_cells: Option<usize>,
     min_reachable_triggers: Option<usize>,
@@ -1041,6 +1042,7 @@ impl TrapConstraints {
         let features = Features::from_grid(grid);
         self.min_reachable_rats
             .is_none_or(|minimum| reachable_rat_count(grid) >= minimum)
+            && (!self.all_rats_reachable || all_rats_reachable(grid))
             && self
                 .max_trapped_rats
                 .is_none_or(|maximum| trapped_unreachable_rat_count(grid) <= maximum)
@@ -2256,7 +2258,7 @@ fn lookup_goal_reached(
             .all(|&point| !point_in_rect(point, x1, y1, x2, y2)),
         LookupGoal::RatsAtMost(count) => count_rats(current) <= count,
         LookupGoal::ReachableRatsAtLeast(count) => reachable_rat_count(current) >= count,
-        LookupGoal::AllRatsReachable => reachable_rat_count(current) == count_rats(current),
+        LookupGoal::AllRatsReachable => all_rats_reachable(current),
         LookupGoal::CyborgsAtMost(count) => count_cyborg_rats(current) <= count,
         LookupGoal::TriggersAtMost(count) => Features::from_grid(current).triggers <= count,
         LookupGoal::ExplosivesAtMost(count) => Features::from_grid(current).explosives <= count,
@@ -4558,6 +4560,10 @@ fn reachable_rat_count(grid: &Grid) -> usize {
     reachable
 }
 
+fn all_rats_reachable(grid: &Grid) -> bool {
+    reachable_rat_count(grid) == count_rats(grid)
+}
+
 fn reachable_trigger_count(grid: &Grid) -> usize {
     let dist = player_dist_map(grid);
     let mut reachable = 0;
@@ -5760,6 +5766,10 @@ fn parse_trap_constraint_arg(
     trap_constraints: &mut TrapConstraints,
 ) -> Option<usize> {
     match args[index].as_str() {
+        "--all-rats-reachable" | "--all-reachable" => {
+            trap_constraints.all_rats_reachable = true;
+            Some(index + 1)
+        }
         "--min-reachable-rats" | "--min-reachable" => {
             trap_constraints.min_reachable_rats = Some(args[index + 1].parse().unwrap());
             Some(index + 2)
