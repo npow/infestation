@@ -208,6 +208,57 @@ Wave 1 used 6 workers, 1.6 GB per child, 240s per child, and solved
 `old_levels/overstep.csv`. The wrapper exited early after 22 logs, but no
 solver children were left running.
 
+### Continuation evidence - 2026-06-14 obligation-aware transfer pass
+
+No new verified win in this continuation.
+
+- `solver/solutions/tools/transfer_ranker.py` now applies soft
+  level-specific obligation penalties before ranking candidate frontiers. These
+  penalties demote known late dead basins such as `release` / `ai_takeover`
+  states with `(18,4)` still boxed, `reload_v3` states with `(0,21)` still
+  sealed behind `(1,21)=web`, late low-rat `tinderrectangle` states that never
+  place a rat at `(0,0)`, and cooperation states that have already spent key
+  resources while preserving trapped rats. This is still only a ranking prior;
+  the Rust oracle remains authoritative.
+- Regenerated ranking:
+  `/tmp/infestation-runs/transfer_rank_20260614T184126Z_obligation.jsonl`.
+  It demoted the stale one-/two-rat `ai_takeover` cleanups and promoted earlier
+  19/20- and 20/21-rat frontiers. It still has weak `on_the_clock` candidates
+  because the archive lacks good early setup states there; handle that level
+  with explicit setup predicates instead of trusting the learned score.
+- The Python `go_explore_portfolio.py` threadpool failed again with exit code
+  `-1` after a partial seed-only wave:
+  `/tmp/infestation-runs/20260614T184232Z_obligation_seed_wave1`. Do not use
+  that wrapper for long runs until the process-management bug is fixed. Prefer
+  shell-managed batches where every child has its own `timeout`, `ulimit`, and
+  log.
+- Guarded FESS wave:
+  `/tmp/infestation-runs/20260614T184406Z_explicit_guarded_wave1`.
+  No solution. Several FESS children exited `137` under the 1.1 GB per-child
+  cap; this was a child cap, not a host OOM. Useful frontier:
+  `cooperation/blocked_v2` from prefix
+  `vv v^ vv <^ <v <^ <. ^< ^^ ^^ ^^ ^< >v` leaves all 9 rats, 15 explosives,
+  14 triggers, 6 reachable rats, and no trapped rats.
+- Targeted checks from that `blocked_v2` frontier all returned no branch:
+  `reachable:5,11`, `cellnot:1,15,web`, and `triggeronly:2` under
+  `--min-rats 9 --min-reachable-rats 6 --min-explosives 15`.
+  This means the frontier is a good archive state but not a live continuation
+  unless an earlier route changes trigger-2 / lower-left-mouth access.
+- `cooperation/handoff` p24 frontier
+  `v^ >^ >^ >^ >^ >^ ^^ .v .> v> v> ^^ .v .v .< .< .< .v .v .> .> .v .> v>`
+  leaves 3 rats, 5 explosives, 2 triggers, and only one reachable rat. Guarded
+  `triggeronly:2` and `cellnot:10,5,web` checks returned no branch. Back up
+  before this shape if revisiting `handoff`.
+- `old_levels/on_the_clock` branchdump from
+  `v>>><^^v>><^^>>>vvv><^vv` for `triggeronly:4` with
+  `--min-rats 8 --min-explosives 5 --min-reachable-rats 2` returned no branch
+  in `/tmp/infestation-runs/20260614T184555Z-clock-p24-trigger4`.
+  The same prefix also had no guarded `triggeronly:9` branch with
+  `--min-reachable-rats 2` and no guarded `reachable:3,8` branch. Relaxing
+  trigger 9 to `--min-reachable-rats 1` only found immediate one-step/stall
+  variants such as `v>>><^^v>><^^>>>vvv><^vv^`; these keep all 8 rats but only
+  one reachable rat, so they are not a useful continuation by themselves.
+
 ### Current run notes - 2026-06-11
 
 No new verified wins yet. Useful observations to preserve:

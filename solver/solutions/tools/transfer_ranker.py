@@ -160,7 +160,60 @@ def badness_from_flags(flags: Iterable[str]) -> float:
     return min(0.90, penalty)
 
 
-def snapshot_badness(snapshot: dict[str, Any]) -> float:
+def point_set(snapshot: dict[str, Any], key: str) -> set[tuple[int, int]]:
+    return {
+        (int(point["x"]), int(point["y"]))
+        for point in snapshot["positions"].get(key, [])
+    }
+
+
+def level_obligation_penalty(level: str, prefix: str, snapshot: dict[str, Any]) -> float:
+    """Penalize frontier states that violate known access obligations.
+
+    These are deliberately soft ranking penalties, not correctness claims. The
+    Rust oracle still verifies every selected branch. They encode human-style
+    observations from current logs: if a required rat remains boxed behind the
+    same web after the route is already committed, stop spending most search on
+    that basin and back up to an earlier topology-changing event.
+    """
+
+    level = canonical_level(level)
+    turn = int(snapshot.get("turn", prefix_len(prefix)))
+    features = snapshot["features"]
+    reach = snapshot["reachability"]
+    rats = point_set(snapshot, "rats") | point_set(snapshot, "cyborg_rats")
+    webs = point_set(snapshot, "webs")
+    penalty = 0.0
+
+    if level.endswith("release.csv") or level.endswith("cyborg_rats/ai_takeover.csv"):
+        if turn >= 10 and (18, 4) in rats and (18, 5) in webs:
+            penalty += 0.35
+        if turn >= 18 and int(reach["rats"]) <= 1 and int(features["rats"]) > 1:
+            penalty += 0.25
+    elif level.endswith("reload_v3.csv"):
+        if turn >= 20 and (0, 21) in rats and (1, 21) in webs:
+            penalty += 0.35
+        if turn >= 20 and (14, 5) in rats and int(reach["rats"]) <= 1:
+            penalty += 0.20
+    elif level.endswith("tinderrectangle.csv"):
+        if turn >= 55 and (0, 0) not in rats and int(features["rats"]) <= 15:
+            penalty += 0.25
+        if turn >= 55 and int(reach["trapped_unreachable_rats"]) > 0:
+            penalty += 0.15
+    elif level.endswith("old_levels/on_the_clock.csv"):
+        if turn >= 24 and int(reach["rats"]) <= 4 and int(features["rats"]) >= 8:
+            penalty += 0.20
+    elif level.endswith("cooperation/handoff.csv"):
+        if turn >= 12 and (10, 5) in webs and int(features["triggers"]) <= 2:
+            penalty += 0.25
+    elif level.endswith("cooperation/blocked_v2.csv"):
+        if turn >= 10 and int(features["rats"]) - int(reach["rats"]) >= 2:
+            penalty += 0.20
+
+    return min(0.60, penalty)
+
+
+def snapshot_badness(snapshot: dict[str, Any], level: str = "", prefix: str = "") -> float:
     features = snapshot["features"]
     reach = snapshot["reachability"]
     rats = int(features["rats"])
@@ -172,6 +225,8 @@ def snapshot_badness(snapshot: dict[str, Any]) -> float:
     penalty += min(0.30, 0.08 * int(reach["trapped_unreachable_rats"]))
     if snapshot["play_state"] == "GameOver":
         penalty += 0.50
+    if level:
+        penalty += level_obligation_penalty(level, prefix, snapshot)
     return min(0.95, penalty)
 
 
@@ -201,7 +256,7 @@ def load_triage_examples(paths: Iterable[pathlib.Path], timeout_sec: float) -> l
             if not isinstance(flags, list):
                 flags = []
             target = max(0.02, 0.35 - badness_from_flags(str(flag) for flag in flags))
-            target = min(target, 0.35 - snapshot_badness(snapshot))
+            target = min(target, 0.35 - snapshot_badness(snapshot, level, prefix))
             examples.append(
                 SnapshotExample(
                     level=canonical_level(level),
@@ -473,7 +528,7 @@ def score_snapshot(
     macro = torch.tensor(((macro - mean) / std)[None, :], dtype=torch.float32)
     with torch.no_grad():
         score = torch.sigmoid(model(board, macro)).item()
-    return float(score - snapshot_badness(example.snapshot))
+    return float(score - snapshot_badness(example.snapshot, example.level, example.prefix))
 
 
 def parse_args() -> argparse.Namespace:
