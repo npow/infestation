@@ -7057,6 +7057,63 @@ bounded `reload_v3` / `ai_takeover` probes while this note was written.
   trigger 3 consumed" and "trigger 4 consumed", before high-release closes the
   lure and trigger-7 routes.
 
+### Current continuation pass - 2026-06-14
+
+No new verified win. Work stayed foreground and capped. Local solver calls used
+`ulimit -v 650000` and short `timeout 15s..25s` wrappers; side explorers were
+read-only and closed. Final infestation-local process checks found no
+`target/release/solver`, `timeout`, `cargo`, `clingo`, or tmux jobs from this
+work. `solver/solutions/final_solutions.json` and autoplay/docs were not
+changed because no candidate replayed as `result=Won`.
+
+- `old_levels/on_the_clock`: post-trigger-5 is now a finite basin, not a route
+  to deepen. The anchor `>>>^^>>>^^^^^vvv><vvvvvv^^>>>` has 8 rats, 3
+  explosives, 6 triggers, only 4/8 reachable rats, and only reachable triggers
+  6 and 8. Local and side-agent probes found that delayed trigger 6/8 variants
+  all converge to 6-rat / 2-explosive / 4-trigger states with only 2 reachable
+  rats, and with `--min-reachable-rats 3` both trigger 6 and trigger 8 returned
+  no branches. Guarded gate checks from this anchor returned empty for
+  `reachablege:5`, `cellnot:14,15,web`, `cellnot:1,18,web`, and
+  `cellnot:4,18,web`. A direct win lookup only reached the known 2-rat stranded
+  basin around `(1,14)` / `(12,14)`.
+- `old_levels/on_the_clock`: backing up before trigger 5 also closed the
+  obvious row-14 hypotheses. The resource-richer prefix
+  `>>>^^>>>vvvv.vvvvv` returned `NO_EVENTS` for `--min-rats 8
+  --min-explosives 4 --min-reachable-rats 3`, and `reachablege:4` returned
+  empty. From `>>>^^>>>vvv><vvvvv`, targeted trigger-3/row-14 predicates
+  `ratrectplayerrectcellis:13,13,16,15,8,8,13,12,10,14,trigger3` and
+  `cellnotratrectplayerrect:14,15,web,13,13,16,15,8,8,13,12` both returned
+  empty. Next useful work must change timing before or at the first right-side
+  structural events, not after trigger 5.
+- `old_levels/overstep`: corrected the trigger-order story. The apparent
+  "trigger 6 first" prefix `vvvvvv>>>>>>>>>v>><>>><<<v^` actually fires
+  trigger 4 at `...<<<v` and then trigger 6 on `^`; it is not an independent
+  trigger-6-first skeleton. The all-six frontiers after `P+<<^<` and
+  `P+<<<v^` are frozen under the tested caps. The alternate intact helper-pair
+  posture `Q=vvvvvv>>>>>>>>>v>><>><<` is distinct, but still has only 1/6
+  reachable rats. Guarded `reachablege:2`, guarded `(11,15)` explosive
+  mutation, guarded `ratgone:10,14`, and guarded `cellnot:14,11,rat` all
+  returned empty; relaxed `ratgone:10,14` only led to dead 4-rat / 0-reachable
+  states. Back up before P21/P22 and prevent the helper from occupying
+  `(13,15)`, or redirect the future `(14,11)` survivor before the helper enters
+  that trigger pocket.
+- `cyborg_rats/ai_takeover`: current-engine checks reconfirmed that old P172 is
+  stale. Replaying `AFTER8+^^^>>>><<<<<<<>>>` now gives player `(11,19)`,
+  two trigger-2 cells still live, enemies `(18,4)` and `(11,9)`, 5 explosives,
+  and only 1/2 enemies player-reachable. Do not use stale no-trigger P172
+  downstream evidence.
+- `cyborg_rats/ai_takeover`: from the high-reachability pre-trigger-4 cut
+  `v<vv^^<vv>>><`, strict trigger 6/7/8 before trigger 4 returned no accepted
+  branches under `--min-rats 20 --min-reachable-rats 18`. From
+  `v<vv^^<vv>>><^`, filtered event inventory with 23 rats, 9 explosives, at
+  least 22 reachable rats, and at most one unreachable rat again surfaced only
+  trigger-5/top-pack release variants. The compound normal-rat/player staging
+  predicate
+  `normalratrectcyborgrectplayerrect:10,8,13,10,18,4,18,7,8,12,14,16` from
+  this cut returned empty. Next useful `ai_takeover` work should back up closer
+  to `v<v` and look for a non-trigger structural change that alters the future
+  trigger-7 approach or right explosive stack before trigger 4 is spent.
+
 ---
 
 ## 4. Planned next steps (start here)
