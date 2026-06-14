@@ -6344,6 +6344,60 @@ confirmed the previous finite-family conclusions for `release`,
 after the bounded batches found no infestation-local `target/release/solver`,
 `cargo`, `clingo`, or `timeout` jobs left running.
 
+### Structural-negative continuation - 2026-06-14 thirty-fifth Codex pass
+
+No new verified win. This pass focused on smaller, human-style mechanism gates
+and deliberately rejected low-rat-count branches where the remaining rats are
+sealed. A few side-agent read-only audits were reused because the thread was at
+the agent limit; all local solver runs were capped with `ulimit -v 850000` and
+short `timeout`s.
+
+- `old_levels/on_the_clock`: shallow frontier from
+  `A18=>>>^^>>>vvv><vvvvv` proves the phase trap precisely. From A18, every
+  one-step continuation except `v` fires trigger 9 immediately; `v` reaches A19,
+  and every next action then fires trigger 9. Guarded trigger-8/7/6 branches
+  from `A12=>>>^^>>>vvv>` were empty with all 8 rats, at least 4 reachable rats,
+  and at least 3 explosives. Broader initial-board checks for
+  `triggeronlycellnot:8,1,18,web`, `triggeronlycellnot:7,4,18,web`, and the
+  player-at-trigger-8/right-rat-high staging geometry also returned empty. A
+  side audit checked direct initial bottom-left opening while preserving
+  `(13,9)=trigger9`, the stricter hazard rectangle `(13..15,8..10)` clear, and
+  the alternate early event `vvvvv`; all follow-ups were empty. Conclusion:
+  the current A12/A18 family is not one move late by accident; the required
+  bottom-left opening is not available on these checked pre-trigger-9 routes.
+- `cooperation/handoff`: the first reachable event remains the 7-turn explosion
+  family, e.g. `v^ >^ >^ >^ >^ >^ ^^`, leaving 4 rats, 8 explosives, and only
+  one reachable rat. Continuing through trigger 1 can reduce to 2 rats, but both
+  survivors are unreachable; the stricter query `ratsle:2` with
+  `--min-reachable-rats 2` from that post-trigger-1 branch returned empty. A
+  side audit found a slightly better first-event frontier
+  `v^ >^ >^ >^ >^ >^ ^^ v^`, which leaves 4 rats and 2 reachable rats
+  (`(8,5)` and `(8,6)`), but its follow-ups for `ratsle:2` with 2 reachable rats
+  and for opening/moving the sealed `(10,6)` rat through `(10,5)` / `(11,7)`
+  were empty. Treat this as the best current diagnostic frontier, not a solve.
+- `cooperation/tug_of_war`: initial diagnostics still show exactly one
+  unreachable rat, the top pocket rat in `{(7,0),(8,0)}`. New compound and
+  intermediate checks returned empty from the initial board under 120k-node caps:
+  `cellnotratrect:7,1,web,7,0,8,0`,
+  `cellnotratrect:8,1,web,7,0,8,0`,
+  `ratrectplayerrectcellnot:7,0,8,0,4,0,11,4,7,1,web`, and the more human
+  plank-cut staging checks requiring a rat in `(7..8,2..4)` plus a player near
+  the upper pocket while `(7,2)` or `(8,2)` is no longer a plank. The plausible
+  mechanism "central rat cuts the plank barrier, then a player chews the web"
+  did not materialize under these constraints.
+- `cooperation/blocked_v2`: reran the existing ASP/clingo over-approximation
+  with `/tmp/infestation-clingo-venv/bin/python` on the initial board and saved
+  `b17`, `upper3`, and `b20_current_clean` frontiers. All were
+  `UNSATISFIABLE` for the resource-preserving lower-left target
+  (`target_clear(1,15)` / `target_rat(0,15)`). This is not a full game
+  impossibility proof, but it rules out the generous "walk/lure without spending
+  resource cells" model across the checked frontiers.
+
+Do not repeat the closed checks above without changing the mechanism. The next
+useful work should either find a genuinely different early event family or add a
+stronger solver predicate that proves actor accessibility/reachability at the
+same time as resource mutation.
+
 ---
 
 ## 4. Planned next steps (start here)
