@@ -74,12 +74,21 @@ class ActiveJob:
 
 STATIC_SEEDS: dict[str, list[tuple[str, str]]] = {
     "levels/tinderrectangle.csv": [
+        ("initial", ""),
+        (
+            "p57_near_miss",
+            "<<<^<<^>>>>^>>v>v<v>>v^>^^>>v>.vvvv<<>^^^^^<<vvv<<^^^<<<<",
+        ),
         (
             "t106_rectsep",
             "<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv"
             "^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv",
         ),
         ("old_lower_rat", "<<<^<^<>^>>>vv^^>>v>v.>>><>v"),
+        (
+            "p60_latch_open",
+            "<^^<v<^^>vvv<<^^^>>>>>>vvv>>^^^>>vvv^^^<<vvv<<^^<^<<v<<<v<<^",
+        ),
     ],
     "levels/release.csv": [
         ("early_t2", "v<vv^^>"),
@@ -89,11 +98,15 @@ STATIC_SEEDS: dict[str, list[tuple[str, str]]] = {
         ("fess_t2_frontier_b", "v<vv^^>>vv<"),
     ],
     "levels/reload_v3.csv": [
+        ("bottom_station_short", "vvv<<<<<<vv<<<<"),
         ("t2_macro", ">>>^>>>>.>>.<.<<<<"),
         ("station", ">>>^>>>>vvv.v<^<<<v<<<<<<<^^<^"),
     ],
     "levels/cyborg_rats/ai_takeover.csv": [
         ("early_row5", "v<vv^^^"),
+        ("early_row5_alt_t3", "v>vv^^^"),
+        ("early_row5_safe_event", "v<vv^^^vvv>"),
+        ("p38_clean", "v<vv^^^vvvv<<^^^<<<vv<<^^^^vv^^vv^^v^^"),
         (
             "release_skeleton",
             "vvvv<<^^^<<<vv<<^^^^vv^^vv",
@@ -104,8 +117,18 @@ STATIC_SEEDS: dict[str, list[tuple[str, str]]] = {
         ("pre_t3_baffle", "^v vv >< vv vv vv vv <> <> <> <>"),
     ],
     "levels/cooperation/handoff.csv": [
+        ("initial", ""),
         ("courier", "v^ >^ >^ >^ >^ >^ ^^ .v .> v> v>"),
         ("pre_t1", "v^ >^ >^ >^ >^ >^"),
+        (
+            "bounded_solve_p20",
+            "v^ >^ >^ v^ >v v> v> v^ ^v >< >< ^^ v^ ^^ ^^ v^ v^ vv <v ^^",
+        ),
+        (
+            "bounded_solve_p35",
+            "v^ >^ >^ v^ >^ vv v> v> v^ v^ v^ v^ v< ^^ >^ ^> ^v ^v ^v ^v "
+            "^< ^< ^^ >v ^^ v^ ^^ ^^ v^ v^ vv <v ^^ ^^ ^^",
+        ),
     ],
     "levels/cooperation/blocked_v2.csv": [
         (
@@ -114,6 +137,17 @@ STATIC_SEEDS: dict[str, list[tuple[str, str]]] = {
         ),
         ("pre_t5", "vv v^ vv <^ <v <^ <."),
         ("post_t5_pre_t1", "vv v^ vv <^ <v <^ <. <^ ^^ ^^"),
+        (
+            "lower_left_gate_p26",
+            "v. v. v. <. <. <. <v <^ ^^ ^^ ^^ v^ <^ <^ <^ <^ <^ <^ <^ "
+            "^v ^v ^v ^v ^v ^^ ^v",
+        ),
+    ],
+    "levels/old_levels/on_the_clock.csv": [
+        ("initial", ""),
+        ("p18_pre_t9", ">>>^^>>>vvv><vvvvv"),
+        ("p19_live_setup", ">>>^^>>>vvv><vvvvvv"),
+        ("p24_sibling", ">>>^^>>>^^^^^vvv><vvvvvv"),
     ],
 }
 

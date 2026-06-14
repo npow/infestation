@@ -1,7 +1,7 @@
 # Infestation solving campaign — HANDOFF
 
 Resume doc for continuing the effort on another machine. **Goal: solve the
-remaining rat-bearing CSV levels.** 37 verified solutions are recorded in
+remaining CSV levels.** 38 verified solutions are recorded in
 `solver/solutions/final_solutions.json`.
 
 ---
@@ -72,27 +72,26 @@ so every result is exactly what the shipped game does. Binary: `target/release/s
 
 ## 3. Status
 
-### Solved - 37 saved solutions (all oracle-verified `result=Won`)
+### Solved - 38 saved solutions (all oracle-verified `result=Won`)
 Move strings: **`solver/solutions/SOLUTIONS.md`** (machine-readable: `final_solutions.json`).
 Browser auto-player: `solver/solutions/autoplay.js`. New puzzles: `levels/claude/`.
 
 Older notes in this file mention `chase`, `world`, and `order_of_operations`
 as active work, but those are now in `final_solutions.json` and verify against
-the current oracle. As of 2026-06-13, the unsolved rat-bearing inventory is the
-9-level set below. `levels/claude/gauntlet.csv` has zero rats and is not counted
-as a rat puzzle.
+the current oracle. As of 2026-06-14, the unsolved inventory is the 8-level set
+below. `levels/claude/gauntlet.csv` has zero rats; under the solver it remains
+`Playing` because hub/portal completion is app `LevelStack` state, not a rat
+win.
 
 ### UNSOLVED - primary hard set
 
 As of the 2026-06-14 transfer-guided pass, `chase.csv`, `world.csv`, the
 Claude child levels, `old_levels/overstep.csv`, and
-`cooperation/tug_of_war.csv` are solved and still verify. The active non-hub
-hard set is:
+`cooperation/tug_of_war.csv` are solved and still verify. The active hard set is:
 `tinderrectangle.csv`, `release.csv`, `reload_v3.csv`,
-`cyborg_rats/ai_takeover.csv`, `cooperation/handoff.csv`, and
-`cooperation/blocked_v2.csv`. The old-level child CSV
-`old_levels/on_the_clock.csv` is still unsolved if you choose to include broken
-child levels; the portal hub `old_levels/old_levels.csv` is solved.
+`cyborg_rats/ai_takeover.csv`, `cooperation/handoff.csv`,
+`cooperation/blocked_v2.csv`, `old_levels/on_the_clock.csv`, and the
+`claude/gauntlet.csv` portal hub.
 
 | # | Level | Players | Name-hint / trick | Best lead / recommended attack |
 |---|---|---|---|---|
@@ -102,9 +101,8 @@ child levels; the portal hub `old_levels/old_levels.csv` is solved.
 | 4 | `cyborg_rats/ai_takeover` | 1 | `release` skeleton plus cyborgs/triggers 7-8 | Solve `release` first, then transfer the trigger skeleton. Extra triggers 7/8 and cyborg Dijkstra behavior are probably the intended differences. |
 | 5 | `cooperation/handoff` | 2 | baton pass | Small enough to hand-reason. P1 cannot simply reach trigger 1 first. P1 can reach trigger 2 first, but then trigger 1 is no longer useful/reachable; likely P1 opens the handoff and P2 finishes on the remote side. |
 | 6 | `cooperation/blocked_v2` | 2 | one player blocked | Keep the previous warning: one rat may be permanently unreachable behind effectively indestructible structure. Before spending human-solving time, prove or disprove winnability with targeted reachability/exhaustive checks. |
-
-Additional unsolved old-level CSV in the current inventory:
-`old_levels/on_the_clock.csv`.
+| 7 | `old_levels/on_the_clock` | 1 | clocked trigger/resource order | P19 setup `>>>^^>>>vvv><vvvvvv` keeps 8 rats, 3 explosives, and 13 triggers. Avoid the P24 sibling unless a branch proves bottom-cage access improves; it spends too much mechanism too early. |
+| 8 | `claude/gauntlet` | 1 | portal hub | Has zero rats and no `verify` win condition in the solver. Treat separately from rat-bearing CSVs unless hub/portal semantics are added to the oracle/artifacts. |
 
 ### Newly solved - 2026-06-14
 
@@ -154,7 +152,11 @@ run. Treat the oracle as a microscope for human hypotheses:
 
 ### Approach update - 2026-06-14
 
-The current strategy is explicitly literature-aligned, but still oracle-first:
+The current strategy is explicitly transfer-first and oracle-first. Do not start
+from-scratch policy/RL training for the remaining hard set; the available
+supervision is too small and the terminal reward is too sparse. Use existing
+pretrained board-planning representations as a prior, then spend exact search
+only where that prior and the human obligations agree.
 
 1. **Transfer-guided macro ranking, not from-scratch RL.** A repo-local venv
    `.venv-ml` was used to install CPU PyTorch plus Hugging Face tooling. The
@@ -162,32 +164,44 @@ The current strategy is explicitly literature-aligned, but still oracle-first:
    Sokoban DRC(1,1) checkpoint
    `AlignmentResearch/learned-planner/drc11/eue6pax7/cp_2002944000`, decodes its
    Flax/msgpack convolutional filters, freezes them as a spatial prior, and
-   trains only a small Infestation-specific head on real oracle snapshots.
+   trains only a small Infestation-specific linear probe/head on real oracle
+   snapshots plus `solver/solutions/tools/obligation_labels.jsonl`.
    This is transfer learning for frontier/state ranking, not a learned game
    engine and not a direct move policy.
-2. **Macro states, not raw moves.** Treat irreversible structural events as the
+2. **Scorer-in-the-loop event expansion.** `event_seed_builder.py --transfer-rank`
+   now calls the same frozen-prior scorer inside event expansion, so every
+   `events --families` successor gets a learned value before launching expensive
+   `fess`/`lookup` children. This keeps the transfer model in the loop without
+   trusting it as an oracle.
+3. **Macro states, not raw moves.** Treat irreversible structural events as the
    search units: trigger consumption, explosive ignition, web/plank deletion,
    rat relocation/removal, and two-player handoff positions. This is the same
    practical lesson as Sokoban-style solvers: deadlocks and resource order beat
    deeper undirected search.
-3. **Go-Explore style return cells.** Archive every useful prefix and return to
+4. **Go-Explore style return cells.** Archive every useful prefix and return to
    diverse mechanism families instead of restarting from the initial state. The
    archive lives under `/tmp/infestation-runs/archive_*.jsonl`; new runs should
    seed from it with `solver/solutions/tools/go_explore_portfolio.py`.
-4. **Feature-space diversity.** Prefer `events --families` and `fess` when the
+5. **Feature-space diversity.** Prefer `events --families` and `fess` when the
    scalar heuristic collapses into a known basin. Keep states that differ by
    reachable rats/triggers, trapped rat positions, webs/explosives/triggers, and
    event-family keys, even when rat count is temporarily worse.
-5. **Dead-basin pruning.** Use `PRUNE_DEAD=1` for portfolio children. It only
+6. **Human obligation labels.** The hard-set ranker now has explicit examples
+   for known obligations: free handoff's `(10,6)` rat before trigger collapse,
+   open release's `(18,5)` before committing to the top sweep, open reload's
+   bottom-left lane before trigger 2 is spent, and preserve all tinderrectangle
+   rats/explosives until separation is proven. These labels rank exact-search
+   spend; they are not accepted as solutions.
+7. **Dead-basin pruning.** Use `PRUNE_DEAD=1` for portfolio children. It only
    prunes states with rats left, no explosives, no reachable rats, and no
    reachable triggers. Add tighter guards such as `--min-reachable-rats`,
    `--max-trapped-rats`, and `--min-explosives` for level-specific traps.
-6. **CEGIS over ASP/clingo, not a second full engine.** If clingo is used, it
+8. **CEGIS over ASP/clingo, not a second full engine.** If clingo is used, it
    should propose bounded event skeletons and nogoods. The Rust oracle must
    still prove each segment with `branchdump`, `lookup`, `wp`, `wp2`, `trace`,
    and `verify`. Reimplementing full Infestation transition semantics in ASP
    would create an untrusted second engine.
-7. **Deep RL is useful only as a prior/ranker here.** The reward is sparse and
+9. **Deep RL is useful only as a prior/ranker here.** The reward is sparse and
    the bad basins are deceptive. Use pretrained neural spatial priors to rank
    macro states, then spend exact oracle search on the ranked frontier. Final
    move strings must still pass `target/release/solver verify`.
@@ -7477,11 +7491,43 @@ game logic:
     the old 3-rat / 1-reachable basin under resource gates. The trigger-3
     baffle probe hit the memory cap before acceptance; rerun only with a
     narrower predicate if that line is revisited.
-  - `cooperation/blocked_v2`: several lower-left mouth probes hit the
-    per-process memory cap before acceptance. This is a search-shape warning,
-    not evidence of a branch. Narrow future checks around specific trigger-2
-    cells or use waypoint-pair staging before running another high-branching
-    2-player `branchdump`.
+- `cooperation/blocked_v2`: several lower-left mouth probes hit the
+  per-process memory cap before acceptance. This is a search-shape warning,
+  not evidence of a branch. Narrow future checks around specific trigger-2
+  cells or use waypoint-pair staging before running another high-branching
+  2-player `branchdump`.
+
+### Transfer macro-event expansion - 2026-06-14 current Codex continuation
+
+No new verified win yet. This pass made the transfer-learning plan concrete at
+the event level instead of only ranking old prefixes.
+
+- Added `solver/solutions/tools/event_seed_builder.py`. It takes archive/static
+  or transfer-ranked return cells, asks the Rust oracle for one
+  `events --families` layer, and writes JSONL seeds that `transfer_ranker.py`
+  and `go_explore_portfolio.py` already understand. This keeps transfer
+  learning focused on choosing among irreversible obligations: trigger
+  consumption, web/plank deletion, rat relocation, and release topology.
+- Updated `event_seed_builder.py` with optional `--transfer-rank` support. This
+  lazy-loads the pretrained Sokoban prior used by `transfer_ranker.py`, trains
+  only the small Infestation head on solved/triage/obligation oracle snapshots,
+  and writes `learned_score` directly onto event successors before the exact
+  portfolio selects children. Use the `.venv-ml` Python for this mode.
+- Tightened the `reload_v3` obligation guard. Early trigger-2-spent states from
+  `>>>^>>>>.>>.<.<<<<` were outranking the better station prefix even though
+  the bottom-left rat `(0,21)` remains sealed behind `(1,21)=web`. The event
+  builder now requires all 14 reload triggers for `reload_v3` macro expansion,
+  and `transfer_ranker.py` softly penalizes states where trigger 2 has already
+  been partly spent while `(0,21)` is still sealed.
+- New guarded macro artifacts:
+  - `/tmp/infestation-runs/event_seeds_20260614T200154Z_guarded.jsonl`
+  - `/tmp/infestation-runs/transfer_rank_event_20260614T200233Z_guarded.jsonl`
+  - `/tmp/infestation-runs/20260614T200251Z_go_explore/`
+- The guarded exact wave uses 8 children, 1.8 GB virtual memory per child, and
+  `PRUNE_DEAD=1`. Its candidates are two all-9 `blocked_v2` trigger-4 variants,
+  one 20-rat `ai_takeover` state, three guarded `release` states, and three
+  station-family `reload_v3` states. Check that run directory for late wins
+  before launching another wave.
 
 ---
 

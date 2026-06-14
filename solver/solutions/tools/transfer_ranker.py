@@ -3,8 +3,9 @@
 
 The pretrained network is not an Infestation oracle and does not emit moves.
 It contributes frozen convolutional filters learned on Sokoban boards; the
-trainable part is only a small head over real Infestation oracle snapshots and
-macro features. All candidate prefixes still need Rust-oracle verification.
+    trainable part is only a small head over real Infestation oracle snapshots,
+    human obligation labels, and macro features. All candidate prefixes still
+    need Rust-oracle verification.
 """
 
 from __future__ import annotations
@@ -167,6 +168,10 @@ def point_set(snapshot: dict[str, Any], key: str) -> set[tuple[int, int]]:
     }
 
 
+def trigger_numbers(snapshot: dict[str, Any]) -> list[int]:
+    return [int(point["number"]) for point in snapshot["positions"].get("triggers", [])]
+
+
 def level_obligation_penalty(level: str, prefix: str, snapshot: dict[str, Any]) -> float:
     """Penalize frontier states that violate known access obligations.
 
@@ -185,17 +190,31 @@ def level_obligation_penalty(level: str, prefix: str, snapshot: dict[str, Any]) 
     webs = point_set(snapshot, "webs")
     penalty = 0.0
 
-    if level.endswith("release.csv") or level.endswith("cyborg_rats/ai_takeover.csv"):
+    if level.endswith("release.csv"):
         if turn >= 10 and (18, 4) in rats and (18, 5) in webs:
             penalty += 0.35
         if turn >= 18 and int(reach["rats"]) <= 1 and int(features["rats"]) > 1:
             penalty += 0.25
+    elif level.endswith("cyborg_rats/ai_takeover.csv"):
+        # Unlike release, the right-side cyborg rat can remain in the main
+        # component after trigger-7 changes. Penalize only if it has actually
+        # become a reachability problem, not merely because the adjacent web is
+        # still present in the snapshot.
+        if turn >= 18 and int(reach["rats"]) <= 1 and int(features["rats"]) > 1:
+            penalty += 0.25
+        if turn >= 22 and int(reach["triggers"]) <= 4 and int(features["rats"]) >= 20:
+            penalty += 0.15
     elif level.endswith("reload_v3.csv"):
         if turn >= 20 and (0, 21) in rats and (1, 21) in webs:
             penalty += 0.35
         if turn >= 20 and (14, 5) in rats and int(reach["rats"]) <= 1:
             penalty += 0.20
+        numbers = trigger_numbers(snapshot)
+        if turn >= 18 and (0, 21) in rats and (1, 21) in webs and numbers.count(2) < 2:
+            penalty += 0.35
     elif level.endswith("tinderrectangle.csv"):
+        if int(features["rats"]) < 16:
+            penalty += 0.40
         if turn >= 55 and (0, 0) not in rats and int(features["rats"]) <= 15:
             penalty += 0.25
         if turn >= 55 and int(reach["trapped_unreachable_rats"]) > 0:
@@ -207,8 +226,13 @@ def level_obligation_penalty(level: str, prefix: str, snapshot: dict[str, Any]) 
         if turn >= 12 and (10, 5) in webs and int(features["triggers"]) <= 2:
             penalty += 0.25
     elif level.endswith("cooperation/blocked_v2.csv"):
-        if turn >= 10 and int(features["rats"]) - int(reach["rats"]) >= 2:
-            penalty += 0.20
+        unreachable = int(features["rats"]) - int(reach["rats"])
+        if turn >= 10 and unreachable >= 2:
+            penalty += 0.30
+        if turn >= 20 and unreachable >= 1 and int(reach["triggers"]) == 0:
+            penalty += 0.35
+        if turn >= 20 and int(features["rats"]) <= 3 and unreachable >= 1:
+            penalty += 0.25
 
     return min(0.60, penalty)
 
@@ -264,6 +288,67 @@ def load_triage_examples(paths: Iterable[pathlib.Path], timeout_sec: float) -> l
                     snapshot=snapshot,
                     target=max(0.02, target),
                     source=str(path),
+                )
+            )
+    return examples
+
+
+def target_from_obligation_label(record: dict[str, Any]) -> float:
+    target = record.get("target")
+    if isinstance(target, int | float):
+        return min(0.98, max(0.02, float(target)))
+    label = str(record.get("label", "")).lower()
+    if label in {"positive", "satisfies", "satisfied", "good"}:
+        return 0.85
+    if label in {"neutral", "staging", "candidate"}:
+        return 0.55
+    if label in {"negative", "violates", "violated", "dead", "bad"}:
+        return 0.05
+    raise ValueError("expected numeric target or known label")
+
+
+def load_obligation_examples(
+    paths: Iterable[pathlib.Path],
+    timeout_sec: float,
+) -> list[SnapshotExample]:
+    examples = []
+    seen: set[tuple[str, str, str]] = set()
+    for path in paths:
+        if not path.exists():
+            continue
+        for line_number, line in enumerate(
+            path.read_text(encoding="utf-8", errors="replace").splitlines(),
+            start=1,
+        ):
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise SystemExit(f"{path}:{line_number}: invalid json: {error}") from error
+            level = record.get("level")
+            prefix = record.get("prefix")
+            obligation_id = str(record.get("obligation_id", "obligation"))
+            if not isinstance(level, str) or not isinstance(prefix, str):
+                raise SystemExit(f"{path}:{line_number}: expected level and prefix strings")
+            key = (canonical_level(level), prefix, obligation_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            snapshot = run_trajectory_snapshot(level, prefix, timeout_sec)
+            if snapshot is None or snapshot["play_state"] == "GameOver":
+                continue
+            try:
+                target = target_from_obligation_label(record)
+            except ValueError as error:
+                raise SystemExit(f"{path}:{line_number}: {error}") from error
+            examples.append(
+                SnapshotExample(
+                    level=canonical_level(level),
+                    prefix=prefix,
+                    snapshot=snapshot,
+                    target=target,
+                    source=f"{path}:{obligation_id}",
                 )
             )
     return examples
@@ -370,19 +455,30 @@ def load_pretrained_params(repo: str, checkpoint: str) -> dict[str, np.ndarray]:
 
 
 class TransferRanker(nn.Module):
-    def __init__(self, macro_dim: int, pretrained: dict[str, np.ndarray], freeze_prior: bool) -> None:
+    def __init__(
+        self,
+        macro_dim: int,
+        pretrained: dict[str, np.ndarray],
+        freeze_prior: bool,
+        head: str,
+    ) -> None:
         super().__init__()
         self.conv0 = nn.Conv2d(3, 32, kernel_size=4, padding="same")
         self.conv1 = nn.Conv2d(32, 32, kernel_size=4, padding="same")
         self.activation = nn.ReLU()
         self.pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.head = nn.Sequential(
-            nn.Linear(32 + macro_dim, 96),
-            nn.ReLU(),
-            nn.Linear(96, 32),
-            nn.ReLU(),
-            nn.Linear(32, 1),
-        )
+        if head == "linear":
+            self.head = nn.Linear(32 + macro_dim, 1)
+        elif head == "small-mlp":
+            self.head = nn.Sequential(
+                nn.Linear(32 + macro_dim, 96),
+                nn.ReLU(),
+                nn.Linear(96, 32),
+                nn.ReLU(),
+                nn.Linear(32, 1),
+            )
+        else:
+            raise ValueError(f"unknown head: {head}")
         self.load_spatial_prior(pretrained)
         if freeze_prior:
             for parameter in list(self.conv0.parameters()) + list(self.conv1.parameters()):
@@ -493,10 +589,11 @@ def train_model(
     epochs: int,
     seed: int,
     freeze_prior: bool,
+    head: str,
 ) -> tuple[TransferRanker, np.ndarray, np.ndarray]:
     torch.manual_seed(seed)
     boards, macros, targets, mean, std = tensors_for_examples(examples)
-    model = TransferRanker(macros.shape[1], pretrained, freeze_prior=freeze_prior)
+    model = TransferRanker(macros.shape[1], pretrained, freeze_prior=freeze_prior, head=head)
     optimizer = torch.optim.AdamW(
         [parameter for parameter in model.parameters() if parameter.requires_grad],
         lr=2e-3,
@@ -546,6 +643,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--oracle-timeout-sec", type=float, default=4.0)
     parser.add_argument("--pretrained-repo", default=DEFAULT_PRETRAINED_REPO)
     parser.add_argument("--pretrained-checkpoint", default=DEFAULT_PRETRAINED_CHECKPOINT)
+    parser.add_argument("--obligation-labels", action="append", type=pathlib.Path, default=[])
+    parser.add_argument("--head", choices=("linear", "small-mlp"), default="linear")
     parser.add_argument("--fine-tune-prior", action="store_true")
     parser.add_argument("--jsonl-out", type=pathlib.Path, required=True)
     return parser.parse_args()
@@ -559,7 +658,8 @@ def main() -> int:
     pretrained = load_pretrained_params(args.pretrained_repo, args.pretrained_checkpoint)
     solved = load_solved_examples(args.samples_per_solution, args.oracle_timeout_sec)
     triage = load_triage_examples(args.triage, args.oracle_timeout_sec)
-    train_examples = solved + triage
+    obligations = load_obligation_examples(args.obligation_labels, args.oracle_timeout_sec)
+    train_examples = solved + triage + obligations
     if len(train_examples) < 16:
         raise SystemExit("not enough oracle examples for transfer head training")
 
@@ -569,6 +669,7 @@ def main() -> int:
         epochs=args.epochs,
         seed=args.seed,
         freeze_prior=not args.fine_tune_prior,
+        head=args.head,
     )
 
     candidates = load_candidates(
@@ -589,6 +690,8 @@ def main() -> int:
         level = canonical_level(candidate.level)
         snapshot = run_trajectory_snapshot(level, candidate.prefix, args.oracle_timeout_sec)
         if snapshot is None or snapshot["play_state"] == "GameOver":
+            continue
+        if level.endswith("tinderrectangle.csv") and int(snapshot["features"]["rats"]) < 16:
             continue
         candidate_examples.append(
             SnapshotExample(
@@ -639,6 +742,7 @@ def main() -> int:
                         "repo": args.pretrained_repo,
                         "checkpoint": args.pretrained_checkpoint,
                         "frozen_prior": not args.fine_tune_prior,
+                        "head": args.head,
                     },
                     "diag": {
                         "state": example.snapshot["play_state"],
@@ -656,7 +760,9 @@ def main() -> int:
 
     print(
         f"pretrained={args.pretrained_repo}/{args.pretrained_checkpoint} "
+        f"head={args.head} frozen_prior={not args.fine_tune_prior} "
         f"train={len(train_examples)} solved={len(solved)} triage={len(triage)} "
+        f"obligations={len(obligations)} "
         f"candidates={len(candidates)} replayed={len(candidate_examples)} selected={len(selected)} "
         f"out={args.jsonl_out}"
     )
