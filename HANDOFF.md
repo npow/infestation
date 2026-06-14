@@ -6139,6 +6139,76 @@ before it can be exercised locally.
   a capped `allreachable` branchdump from the initial board returned empty. The
   top pocket remains the structural blocker.
 
+### OOM-safe continuation - 2026-06-14 thirty-first Codex pass
+
+No new verified win. This pass stayed OOM-safe: every solver probe used
+external `timeout`, `ulimit -v 850000`, and modest `--maxnodes` caps; no tmux
+or detached solver jobs were started, and process checks found no leftover
+`target/release/solver`, `cargo`, `clingo`, or `timeout` jobs. `clingo` is not
+on PATH and the default Python has no `clingo` module, but
+`/tmp/infestation-clingo-venv/bin/python` does have Python `clingo 5.8.0`; ASP
+is therefore possible only through that venv or a new setup, and was not used
+for full-game solving in this pass.
+
+- `cyborg_rats/ai_takeover`: the read-only side-agent's AFTER8/Ppre predicates
+  were rerun locally under tight caps. From Ppre(0), Ppre(4), and Ppre(8),
+  `cellnot:18,4,cyborg --min-rats 2 --min-triggers 2 --min-explosives 5`
+  returned empty. From Q106, both right-column opener checks
+  `cellnotratrect:18,6,explosive,16,19,16,19` and
+  `cellnotratrect:18,6,explosive,11,8,12,10` returned empty. The runway-width
+  discriminator `cyborgkillreadyratlive`, the exact right-column stance
+  `normalratrectcyborgrectplayerrect:11,9,11,9,18,7,18,7,18,8,18,8`, and
+  newer faced-kill probes from P172/P105 also returned empty. This closes the
+  current "pre-trigger-2 cyborg enters the right blast column" and "easy faced
+  kill after P172" lanes under the tested caps.
+- `release`: the delayed rat-triggered top-4 family was rechecked from
+  `v<vv^^>>>..^>>vv`. The known good top-4 branch
+  `v<vv^^>>>..^>>vvv><^<v<<^v<<` was reproduced, but it still leaves
+  `(0,16)` unreachable. Event enumeration from the same prefix found left-side
+  22-rat postures such as `v<vv^^>>>..^>>vvv<<<<<<^^^<<<v<`, with player
+  `(1,12)`, 20/22 rats reachable, `(18,4)` still sealed, `(18,5)=web`, and
+  left trigger 2 still blocked by `(1,16)=explosive`. From that left-side
+  posture, guarded checks for `reachable:0,16`, `cellnot:1,16,explosive`, and
+  `triggeronlycellnot:2,18,5,web` all returned empty. This is a useful negative:
+  the top-4 family can move the player left before the old sweep, but still
+  cannot activate useful left trigger 2 or clear its adjacent explosive.
+- `old_levels/overstep`: the anchor
+  `A=v<<^^^^>>>><^^^>>>>>>>>>>>><<<>>` and extracted state
+  `A+^><>v>v>v` remain constructive but isolated. From the extracted state,
+  `reachablege:2` and `playerat:15,3` returned empty; `cellnot:16,4,empty`
+  returned only false-positive branches where a rat occupied `(16,4)` and
+  `reachable_rats` stayed 1. Backing up to A, `reachablege:2`,
+  `playerat:13,8`, `triggeronly:6`, `ratcell:13,5,16,4,empty`,
+  `ratrectplayerrect:15,3,16,4,18,4,19,6`, and `allreachable` all returned
+  empty under the tested caps. Continue only with an extraction that changes
+  access to the top component before the player gets trapped in the right
+  chute.
+- `old_levels/on_the_clock`: a read-only side-agent confirmed the live anchor
+  `>>>^^>>>vvv><vvvvvv` but found no bottom-left access event from it. Exact
+  preservation probes from that anchor returned no branches for `reachablege:5`,
+  `cellnot:1,18,web`, `cellnot:4,18,web`, `reachable:2,17`, or
+  `triggeronlycellnot:8,1,18,web` while preserving all 8 rats, at least 4
+  reachable rats, and at least 4 reachable triggers. Do not deepen this P19
+  anchor without changing the approach before the bottom-left cage geometry
+  forms.
+- `tinderrectangle`: a read-only side-agent rechecked the long P135 safe-side
+  branch. Diagnostics are unchanged: player `(14,7)`, lower rat `(2,3)`, all
+  16 rats reachable, and blockers `(2,4)` / `(3,4)` still web. From P135,
+  `ratrectplayerrect:2,6,6,6,13,6,15,8`,
+  `ratrectplayerrect:2,5,6,6,13,6,15,8`, and an A* lookup to the row-6/right
+  safe predicate all returned empty. A depth-8 local frontier only moved the
+  player around the right/top pocket; the lower rat stayed at `(2,3)` in every
+  printed state. Treat P135 as another finite staging branch unless an earlier
+  release gate changes how the lower rat starts moving.
+- `cooperation/tug_of_war`: the clean frontier
+  `.< v^ <^ >^ <^ <^ >^ <^` was rechecked. Diagnostics still show one
+  unreachable top-pocket rat in `{(7,0),(8,0)}` with 4/5 rats reachable.
+  Stronger top-gate predicates from that frontier,
+  `cellnotnoratsrect:7,2,plank,7,0,8,0` and
+  `cellnotnoratsrect:8,2,plank,7,0,8,0`, both returned empty while preserving
+  at least 5 rats, 10 explosives, and 10 triggers. This avoids the false
+  positive where `ratgone:7,0` only means the rat shifted to `(8,0)`.
+
 ---
 
 ## 4. Planned next steps (start here)
