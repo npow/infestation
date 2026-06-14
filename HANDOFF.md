@@ -6509,6 +6509,34 @@ cleanup to current-engine mechanism checks.
   moving the normal rat toward `(14,12)/(15,12)` while keeping the cyborg near
   `(15,11)/(16,12)`, not by broad cleanup from A140 or stale P172.
 
+### `ai_takeover` A140 endgame order check - 2026-06-14 thirty-ninth Codex pass
+
+No new verified win. This pass tightened the A140 endgame and found that the
+previous "stage cyborg, then route normal rat" order is likely backwards or
+finite.
+
+- Rule audit: the normal rat at `(11,9)` cannot move east/south toward the
+  explosives because `(12,9)`, `(12,10)`, and `(11,10)` are blocked. The only
+  plausible detonator route is up/right first:
+  `(11,9) -> (12,8) -> (13,9) -> (14,10/11) -> (14,12)/(15,12)`.
+- From staged-cyborg state
+  `A140+>>v>>>>v^v<.^v^v^v`, immediate moves keep the cyborg in/near blast
+  range for one turn, but the normal rat remains at `(11,9)`. Guarded probes
+  for exact normal-rat route cells while keeping the cyborg near
+  `(14..16,11..13)` returned empty. `winready` from both A140 and the staged
+  cyborg state also returned empty under 40s caps.
+- Reversing the order also failed under caps. From A140, even with the cyborg
+  allowed anywhere, guarded `normalratrectcyborgrect...` checks for normal rat
+  `(12,8)` or `(13,9)` returned empty, and A* lookup for the loose normal route
+  `(12,8)..(14,11)` made no progress. This suggests A140's no-trigger,
+  two-enemy board does not have the needed normal-rat access route.
+
+Practical next `ai_takeover` work: back up before the A140 trigger-2 cut. The
+intended route probably must move/kill the right cyborg with trigger-2 timing
+while the normal rat is not trapped behind the `(11,9)` wall pocket, or preserve
+a different trigger/explosive resource. Do not deepen A140, old P172, or
+"kill normal first" cleanup without a new access-changing event.
+
 ---
 
 ## 4. Planned next steps (start here)
