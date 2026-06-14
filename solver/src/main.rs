@@ -4548,6 +4548,12 @@ struct Branch {
     score: i64,
 }
 
+#[derive(Clone)]
+struct EventCandidate {
+    branch: Branch,
+    event_key: String,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct Features {
     rats: usize,
@@ -4739,58 +4745,6 @@ fn feature_bucket_key(grid: &Grid) -> String {
     )
 }
 
-fn select_feature_frontier(
-    mut candidates: Vec<Branch>,
-    width: usize,
-    per_bucket: usize,
-) -> Vec<Branch> {
-    if candidates.len() <= width {
-        candidates.sort_by_key(|branch| branch.score);
-        return candidates;
-    }
-
-    candidates.sort_by_key(|branch| branch.score);
-    let mut buckets: HashMap<String, Vec<Branch>> = HashMap::new();
-    for candidate in candidates {
-        buckets
-            .entry(feature_bucket_key(&candidate.grid))
-            .or_default()
-            .push(candidate);
-    }
-
-    let mut bucket_values: Vec<Vec<Branch>> = buckets
-        .into_values()
-        .map(|mut bucket| {
-            bucket.sort_by_key(|branch| branch.score);
-            bucket
-        })
-        .collect();
-    bucket_values.sort_by_key(|bucket| bucket.first().map_or(i64::MAX, |branch| branch.score));
-
-    let mut selected = Vec::new();
-    let mut deferred = Vec::new();
-    for mut bucket in bucket_values {
-        let take = per_bucket.max(1).min(bucket.len());
-        selected.extend(bucket.drain(0..take));
-        deferred.extend(bucket);
-    }
-
-    selected.sort_by_key(|branch| branch.score);
-    if selected.len() > width {
-        selected.truncate(width);
-        return selected;
-    }
-
-    deferred.sort_by_key(|branch| branch.score);
-    for candidate in deferred {
-        selected.push(candidate);
-        if selected.len() >= width {
-            break;
-        }
-    }
-    selected
-}
-
 fn limited_positions_key(grid: &Grid, predicate: fn(CellKind) -> bool, limit: usize) -> String {
     let mut positions = Vec::new();
     for y in 0..grid.height() {
@@ -4903,6 +4857,65 @@ fn event_kind_key(before: &Grid, after: &Grid) -> String {
     )
 }
 
+fn event_family_key(before: &Grid, after: &Grid) -> String {
+    let before_features = Features::from_grid(before);
+    let after_features = Features::from_grid(after);
+    let mut removed_triggers = Vec::new();
+    let mut opened_webs = 0usize;
+    let mut removed_explosives = 0usize;
+    let mut removed_planks = 0usize;
+    let mut removed_walls = 0usize;
+    let mut rat_cells_changed = 0usize;
+
+    for y in 0..before.height() {
+        for x in 0..before.width() {
+            let old = before.cell_kind_at(x, y);
+            let new = after.cell_kind_at(x, y);
+            if old == new {
+                continue;
+            }
+            match (old, new) {
+                (CellKind::Trigger(number), _) => removed_triggers.push(number),
+                (CellKind::Spiderweb, _) => opened_webs += 1,
+                (CellKind::Explosive, _) => removed_explosives += 1,
+                (CellKind::Plank, _) => removed_planks += 1,
+                (CellKind::Wall, _) => removed_walls += 1,
+                (CellKind::Rat | CellKind::CyborgRat, _)
+                | (_, CellKind::Rat | CellKind::CyborgRat) => rat_cells_changed += 1,
+                _ => {}
+            }
+        }
+    }
+
+    removed_triggers.sort_unstable();
+    removed_triggers.dedup();
+    let before_reachable_rats = reachable_rat_count(before);
+    let after_reachable_rats = reachable_rat_count(after);
+    let before_reachable_triggers = reachable_trigger_count(before);
+    let after_reachable_triggers = reachable_trigger_count(after);
+    let after_unreachable = unreachable_rat_positions_key(after, false, 4);
+    let after_trapped = unreachable_rat_positions_key(after, true, 4);
+
+    format!(
+        "dr{}:dc{}:dx{}:dw{}:dt{}:dp{}:dwall{}:ratmove{}:rr{}>{}:rt{}>{}:trig{:?}:ur[{}]:trap[{}]",
+        before_features.rats as i32 - after_features.rats as i32,
+        count_cyborg_rats(before) as i32 - count_cyborg_rats(after) as i32,
+        removed_explosives,
+        opened_webs,
+        before_features.triggers as i32 - after_features.triggers as i32,
+        removed_planks,
+        removed_walls,
+        rat_cells_changed,
+        before_reachable_rats,
+        after_reachable_rats,
+        before_reachable_triggers,
+        after_reachable_triggers,
+        removed_triggers,
+        after_unreachable,
+        after_trapped
+    )
+}
+
 fn select_event_successors(
     mut events: Vec<EventSuccessor>,
     max_events: usize,
@@ -4948,6 +4961,74 @@ fn select_event_successors(
     for event in deferred {
         selected.push(event);
         if selected.len() >= max_events {
+            break;
+        }
+    }
+    selected
+}
+
+fn select_fess_frontier(
+    mut candidates: Vec<EventCandidate>,
+    width: usize,
+    per_bucket: usize,
+) -> Vec<Branch> {
+    if candidates.len() <= width {
+        candidates.sort_by_key(|candidate| candidate.branch.score);
+        return candidates
+            .into_iter()
+            .map(|candidate| candidate.branch)
+            .collect();
+    }
+
+    candidates.sort_by_key(|candidate| candidate.branch.score);
+    let mut buckets: HashMap<String, Vec<EventCandidate>> = HashMap::new();
+    for candidate in candidates {
+        let bucket_key = format!(
+            "{}|{}",
+            candidate.event_key,
+            feature_bucket_key(&candidate.branch.grid)
+        );
+        buckets.entry(bucket_key).or_default().push(candidate);
+    }
+
+    let mut bucket_values: Vec<Vec<EventCandidate>> = buckets
+        .into_values()
+        .map(|mut bucket| {
+            bucket.sort_by_key(|candidate| candidate.branch.score);
+            bucket
+        })
+        .collect();
+    bucket_values.sort_by_key(|bucket| {
+        bucket
+            .first()
+            .map_or(i64::MAX, |candidate| candidate.branch.score)
+    });
+
+    let mut selected = Vec::new();
+    let mut deferred = Vec::new();
+    let mut event_families = HashSet::new();
+    for mut bucket in bucket_values {
+        let take = per_bucket.max(1).min(bucket.len());
+        for candidate in bucket.drain(0..take) {
+            if event_families.insert(candidate.event_key.clone()) || selected.len() < width / 2 {
+                selected.push(candidate.branch);
+            } else {
+                deferred.push(candidate);
+            }
+        }
+        deferred.extend(bucket);
+    }
+
+    selected.sort_by_key(|branch| branch.score);
+    if selected.len() > width {
+        selected.truncate(width);
+        return selected;
+    }
+
+    deferred.sort_by_key(|candidate| candidate.branch.score);
+    for candidate in deferred {
+        selected.push(candidate.branch);
+        if selected.len() >= width {
             break;
         }
     }
@@ -6761,6 +6842,7 @@ fn find_event_successors(
     let mut events = Vec::new();
     let mut event_hashes = HashSet::new();
     let mut expansions = 0u64;
+    let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
 
     while let Some(idx) = q.pop_front() {
         expansions += 1;
@@ -6776,6 +6858,9 @@ fn find_event_successors(
         for t in tuples {
             let (next_grid, play_state) = step(&cur_grid, t);
             if play_state == PlayState::GameOver {
+                continue;
+            }
+            if prune_dead && play_state == PlayState::Playing && lookup_dead_state(&next_grid) {
                 continue;
             }
 
@@ -6822,7 +6907,12 @@ fn find_event_successors(
                             fess_branch_score(&nodes[node_idx].grid, path.len())
                         }
                     };
-                    let event_key = event_kind_key(start_grid, &nodes[node_idx].grid);
+                    let event_key = match score_mode {
+                        EventScoreMode::Trigger => {
+                            event_kind_key(start_grid, &nodes[node_idx].grid)
+                        }
+                        EventScoreMode::Fess => event_family_key(start_grid, &nodes[node_idx].grid),
+                    };
                     events.push(EventSuccessor {
                         grid: next_grid,
                         score,
@@ -6985,6 +7075,7 @@ fn solve_event_fess(
     let mut seen = HashSet::new();
     seen.insert(grid.search_hash());
     let mut best = frontier[0].clone();
+    let verbose_branches = std::env::var("FESS_VERBOSE").is_ok();
 
     for step_idx in 0..event_steps {
         if started.elapsed().as_secs_f64() > total_secs {
@@ -7033,14 +7124,16 @@ fn solve_event_fess(
             ) else {
                 continue;
             };
-            eprintln!(
-                "  fess step {} branch_path={} bucket={} features={:?} events={}",
-                step_idx + 1,
-                branch.path.len(),
-                feature_bucket_key(&branch.grid),
-                before,
-                events.len()
-            );
+            if verbose_branches {
+                eprintln!(
+                    "  fess step {} branch_path={} bucket={} features={:?} events={}",
+                    step_idx + 1,
+                    branch.path.len(),
+                    feature_bucket_key(&branch.grid),
+                    before,
+                    events.len()
+                );
+            }
 
             for event in events {
                 let mut path = branch.path.clone();
@@ -7060,7 +7153,10 @@ fn solve_event_fess(
                 if candidate.score < best.score {
                     best = candidate.clone();
                 }
-                candidates.push(candidate);
+                candidates.push(EventCandidate {
+                    branch: candidate,
+                    event_key: event.event_key,
+                });
             }
         }
 
@@ -7069,7 +7165,7 @@ fn solve_event_fess(
             break;
         }
 
-        frontier = select_feature_frontier(candidates, width, per_bucket);
+        frontier = select_fess_frontier(candidates, width, per_bucket);
         eprintln!(
             "  fess step {}: frontier={} buckets={} best_score={} best_bucket={} best_path={} best_features={:?} reachable_rats={} trapped={}",
             step_idx + 1,

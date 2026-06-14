@@ -7171,6 +7171,58 @@ wording is stale after upstream invalidation.
   --max-unreachable-rats 3`. Continue closer to `v<v` or search for a
   non-trigger geometry change before trigger 4/5 commit.
 
+### Event-family FESS pass - 2026-06-14 current Codex follow-up
+
+No new verified win. This follow-up applied the literature-driven idea more
+directly: keep novelty over event families, not only over scalar features or
+exact local cell changes.
+
+- `solver fess` now uses a coarse FESS event-family key in `EventScoreMode::Fess`.
+  The family key records rat/cyborg/explosive/web/trigger/plank/wall deltas,
+  reachable-rat and reachable-trigger deltas, removed trigger identities, and
+  remaining unreachable/trapped survivor positions. `events` and `macro` still
+  use the exact event key for their existing diagnostics.
+- FESS frontier selection now buckets by `event_family_key + feature_bucket_key`.
+  This keeps distinct human-level mechanisms alive, instead of letting many
+  local web/cyborg-motion variants crowd out other event families.
+- `PRUNE_DEAD=1` now applies inside event-successor generation too, so FESS can
+  share the existing no-resource/no-reachability dead-state cut used by lookup
+  and branchdump.
+- FESS per-branch logging is now gated by `FESS_VERBOSE=1`; default output keeps
+  step/frontier summaries only, which is more usable for bounded parallel runs.
+- Validation before this note: `cargo fmt -p solver`, `cargo check -p solver`,
+  and `cargo build --release -p solver` passed before the first run batch; rerun
+  after any later edits before committing.
+
+Bounded run evidence from this pass:
+
+- `cyborg_rats/ai_takeover`: event-family FESS from prefix `v<vv^^<vv` produced
+  a cleaner 30-turn frontier:
+  `v<vv^^<vvv<<^^^<<<vv<<^^^^^vvv`. Diagnostics: 20 rats, 9 explosives,
+  14 triggers, `reachable_rats=19/20`, `trapped_unreachable_rats=0`; the only
+  unreachable survivor is still `(18,4)`. Exact guarded branchdumps from that
+  state for `reachable:18,4` and `triggeronly:2` returned no branches under
+  25s / 250k nodes / 800 MB. `cellnot:18,5,web` is trivial here because
+  `(18,5)` is already open.
+- `release`: event-family FESS from prefix `v<vv^^<vv` again stayed in the
+  opener family. Best frontier suffixes such as `>>>^>^^<<v` preserve 23 rats
+  and 5 explosives, but leave `reachable_rats=20/23` with trapped survivors
+  `(18,4)` and `(13,5)` plus a lower survivor around `(8..11,19)`. This is not
+  useful progress; it reinforces backing up before the opener commits.
+- `tinderrectangle`: FESS from short candidate `<<^<<^<>^>>>vv^^` only found
+  three turns of top/right web chewing (`>>>`) under strict all-16 guards and
+  then no further admissible event. Treat this prefix as a diagnostic dead end,
+  not a separation solution.
+- `old_levels/overstep`: `triglookup` from the trigger-5 staging prefix
+  `v<<^^^^^^^>>>>>>>>>>>>><>>` with order `3,4,7` found trigger-3 branches but
+  no guarded trigger-4 continuation. Direct initial order `5,3,4,7` also
+  returned no useful trigger-5 branch. The "trigger 5 first" hypothesis needs a
+  different staging path or should be deprioritized.
+- `old_levels/on_the_clock`: FESS from the initial board with a human guard
+  requiring at least 4 reachable rats produced no event candidates. Initial
+  diagnostics still show only one reachable rat and seven trapped/unreachable
+  rats; search needs a setup movement prefix before any structural event.
+
 ---
 
 ## 4. Planned next steps (start here)
