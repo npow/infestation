@@ -44,6 +44,11 @@
     "players": 2,
     "moves": 28
   },
+  "cooperation/tug_of_war.csv": {
+    "sol": "^v vv >< vv vv vv vv <> <> <> <> <> >v << vv >> vv vv << >> << >> ^^ <^ ^^ >^ <v ^> ^< >^ >^ ^> ^^ ^< >< >< ^^ ^< ^> ^v ^^ ^^ ^^ ^^ ^^ >^ >^ ^^ ^^ v^ v^ <^ v^ v^ v^ v^ v^ v^ v^ v^ v^ v^ ^^ ^^ >^ >^ ^^ ^^ ^^ ^^ ^< ^< ^^ ^^ ^> ^> ^> ^> ^v ^v ^> ^> ^> ^^ ^^ ^> ^v ^v ^v ^v ^v ^v ^< ^< ^< ^< ^v ^v",
+    "players": 2,
+    "moves": 98
+  },
   "cyborg_rats/cyborg_rats.csv": {
     "sol": "↑→→↑↑←←←→→→↑↑←←←→→→↑↑←←←→→→↑↑←←←",
     "players": 1,

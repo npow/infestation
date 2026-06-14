@@ -5,7 +5,7 @@ All move-strings below were **verified against the real game engine** (`solver v
 Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-separated `P1P2` pairs.
 
 
-## Original levels (32 solved)
+## Original levels (33 solved)
 
 | Level | Players | Moves | Solution |
 |---|---|---|---|
@@ -13,6 +13,7 @@ Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-s
 | `chase.csv` | 1 | 199 | `↑→→→↓↑↑↑→↑↑→→→→→↓→→↓↓↓↓↓↑↑↑↑↑↑←←←←↓←←←↓↑←↑←↑←←→→→→↓→→→→→↓↓↓↓↑↑↑↑←←←↑←↑←←↑↑↑↑↑↑↑↑←←←←←↑↑↓↓↓↓↓↓↓↓↓↓↓↓↓→→→→→→→→↓↓↑↑←←↓↓↓↓↓←→→→→→→→→→→→→→→↑↑↓←→↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑←←←←→→↓↓↓↓←↓↓↓↓↓↓↓↓↓↓↓↓←↓↓↓←←←←←←←←←←←←←←←` |
 | `cooperation/coop_world_v3.csv` | 2 | 26 | `↑↑ ↑→ ↑↑ ↑↑ ↑↑ ↑↑ ↑↑ ↑→ ↑↑ ↓→ ←→ ↑→ ↑→ ↑→ ↑→ ↑→ ↑→ →↓ ←. ↑↓ →← ↓← .→ .↑ ↑↑ ↑↑` |
 | `cooperation/cooperation.csv` | 2 | 28 | `↑↑ ↑→ ↑↑ ↑↑ ↑← ←↑ ↑→ ↑→ ↑→ ←→ ←↓ ←→ ←→ ←→ ←→ ↑→ →→ →→ ←→ ←← .← ←↓ ↓↓ ↓↓ ↓← ↓← ↓↓ ↓↓` |
+| `cooperation/tug_of_war.csv` | 2 | 98 | `^v vv >< vv vv vv vv <> <> <> <> <> >v << vv >> vv vv << >> << >> ^^ <^ ^^ >^ <v ^> ^< >^ >^ ^> ^^ ^< >< >< ^^ ^< ^> ^v ^^ ^^ ^^ ^^ ^^ >^ >^ ^^ ^^ v^ v^ <^ v^ v^ v^ v^ v^ v^ v^ v^ v^ v^ ^^ ^^ >^ >^ ^^ ^^ ^^ ^^ ^< ^< ^^ ^^ ^> ^> ^> ^> ^v ^v ^> ^> ^> ^^ ^^ ^> ^v ^v ^v ^v ^v ^v ^< ^< ^< ^< ^v ^v` |
 | `cyborg_rats/cyborg_rats.csv` | 1 | 32 | `↑→→↑↑←←←→→→↑↑←←←→→→↑↑←←←→→→↑↑←←←` |
 | `cyborg_rats/fakeout.csv` | 1 | 78 | `↑↑↓......→→←↓←↓................←←←→←←←←←→←→→←→↑→↑→↓←←↓↓↓↓↓↓↓↓↓↓→↑→↑↑→→→→→→→→→→` |
 | `cyborg_rats/stalemate.csv` | 1 | 47 | `↑→→↑→↑→→↓↓←↓↓→←↑↑→↑↑→→→..............→←←←←←←←←←` |

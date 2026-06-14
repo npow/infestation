@@ -85,14 +85,14 @@ as a rat puzzle.
 ### UNSOLVED - primary hard set
 
 As of the 2026-06-14 transfer-guided pass, `chase.csv`, `world.csv`, the
-Claude child levels, and `old_levels/overstep.csv` are solved and still verify.
-The active non-hub hard set is:
+Claude child levels, `old_levels/overstep.csv`, and
+`cooperation/tug_of_war.csv` are solved and still verify. The active non-hub
+hard set is:
 `tinderrectangle.csv`, `release.csv`, `reload_v3.csv`,
-`cyborg_rats/ai_takeover.csv`, `cooperation/tug_of_war.csv`,
-`cooperation/handoff.csv`, and `cooperation/blocked_v2.csv`. The old-level
-child CSV `old_levels/on_the_clock.csv` is still unsolved if you choose to
-include broken child levels; the portal hub `old_levels/old_levels.csv` is
-solved.
+`cyborg_rats/ai_takeover.csv`, `cooperation/handoff.csv`, and
+`cooperation/blocked_v2.csv`. The old-level child CSV
+`old_levels/on_the_clock.csv` is still unsolved if you choose to include broken
+child levels; the portal hub `old_levels/old_levels.csv` is solved.
 
 | # | Level | Players | Name-hint / trick | Best lead / recommended attack |
 |---|---|---|---|---|
@@ -100,15 +100,23 @@ solved.
 | 2 | `release` | 1 | release the caged rats, then mop | Strong human prefix: `v<vv^^>>v` consumes trigger 3 then 4, drops rats from 24 to 23, explosives from 35 to 5, webs from 47 to 27, and makes 21 rats reachable. Follow-up trigger 5 is reachable with suffix `v<>>>^`; next work is choosing between trigger 2 and 6, then mop-up. |
 | 3 | `reload_v3` | 1 | fire/reload cycles; triggers 1-7 | Work bottom trigger row as reload stations, not as a global search. Likely order starts around trigger 1, then 2/3/4/5/6/7 as each detonation opens the next chamber. Use `triglookup` with explicit orders and inspect each irreversible change. |
 | 4 | `cyborg_rats/ai_takeover` | 1 | `release` skeleton plus cyborgs/triggers 7-8 | Solve `release` first, then transfer the trigger skeleton. Extra triggers 7/8 and cyborg Dijkstra behavior are probably the intended differences. |
-| 5 | `cooperation/tug_of_war` | 2 | mirror-symmetric tug | Needs paired role choreography with `wp2`: mirrored trigger pairs 1/2/3, side rats, then central rat. Avoid generic 2p search until the waypoint pairs encode the intended symmetry. |
-| 6 | `cooperation/handoff` | 2 | baton pass | Small enough to hand-reason. P1 cannot simply reach trigger 1 first. P1 can reach trigger 2 first, but then trigger 1 is no longer useful/reachable; likely P1 opens the handoff and P2 finishes on the remote side. |
-| 7 | `cooperation/blocked_v2` | 2 | one player blocked | Keep the previous warning: one rat may be permanently unreachable behind effectively indestructible structure. Before spending human-solving time, prove or disprove winnability with targeted reachability/exhaustive checks. |
+| 5 | `cooperation/handoff` | 2 | baton pass | Small enough to hand-reason. P1 cannot simply reach trigger 1 first. P1 can reach trigger 2 first, but then trigger 1 is no longer useful/reachable; likely P1 opens the handoff and P2 finishes on the remote side. |
+| 6 | `cooperation/blocked_v2` | 2 | one player blocked | Keep the previous warning: one rat may be permanently unreachable behind effectively indestructible structure. Before spending human-solving time, prove or disprove winnability with targeted reachability/exhaustive checks. |
 
 Additional unsolved old-level CSV in the current inventory:
 `old_levels/on_the_clock.csv`.
 
 ### Newly solved - 2026-06-14
 
+- `cooperation/tug_of_war.csv` solved by a transfer-ranked direct novelty
+  child from the `static:pre_t3_baffle` seed. Verified with:
+  ```bash
+  target/release/solver verify levels/cooperation/tug_of_war.csv \
+    '^v vv >< vv vv vv vv <> <> <> <> <> >v << vv >> vv vv << >> << >> ^^ <^ ^^ >^ <v ^> ^< >^ >^ ^> ^^ ^< >< >< ^^ ^< ^> ^v ^^ ^^ ^^ ^^ ^^ >^ >^ ^^ ^^ v^ v^ <^ v^ v^ v^ v^ v^ v^ v^ v^ v^ v^ ^^ ^^ >^ >^ ^^ ^^ ^^ ^^ ^< ^< ^^ ^^ ^> ^> ^> ^> ^v ^v ^> ^> ^> ^^ ^^ ^> ^v ^v ^v ^v ^v ^v ^< ^< ^< ^< ^v ^v'
+  # result=Won turns_applied=98
+  ```
+  Source log:
+  `/tmp/infestation-runs/20260614T181902Z_direct_ranked_children/tug_of_war_20_8142f362_novelty.log`.
 - `old_levels/overstep.csv` solved by a transfer-ranked Go-Explore/FESS seed.
   Verified with:
   ```bash
@@ -7449,11 +7457,10 @@ game logic:
    14-trigger phase earlier than `v<vv^^<vv`, but bounded checks still cannot
    fire trigger 7 or reach `(18,4)`. Look for a topology change around the
    right gate before accepting the high-release family.
-5. **For two-player levels, work in `wp2` waypoint pairs.** Start with
-   structural access checks (`cellnot` / `playerat`) before trigger
-   choreography. `tug_of_war` may be unwinnable as authored because the top
-   pocket has no legal web/plank-clearing event; `handoff` still needs a
-   mechanism for the `(10,6)` sealed rat before the P2 sweep.
+5. **For remaining two-player levels, work in `wp2` waypoint pairs.** Start
+   with structural access checks (`cellnot` / `playerat`) before trigger
+   choreography. `handoff` still needs a mechanism for the `(10,6)` sealed rat
+   before the P2 sweep.
 6. **`blocked_v2`:** treat the all-9 `5 -> 1 -> 4` prefix as the best archive
    frontier, but not yet a live continuation. The next useful predicate should
    alter lower-left mouth / trigger-2 access before trigger 4, since P16
@@ -7470,7 +7477,7 @@ solver/                             Rust oracle crate
   src/main.rs                         all modes: solve / verify / trace / wp
   Cargo.toml
 solver/solutions/
-  SOLUTIONS.md                       31 verified original solutions + 5 Claude puzzles
+  SOLUTIONS.md                       33 verified original solutions + 5 Claude puzzles
   final_solutions.json               machine-readable verified set
   autoplay.js                        browser console auto-player (1p + 2p)
   results/                           raw search outputs (results*.json, autoplay_data.json)
@@ -7483,8 +7490,8 @@ solver/solutions/
 
 ## 6. Session context
 - A session Stop-hook with goal **"solve all the puzzles"** may be active in
-  some environments. The current active non-hub hard set is the seven CSVs
-  listed near the top of §3; include the two old broken child CSVs only if the
+  some environments. The current active non-hub hard set is the six CSVs
+  listed near the top of §3; include `old_levels/on_the_clock.csv` only if the
   task explicitly expands beyond portal-reachable puzzles. Resume by working §4.
 - Fork created with `gh repo fork`; push with `gh auth setup-git --hostname github.com` then
   `git push fork claude/new-puzzles`. No PR was opened to upstream (`davidspies/infestation`).
