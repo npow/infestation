@@ -6420,6 +6420,8 @@ fn find_event_successors(
     max_depth: usize,
     time_limit_secs: f64,
     max_events: usize,
+    min_rats: Option<usize>,
+    trap_constraints: TrapConstraints,
 ) -> Option<Vec<EventSuccessor>> {
     let start_time = Instant::now();
     let start_features = Features::from_grid(start_grid);
@@ -6478,6 +6480,11 @@ fn find_event_successors(
 
             let features = Features::from_grid(&next_grid);
             if features != start_features {
+                if min_rats.is_some_and(|minimum| features.rats < minimum)
+                    || !trap_constraints.accepts(&next_grid, play_state)
+                {
+                    continue;
+                }
                 if event_hashes.insert(hash) {
                     let path = reconstruct(&nodes, node_idx);
                     let score = trigger_branch_score(
@@ -6574,7 +6581,15 @@ fn solve_macro_events(
         let prefix = nodes[idx].path.clone();
         let current = nodes[idx].grid.clone();
         let Some(events) =
-            find_event_successors(&current, &tuples, segment_depth, segment_secs, event_beam)
+            find_event_successors(
+                &current,
+                &tuples,
+                segment_depth,
+                segment_secs,
+                event_beam,
+                None,
+                TrapConstraints::default(),
+            )
         else {
             continue;
         };
@@ -9554,14 +9569,20 @@ fn main() {
     }
 
     if mode == "events" {
-        // solver events <csv> [--depth N] [--secs S] [--max N]
+        // solver events <csv> [--depth N] [--secs S] [--max N] [--min-rats N]
         // List structural event successors with paths for manual midgame analysis.
         let mut prefix_str = String::new();
         let mut depth = 80usize;
         let mut secs = 30.0;
         let mut max_events = 20usize;
+        let mut min_rats: Option<usize> = None;
+        let mut trap_constraints = TrapConstraints::default();
         let mut i = 3;
         while i < args.len() {
+            if let Some(next_i) = parse_trap_constraint_arg(&args, i, &mut trap_constraints) {
+                i = next_i;
+                continue;
+            }
             match args[i].as_str() {
                 "--prefix" => {
                     prefix_str = args[i + 1].clone();
@@ -9577,6 +9598,10 @@ fn main() {
                 }
                 "--max" => {
                     max_events = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--min-rats" => {
+                    min_rats = Some(args[i + 1].parse().unwrap());
                     i += 2;
                 }
                 _ => {
@@ -9596,14 +9621,24 @@ fn main() {
         }
         let tuples = all_action_tuples(nplayers);
         eprintln!(
-            "events: players={} prefix={} depth={} secs={} max={}",
+            "events: players={} prefix={} depth={} secs={} max={} min_rats={:?} trap={:?}",
             nplayers,
             prefix.len(),
             depth,
             secs,
-            max_events
+            max_events,
+            min_rats,
+            trap_constraints
         );
-        match find_event_successors(&start_grid, &tuples, depth, secs, max_events) {
+        match find_event_successors(
+            &start_grid,
+            &tuples,
+            depth,
+            secs,
+            max_events,
+            min_rats,
+            trap_constraints,
+        ) {
             Some(events) => {
                 for (idx, event) in events.iter().enumerate() {
                     let mut full_path = prefix.clone();
@@ -9620,11 +9655,13 @@ fn main() {
                     };
                     let full_ascii = format_path_ascii(&full_path);
                     println!(
-                        "EVENT idx={} moves={} score={} features={:?}",
+                        "EVENT idx={} moves={} score={} features={:?} reachable_rats={} trapped={}",
                         idx,
                         event.path.len(),
                         event.score,
-                        event.features
+                        event.features,
+                        reachable_rat_count(&event.grid),
+                        trapped_unreachable_rat_count(&event.grid)
                     );
                     println!("ASCII {}", ascii);
                     println!("FULL_ASCII {}", full_ascii);

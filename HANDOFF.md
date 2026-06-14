@@ -6537,6 +6537,67 @@ while the normal rat is not trapped behind the `(11,9)` wall pocket, or preserve
 a different trigger/explosive resource. Do not deepen A140, old P172, or
 "kill normal first" cleanup without a new access-changing event.
 
+### Filtered event-inventory pass - 2026-06-14 fortieth Codex pass
+
+No new verified win. This pass changed the workflow away from deeper cleanup
+searches and toward guarded irreversible-event inventory. `solver events` now
+accepts `--min-rats` plus the existing trap/resource guards
+(`--all-rats-reachable`, `--min-reachable-rats`, `--min-explosives`,
+`--min-triggers`, etc.) and prints `reachable_rats` plus
+`trapped_unreachable_rats` for each event. This makes event ordering usable as a
+human-style filter: do not inspect event branches that already violate survivor
+reachability/resource invariants.
+
+Verification:
+
+- `cargo check -p solver` passed.
+- `cargo build --release -p solver` passed.
+- `cargo test -p solver --no-run` passed.
+
+Mechanism findings under capped `timeout` / `ulimit -v 850000` probes:
+
+- `reload_v3`: local station-1 geometry is finite. From
+  `P40+v><v`, preserving all three rats yields only one continuation (`<`).
+  From `P40+vvv`, the same bottom-lip shove pattern appears while station 1 is
+  still live. Compound gate checks from both the P44 and `P40+^vv` spacings
+  returned empty for changing `(1,21)=web` or `(2,21)=explosive` while
+  preserving all three rats and useful station resources. The next useful work
+  must change helper/player spacing before the station family, not deepen P44.
+- `old_levels/on_the_clock`: from live anchor `>>>^^>>>vvv><vvvvvv`, guarded
+  checks for `allreachable`, `reachable:1,19`, and `reachable:4,19` returned
+  empty with all eight rats and useful resources preserved. Filtered event
+  inventory shows every immediate structural event still leaves 4 trapped rats.
+  Continue only with an earlier timing change that opens bottom-left cage access.
+- `old_levels/overstep`: the P33 timing fork can delay the future `(14,11)`
+  blocker while the upper rats remain around `(16,4)/(16,9)`, but guarded
+  topology checks returned empty for `reachablege:2`, `reachable:15,4`,
+  `reachable:16,9`, and opening access around `(14,4)` while preserving the
+  six-rat resource shape. Delaying the trap is not enough; the missing event is
+  actual player access into the upper component.
+- `cyborg_rats/ai_takeover`: a side audit found the right idea but not yet a
+  route: move the normal rat out of `(11,9)` before the trigger-2 cut. Current
+  positive branches from P106:
+  `N124=P106+<>^^^^^^^^<<<<^<<^^` preserves all three rats and moves the normal
+  rat to `(12,8)`, but local frontier shows the only safe next move kills that
+  normal rat; every all-three-rat separated-player variant tested from P106 and
+  `P106+<` returned empty. `N128=P106+<>><>^^^^^^^^<<<<^<<^^` reaches the same
+  normal-rat position but has already lost the bottom rat, so treat it as
+  geometry evidence, not a preferred frontier.
+- Filtered `events` from P106 with `--min-rats 3 --min-reachable-rats 2`
+  reports only bottom-web / bottom-rat movement events, not a trigger-2 cut.
+  This supports the current invariant: before spending trigger 2, find a
+  normal-rat movement route that does not pin the player adjacent to the rat.
+- `release`: filtered event inventory from the delayed rat-triggered top-4
+  family still reports 22 rats, 5 explosives, 5 triggers, 20 reachable rats, and
+  2 trapped rats. This confirms the family is structurally better than old
+  P8/P21 but still does not solve the `(18,4)/(18,5)` isolation problem.
+
+Practical next move: use guarded `events` as the first pass on every frontier,
+then use compound rat/player predicates only for event skeletons that preserve
+survivor reachability. The highest-value live question is `ai_takeover`: can the
+normal rat leave `(11,9)` with the player separated and all three rats alive
+before trigger 2 is fired?
+
 ---
 
 ## 4. Planned next steps (start here)
