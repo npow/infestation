@@ -6209,6 +6209,43 @@ for full-game solving in this pass.
   at least 5 rats, 10 explosives, and 10 triggers. This avoids the false
   positive where `ratgone:7,0` only means the rat shifted to `(8,0)`.
 
+### OOM-safe continuation - 2026-06-14 thirty-second Codex pass
+
+No new verified win. This pass used bounded, mechanism-specific probes and left
+no active solver/cargo/clingo/timeout process. Two existing side-agents were
+reused because the thread had already reached the agent limit. Keep future
+parallelism to a few capped processes at once; a useful template is:
+`P='...'; ulimit -v 850000; timeout 25s target/release/solver <mode> ... "$P"`.
+Avoid nested `bash -lc '... "$P" ...'` unless `P` is exported or expanded by the
+outer shell; otherwise the solver silently starts from prefix length 0.
+
+- `tinderrectangle`: new positive-but-trap branch from the P83 safe-side family:
+  `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^^vvv<<^>>>>^^>>>v>vv>>^^^>>vv>vvv<<>^^^^^<<vvv<<^^^<<<vv<<<<<^`
+  opens `(2,4)` while preserving all 16 rats and all 43 explosives. Diagnostics:
+  player `(2,4)`, lower rat `(2,3)`, all rats reachable, `(2,4)` open, `(3,4)`
+  still web. Preserving all rats from there has only the forced downward contact
+  line (`v`, `vv`) under a depth-14 frontier; killing the lower rat with one more
+  `^` leaves 15 top-row rats but immediate continuation checks `cont`,
+  `ratsle:10`, and `ratsle:5` returned empty with the correct prefix. Pressing
+  upward again is `GameOver` because the `(2,1)` rat steps onto the player at
+  `(2,2)`. This branch proves the gate can open cleanly, but the geometry is a
+  contact-shaft trap unless a different pre-release separation exists.
+- `release`: new weak lower-carrier staging branch:
+  `v<vv^^>><<vv>v<<<`. It leaves player `(5,14)`, a bottom actor rat around
+  `(5,19)`, 23 rats, 5 explosives, 26 webs, 9 triggers, 20 reachable rats, and
+  trigger 6 reachable; `(18,4)` remains sealed behind `(18,5)=web`, and left
+  trigger 2 `(0,16)` remains unreachable. Follow-ups from that branch for
+  `triggeronlycellnot:2,18,5,web` and trigger-6 relay
+  `triggeronlycellnot:6,1,16,explosive --next-trigger 2` both returned empty.
+  Treat this as diagnostic staging only, not as a live suffix target yet.
+- `cooperation/handoff`: local all-rat-preserving gate probes from the initial
+  board returned empty for `cellnot:10,5,web`, `cellnot:12,7,explosive`, and
+  `reachable:11,7`. Relaxing to allow one rat loss (`--min-rats 4`) was also
+  empty for the same three goals. The first visible event still kills one rat
+  and detonates much of the explosive material while leaving the `(10,6)` sealed
+  rat inaccessible. Continue by looking for a different pre-event handoff, not
+  by replaying the obvious detonation event.
+
 ---
 
 ## 4. Planned next steps (start here)
