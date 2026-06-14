@@ -12,6 +12,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::time::Instant;
 
 use infestation::testing::{Action, CellKind, Dir4, Grid, PlayState, grid_from_csv, step_grid};
+use serde_json::{Value, json};
 
 fn ch_to_action(c: char) -> Option<Action> {
     match c {
@@ -3365,6 +3366,220 @@ fn positions_for_any(grid: &Grid, kinds: &[CellKind]) -> Vec<(usize, usize)> {
         }
     }
     positions
+}
+
+fn play_state_name(play_state: PlayState) -> &'static str {
+    match play_state {
+        PlayState::Playing => "Playing",
+        PlayState::Won => "Won",
+        PlayState::GameOver => "GameOver",
+    }
+}
+
+fn player_snapshots(grid: &Grid) -> Vec<Value> {
+    let mut players = Vec::new();
+    for (y, row) in csv_tokens(grid).iter().enumerate() {
+        for (x, token) in row.iter().enumerate() {
+            let player = match token.as_str() {
+                "▲" => Some((1, "North")),
+                "▼" => Some((1, "South")),
+                "►" => Some((1, "East")),
+                "◄" => Some((1, "West")),
+                "△" => Some((2, "North")),
+                "▽" => Some((2, "South")),
+                "▷" => Some((2, "East")),
+                "◁" => Some((2, "West")),
+                _ => None,
+            };
+            if let Some((index, facing)) = player {
+                players.push(json!({
+                    "index": index,
+                    "x": x,
+                    "y": y,
+                    "facing": facing,
+                }));
+            }
+        }
+    }
+    players
+}
+
+fn position_objects(positions: &[(usize, usize)]) -> Vec<Value> {
+    positions
+        .iter()
+        .map(|&(x, y)| json!({ "x": x, "y": y }))
+        .collect()
+}
+
+fn trigger_snapshots(grid: &Grid) -> Vec<Value> {
+    let mut triggers = Vec::new();
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if let CellKind::Trigger(number) = grid.cell_kind_at(x, y) {
+                triggers.push(json!({ "x": x, "y": y, "number": number }));
+            }
+        }
+    }
+    triggers
+}
+
+fn feature_json(features: Features) -> Value {
+    json!({
+        "rats": features.rats,
+        "explosives": features.explosives,
+        "webs": features.webs,
+        "triggers": features.triggers,
+        "planks": features.planks,
+        "walls": features.walls,
+    })
+}
+
+fn feature_delta_json(before: Features, after: Features) -> Value {
+    json!({
+        "rats": after.rats as i64 - before.rats as i64,
+        "explosives": after.explosives as i64 - before.explosives as i64,
+        "webs": after.webs as i64 - before.webs as i64,
+        "triggers": after.triggers as i64 - before.triggers as i64,
+        "planks": after.planks as i64 - before.planks as i64,
+        "walls": after.walls as i64 - before.walls as i64,
+    })
+}
+
+fn grid_snapshot_json(
+    level: &str,
+    turn: usize,
+    action_text: &str,
+    play_state: PlayState,
+    grid: &Grid,
+    include_csv: bool,
+) -> Value {
+    let features = Features::from_grid(grid);
+    let rats = positions_for(grid, CellKind::Rat);
+    let cyborg_rats = positions_for(grid, CellKind::CyborgRat);
+    let explosives = positions_for(grid, CellKind::Explosive);
+    let webs = positions_for(grid, CellKind::Spiderweb);
+    let planks = positions_for(grid, CellKind::Plank);
+    let black_holes = positions_for(grid, CellKind::BlackHole);
+    let mut snapshot = json!({
+        "level": level,
+        "turn": turn,
+        "action": action_text,
+        "play_state": play_state_name(play_state),
+        "state_hash": grid.state_hash(),
+        "width": grid.width(),
+        "height": grid.height(),
+        "features": feature_json(features),
+        "reachability": {
+            "player_cells": player_reachable_cell_count(grid),
+            "rats": reachable_rat_count(grid),
+            "triggers": reachable_trigger_count(grid),
+            "trapped_unreachable_rats": trapped_unreachable_rat_count(grid),
+        },
+        "positions": {
+            "players": player_snapshots(grid),
+            "rats": position_objects(&rats),
+            "cyborg_rats": position_objects(&cyborg_rats),
+            "triggers": trigger_snapshots(grid),
+            "explosives": position_objects(&explosives),
+            "webs": position_objects(&webs),
+            "planks": position_objects(&planks),
+            "black_holes": position_objects(&black_holes),
+        }
+    });
+    if include_csv {
+        snapshot["csv"] = json!(grid.to_csv());
+    }
+    snapshot
+}
+
+fn action_text(actions: &[Action], nplayers: usize) -> String {
+    if nplayers == 1 {
+        actions
+            .first()
+            .map(|action| action_to_ch(*action).to_string())
+            .unwrap_or_else(|| ".".to_string())
+    } else {
+        actions
+            .iter()
+            .map(|action| action_to_ch(*action))
+            .collect::<String>()
+    }
+}
+
+fn emit_trajectory_json(level: &str, grid: &Grid, action_str: &str, include_csv: bool) {
+    let nplayers = count_players(grid);
+    let path = parse_action_string(action_str, nplayers);
+    let mut state = grid.clone();
+    println!(
+        "{}",
+        grid_snapshot_json(level, 0, "", PlayState::Playing, &state, include_csv)
+    );
+    for (turn, actions) in path.iter().enumerate() {
+        let (next_state, play_state) = step(&state, actions);
+        state = next_state;
+        println!(
+            "{}",
+            grid_snapshot_json(
+                level,
+                turn + 1,
+                &action_text(actions, nplayers),
+                play_state,
+                &state,
+                include_csv,
+            )
+        );
+        if play_state != PlayState::Playing {
+            break;
+        }
+    }
+}
+
+fn emit_step_json(level: &str, grid: &Grid, prefix: &str, action_str: &str, include_csv: bool) {
+    let nplayers = count_players(grid);
+    let prefix_path = parse_action_string(prefix, nplayers);
+    let (state, prefix_result, prefix_turns_applied) = replay_path(grid, &prefix_path);
+    let before_features = Features::from_grid(&state);
+    let action_path = parse_action_string(action_str, nplayers);
+    assert_eq!(
+        action_path.len(),
+        1,
+        "stepjson requires exactly one action turn"
+    );
+    let actions = &action_path[0];
+    let (next_state, play_state) = step(&state, actions);
+    let after_features = Features::from_grid(&next_state);
+    let applied_action = prefix_result == PlayState::Playing;
+
+    println!(
+        "{}",
+        json!({
+            "level": level,
+            "prefix": prefix,
+            "action": action_text(actions, nplayers),
+            "nplayers": nplayers,
+            "prefix_result": play_state_name(prefix_result),
+            "prefix_turns_applied": prefix_turns_applied,
+            "action_applied": applied_action,
+            "result": play_state_name(play_state),
+            "delta": feature_delta_json(before_features, after_features),
+            "before": grid_snapshot_json(
+                level,
+                prefix_turns_applied,
+                "",
+                prefix_result,
+                &state,
+                include_csv,
+            ),
+            "after": grid_snapshot_json(
+                level,
+                prefix_turns_applied + usize::from(applied_action),
+                &action_text(actions, nplayers),
+                play_state,
+                &next_state,
+                include_csv,
+            ),
+        })
+    );
 }
 
 fn format_positions(positions: &[(usize, usize)]) -> String {
@@ -8447,6 +8662,55 @@ fn main() {
         let path = parse_action_string(action_str, nplayers);
         let (_, result, applied_count) = replay_path(&grid, &path);
         println!("result={:?} turns_applied={}", result, applied_count);
+        return;
+    }
+
+    if mode == "trajectory-json" || mode == "trajectoryjson" {
+        // solver trajectory-json <csv> "<actions>" [--no-csv]
+        // Emits one JSON object per line: initial state, then every replayed turn.
+        let action_str = args.get(3).map(String::as_str).unwrap_or("");
+        let include_csv = !args.iter().any(|arg| arg == "--no-csv");
+        emit_trajectory_json(&args[2], &grid, action_str, include_csv);
+        return;
+    }
+
+    if mode == "stepjson" || mode == "step-json" {
+        // solver stepjson <csv> [--prefix MOVES] --action TURN [--no-csv]
+        // TURN is one action for single-player levels or one two-player turn such as "^v".
+        let mut prefix = "";
+        let mut action_str = None;
+        let mut include_csv = true;
+        let mut i = 3;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--prefix" => {
+                    prefix = args
+                        .get(i + 1)
+                        .map(String::as_str)
+                        .expect("--prefix requires a move string");
+                    i += 2;
+                }
+                "--action" => {
+                    action_str = Some(
+                        args.get(i + 1)
+                            .map(String::as_str)
+                            .expect("--action requires one turn"),
+                    );
+                    i += 2;
+                }
+                "--no-csv" => {
+                    include_csv = false;
+                    i += 1;
+                }
+                other if action_str.is_none() => {
+                    action_str = Some(other);
+                    i += 1;
+                }
+                other => panic!("unknown stepjson argument {other}"),
+            }
+        }
+        let action_str = action_str.expect("stepjson requires --action TURN");
+        emit_step_json(&args[2], &grid, prefix, action_str, include_csv);
         return;
     }
 

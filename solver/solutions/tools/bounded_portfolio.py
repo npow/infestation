@@ -12,12 +12,15 @@ import argparse
 import concurrent.futures
 import dataclasses
 import datetime as dt
+import os
 import pathlib
 import resource
 import shlex
 import subprocess
 import sys
 import time
+from collections import defaultdict, deque
+from collections.abc import Iterable
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -448,17 +451,28 @@ def set_limits(mem_mb: int) -> None:
     resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
 
 
-def run_job(job: Job, out_dir: pathlib.Path) -> tuple[str, int, float, pathlib.Path, bool]:
+def run_job(
+    job: Job,
+    out_dir: pathlib.Path,
+    prune_dead: bool,
+) -> tuple[str, int, float, pathlib.Path, bool]:
     log_path = out_dir / f"{job.name}.log"
     command = [str(SOLVER), *job.args]
     started = time.monotonic()
+    env = None
+    if prune_dead:
+        env = dict(os.environ)
+        env["PRUNE_DEAD"] = "1"
     with log_path.open("w", encoding="utf-8") as log:
         log.write("$ " + shlex.join(command) + "\n")
+        if prune_dead:
+            log.write("# env PRUNE_DEAD=1\n")
         log.flush()
         try:
             proc = subprocess.run(
                 command,
                 cwd=ROOT,
+                env=env,
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 timeout=job.timeout_sec,
@@ -473,6 +487,24 @@ def run_job(job: Job, out_dir: pathlib.Path) -> tuple[str, int, float, pathlib.P
     text = log_path.read_text(encoding="utf-8", errors="replace")
     solved = "SOLVED " in text or "result=Won" in text
     return job.name, code, elapsed, log_path, solved
+
+
+def interleave_by_level(jobs: Iterable[Job]) -> list[Job]:
+    """Round-robin jobs across levels so the portfolio stays mechanism-diverse."""
+    by_level: dict[str, deque[Job]] = defaultdict(deque)
+    for job in jobs:
+        level = job.args[1] if len(job.args) > 1 else ""
+        by_level[level].append(job)
+
+    ordered = []
+    levels = deque(sorted(by_level))
+    while levels:
+        level = levels.popleft()
+        queue = by_level[level]
+        ordered.append(queue.popleft())
+        if queue:
+            levels.append(level)
+    return ordered
 
 
 def parse_args() -> argparse.Namespace:
@@ -490,6 +522,12 @@ def parse_args() -> argparse.Namespace:
         action="append",
         default=[],
         help="skip jobs whose name contains this substring; repeatable",
+    )
+    parser.add_argument(
+        "--prune-dead",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="set PRUNE_DEAD=1 for solver children",
     )
     parser.add_argument("--out-dir", type=pathlib.Path)
     return parser.parse_args()
@@ -510,10 +548,11 @@ def main() -> int:
         jobs = [job for job in jobs if not any(token in job.name for token in args.skip)]
     if not jobs:
         raise SystemExit("no jobs selected")
+    jobs = interleave_by_level(jobs)
     print(f"running {len(jobs)} jobs with concurrency={args.jobs} logs={out_dir}")
     found_solution = False
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as executor:
-        futures = [executor.submit(run_job, job, out_dir) for job in jobs]
+        futures = [executor.submit(run_job, job, out_dir, args.prune_dead) for job in jobs]
         for future in concurrent.futures.as_completed(futures):
             name, code, elapsed, log_path, solved = future.result()
             found_solution = found_solution or solved

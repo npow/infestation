@@ -1,7 +1,7 @@
 # Infestation solving campaign — HANDOFF
 
 Resume doc for continuing the effort on another machine. **Goal: solve the
-remaining rat-bearing CSV levels.** 36 verified solutions are recorded in
+remaining rat-bearing CSV levels.** 37 verified solutions are recorded in
 `solver/solutions/final_solutions.json`.
 
 ---
@@ -36,6 +36,8 @@ so every result is exactly what the shipped game does. Binary: `target/release/s
 | **solve** | `solver solve <csv> [--strategy gbfs\|astar\|bfs] [--weight W] [--depth N] [--secs S]` | Heuristic search. `PROGRESS_H=1` env enables the progress heuristic (rewards detonated explosives / cleared webs / consumed triggers — gives a gradient on chain puzzles). |
 | **verify** | `solver verify <csv> "<moves>"` | Replays, prints `result=Won/GameOver/Playing turns_applied=N`. |
 | **trace** | `solver trace <csv> "<moves>"` | Prints the **board after every turn** — watch rat reactions. Essential for hand-solving. |
+| **trajectory-json** | `solver trajectory-json <csv> "<moves>" [--no-csv]` | Emits one JSON object per turn with the real oracle state, positions, features, reachability, and optional CSV. This is the training/inference feed for transfer-guided ranking. |
+| **stepjson** | `solver stepjson <csv> [--prefix MOVES] --action TURN [--no-csv]` | Replays a prefix, applies exactly one oracle turn, and emits before/after JSON plus feature deltas. Use it for neural/ranker data and tactical transition probes. |
 | **wp** | `solver wp <csv> --waypoints "x,y;x,y;..." [--persecs S] [--mopsecs S] [--mopstrat astar] [--mopweight W]` | **Waypoint-guided.** Drives the player to each cell in order (gradient = Manhattan dist), then mops up remaining rats. The key tool for gradient-less puzzles: *you supply the plan, it fills in the moves.* |
 
 **Move encoding:** `^`=N `v`=S `<`=W `>`=E `.`=stall. Single-player = a string
@@ -70,7 +72,7 @@ so every result is exactly what the shipped game does. Binary: `target/release/s
 
 ## 3. Status
 
-### Solved - 36 saved solutions (all oracle-verified `result=Won`)
+### Solved - 37 saved solutions (all oracle-verified `result=Won`)
 Move strings: **`solver/solutions/SOLUTIONS.md`** (machine-readable: `final_solutions.json`).
 Browser auto-player: `solver/solutions/autoplay.js`. New puzzles: `levels/claude/`.
 
@@ -82,14 +84,15 @@ as a rat puzzle.
 
 ### UNSOLVED - primary hard set
 
-As of the 2026-06-14 bounded portfolio pass, `chase.csv`, `world.csv`, and the
-Claude child levels are solved and still verify. The active non-hub hard set is:
+As of the 2026-06-14 transfer-guided pass, `chase.csv`, `world.csv`, the
+Claude child levels, and `old_levels/overstep.csv` are solved and still verify.
+The active non-hub hard set is:
 `tinderrectangle.csv`, `release.csv`, `reload_v3.csv`,
 `cyborg_rats/ai_takeover.csv`, `cooperation/tug_of_war.csv`,
 `cooperation/handoff.csv`, and `cooperation/blocked_v2.csv`. The old-level
-child CSVs `old_levels/on_the_clock.csv` and `old_levels/overstep.csv` are still
-unsolved if you choose to include broken child levels; the portal hub
-`old_levels/old_levels.csv` is solved.
+child CSV `old_levels/on_the_clock.csv` is still unsolved if you choose to
+include broken child levels; the portal hub `old_levels/old_levels.csv` is
+solved.
 
 | # | Level | Players | Name-hint / trick | Best lead / recommended attack |
 |---|---|---|---|---|
@@ -101,8 +104,20 @@ unsolved if you choose to include broken child levels; the portal hub
 | 6 | `cooperation/handoff` | 2 | baton pass | Small enough to hand-reason. P1 cannot simply reach trigger 1 first. P1 can reach trigger 2 first, but then trigger 1 is no longer useful/reachable; likely P1 opens the handoff and P2 finishes on the remote side. |
 | 7 | `cooperation/blocked_v2` | 2 | one player blocked | Keep the previous warning: one rat may be permanently unreachable behind effectively indestructible structure. Before spending human-solving time, prove or disprove winnability with targeted reachability/exhaustive checks. |
 
-Additional unsolved old-level CSVs in the current inventory:
-`old_levels/on_the_clock.csv` and `old_levels/overstep.csv`.
+Additional unsolved old-level CSV in the current inventory:
+`old_levels/on_the_clock.csv`.
+
+### Newly solved - 2026-06-14
+
+- `old_levels/overstep.csv` solved by a transfer-ranked Go-Explore/FESS seed.
+  Verified with:
+  ```bash
+  target/release/solver verify levels/old_levels/overstep.csv \
+    'vvvvvv>>>>>>>>>v>><>><<^v^>>>^>^>^^^^^^^^^^^<<<<<>>>v>v>vvvvvvvvvvv<<<><<<<^<<<<^^<<^<<<^^<<^^^^^^>>>>>>>v>>>^^<<vvv<<>^^<<<<<vvv<<vvv>>vvvv<<<vv^^>>^^^^>^>>v^^^^^^^>>'
+  # result=Won turns_applied=167
+  ```
+  Source log:
+  `/tmp/infestation-runs/20260614_transfer_wave1/overstep_tmp_infestation_runs_20260614_old_child_wave_overstep_h_cbe1f06b_fess.log`.
 
 ### Approach update - 2026-06-11
 
@@ -128,6 +143,62 @@ run. Treat the oracle as a microscope for human hypotheses:
    rat/explosive/web count is a lead, not a failure.
 5. Commit verified prefixes and observations even if they are not complete
    wins; the next iteration should continue from the best known state.
+
+### Approach update - 2026-06-14
+
+The current strategy is explicitly literature-aligned, but still oracle-first:
+
+1. **Transfer-guided macro ranking, not from-scratch RL.** A repo-local venv
+   `.venv-ml` was used to install CPU PyTorch plus Hugging Face tooling. The
+   new `solver/solutions/tools/transfer_ranker.py` loads the public pretrained
+   Sokoban DRC(1,1) checkpoint
+   `AlignmentResearch/learned-planner/drc11/eue6pax7/cp_2002944000`, decodes its
+   Flax/msgpack convolutional filters, freezes them as a spatial prior, and
+   trains only a small Infestation-specific head on real oracle snapshots.
+   This is transfer learning for frontier/state ranking, not a learned game
+   engine and not a direct move policy.
+2. **Macro states, not raw moves.** Treat irreversible structural events as the
+   search units: trigger consumption, explosive ignition, web/plank deletion,
+   rat relocation/removal, and two-player handoff positions. This is the same
+   practical lesson as Sokoban-style solvers: deadlocks and resource order beat
+   deeper undirected search.
+3. **Go-Explore style return cells.** Archive every useful prefix and return to
+   diverse mechanism families instead of restarting from the initial state. The
+   archive lives under `/tmp/infestation-runs/archive_*.jsonl`; new runs should
+   seed from it with `solver/solutions/tools/go_explore_portfolio.py`.
+4. **Feature-space diversity.** Prefer `events --families` and `fess` when the
+   scalar heuristic collapses into a known basin. Keep states that differ by
+   reachable rats/triggers, trapped rat positions, webs/explosives/triggers, and
+   event-family keys, even when rat count is temporarily worse.
+5. **Dead-basin pruning.** Use `PRUNE_DEAD=1` for portfolio children. It only
+   prunes states with rats left, no explosives, no reachable rats, and no
+   reachable triggers. Add tighter guards such as `--min-reachable-rats`,
+   `--max-trapped-rats`, and `--min-explosives` for level-specific traps.
+6. **CEGIS over ASP/clingo, not a second full engine.** If clingo is used, it
+   should propose bounded event skeletons and nogoods. The Rust oracle must
+   still prove each segment with `branchdump`, `lookup`, `wp`, `wp2`, `trace`,
+   and `verify`. Reimplementing full Infestation transition semantics in ASP
+   would create an untrusted second engine.
+7. **Deep RL is useful only as a prior/ranker here.** The reward is sparse and
+   the bad basins are deceptive. Use pretrained neural spatial priors to rank
+   macro states, then spend exact oracle search on the ranked frontier. Final
+   move strings must still pass `target/release/solver verify`.
+
+Operationally, keep portfolios bounded. Current safe defaults are 4-8 parallel
+solver children, per-child virtual memory caps, and per-job wall-clock caps.
+Avoid unbounded `solve` fan-out.
+
+Recent transfer-ranked artifacts:
+
+- `/tmp/infestation-runs/archive_20260614_transfer_recent.jsonl`
+- `/tmp/infestation-runs/triage_20260614_transfer.jsonl`
+- `/tmp/infestation-runs/seeds_20260614_transfer.jsonl`
+- `/tmp/infestation-runs/transfer_rank_20260614.jsonl`
+- `/tmp/infestation-runs/20260614_transfer_wave1/`
+
+Wave 1 used 6 workers, 1.6 GB per child, 240s per child, and solved
+`old_levels/overstep.csv`. The wrapper exited early after 22 logs, but no
+solver children were left running.
 
 ### Current run notes - 2026-06-11
 
