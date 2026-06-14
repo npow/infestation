@@ -7712,6 +7712,21 @@ the logs.
   no remaining mechanism. No new labels were added because existing labels
   already cover these basins.
 
+### Two-player access follow-up - 2026-06-14
+
+No new verified win. Run directory:
+`/tmp/infestation-runs/20260614T221726Z_twoplayer_access_followup/`.
+
+- `handoff`: the alternate `wp2` gate staging from
+  `v^ >^ >^ >^ >^ >^` again reaches the first waypoint pair and makes the
+  second pair unreachable. The resource-guarded lookup for moving the `(10,6)`
+  rat while removing `(10,5)=web` returned `NO_SOLUTION`; its best path is the
+  same unseal-after-collapse family already labeled negative.
+- `blocked_v2`: the lower-mouth `wp2` probe reaches the first pair and then
+  becomes unreachable. The explicit lower-mouth/trigger-2 lookup returned
+  `NO_SOLUTION`; its best path is the already labeled upper rat-lane basin, so
+  do not retry that predicate unchanged.
+
 ---
 
 ## 4. Planned next steps (start here)
