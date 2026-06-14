@@ -1,6 +1,6 @@
 # Infestation solving campaign — HANDOFF
 
-Resume doc for continuing the effort on another machine. **Goal: solve the 9
+Resume doc for continuing the effort on another machine. **Goal: solve the
 remaining rat-bearing CSV levels.** 36 verified solutions are recorded in
 `solver/solutions/final_solutions.json`.
 
@@ -81,6 +81,15 @@ the current oracle. As of 2026-06-13, the unsolved rat-bearing inventory is the
 as a rat puzzle.
 
 ### UNSOLVED - primary hard set
+
+As of the 2026-06-14 bounded portfolio pass, `chase.csv`, `world.csv`, and the
+Claude child levels are solved and still verify. The active non-hub hard set is:
+`tinderrectangle.csv`, `release.csv`, `reload_v3.csv`,
+`cyborg_rats/ai_takeover.csv`, `cooperation/tug_of_war.csv`,
+`cooperation/handoff.csv`, and `cooperation/blocked_v2.csv`. The old-level
+child CSVs `old_levels/on_the_clock.csv` and `old_levels/overstep.csv` are still
+unsolved if you choose to include broken child levels; the portal hub
+`old_levels/old_levels.csv` is solved.
 
 | # | Level | Players | Name-hint / trick | Best lead / recommended attack |
 |---|---|---|---|---|
@@ -7287,6 +7296,63 @@ representative per mechanism family.
   time on this prefix unless a predicate explicitly changes `(18,4)/(18,5)` or
   the left trigger-2 route.
 
+### Continuation pass - 2026-06-14 bounded portfolio / literature-informed reset
+
+No new verified win. This pass changed the operating method rather than the
+game logic:
+
+- Added `solver/solutions/tools/bounded_portfolio.py`, a capped portfolio
+  runner for mechanism-specific probes. It runs at fixed concurrency, applies
+  per-process virtual-memory limits, captures one log per job under
+  `/tmp/infestation-runs/`, and supports `--only` / `--skip` filters so future
+  passes do not repeat stale probes before new hypotheses.
+- The approach is now explicitly aligned with width/novelty and Go-Explore-like
+  practice: keep a small archive of structurally distinct event states, return
+  to promising frontiers, and test exact blocker-changing predicates instead of
+  doing broad count-greedy search. For these levels, the practical equivalent of
+  Sokoban deadlock analysis is to reject routes that spend the only trigger,
+  explosive, plank, or lure actor needed to affect an isolated component.
+- Bounded runner smoke and two portfolio waves completed with no solver
+  processes left running. `python3 -m py_compile
+  solver/solutions/tools/bounded_portfolio.py` passes.
+- Negative results from `/tmp/infestation-runs/20260614T043531Z_bounded_portfolio`:
+  - `tinderrectangle`: from T106
+    `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv`,
+    `rectsep` returned no branch. Separate T106 top-corner checks for a rat at
+    `(0,0)` with the player on row 3 also returned no branch in short capped
+    probes. Do not repeat T106 lower-separation or top-left-corner checks
+    without a new door-opening mechanism.
+  - `release`: from `v<vv^^>` the exact valuable trigger-2 outcomes
+    `triggeronlycellnot:2,18,5,web` and
+    `triggeronlycellnot:2,1,16,explosive` returned no branches with
+    `--min-rats 23 --min-reachable-rats 20 --max-trapped-rats 1`. From
+    `v<vv^^>>vv>^<<v<<<^^`, `triggeronlycellnot:6,18,5,web` returned no branch.
+    From row-17 carrier P37, `cellnot:16,17,plank` returned no branch with 20+
+    rats and 18+ reachable rats.
+  - `reload_v3`: from `>>>^>>>>.>>.<.<<<<`, preserving all three rats and at
+    least one reachable rat/trigger, `triggeronly:1` returned no branch. From
+    station prefix `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^`,
+    `cellnotratrectplayerrect:2,21,explosive,0,20,3,21,2,17,8,21` returned no
+    branch with all three rats and 14 triggers preserved.
+  - `cyborg_rats/ai_takeover`: from `v<vv^^^`, the early row-5 lure
+    `ratplayer:18,5,5,5` returned no branch with 23 rats / 9 explosives / 14
+    triggers preserved. From B75, `explosivesle:1` returned no branch; B75
+    remains a diagnostic trap, not a cleanup frontier.
+  - `cooperation/handoff`: from the pre-trigger-1 cut `v^ >^ >^ >^ >^ >^`,
+    `ratrectplayerrect:11,7,11,7,13,7,14,8` returned no branch. From courier
+    prefix `v^ >^ >^ >^ >^ >^ ^^ .v .> v> v>`,
+    `cellnot:10,8,explosive` returned no branch with all triggers and at least
+    six explosives preserved.
+  - `cooperation/tug_of_war`: the known trigger-1 scaffold still reaches only
+    the old 3-rat / 1-reachable basin under resource gates. The trigger-3
+    baffle probe hit the memory cap before acceptance; rerun only with a
+    narrower predicate if that line is revisited.
+  - `cooperation/blocked_v2`: several lower-left mouth probes hit the
+    per-process memory cap before acceptance. This is a search-shape warning,
+    not evidence of a branch. Narrow future checks around specific trigger-2
+    cells or use waypoint-pair staging before running another high-branching
+    2-player `branchdump`.
+
 ---
 
 ## 4. Planned next steps (start here)
@@ -7339,13 +7405,15 @@ solver/solutions/
   results/                           raw search outputs (results*.json, autoplay_data.json)
   tools/                             orchestration + verification scripts
     build_final.py, verify.py, gen_docs.py, run_all.py, run_failures.py, run_pass3.py
+    bounded_portfolio.py             capped hard-level mechanism portfolio runner
     scratch/                         historical Python engine (BUGGY) + agent IDA*/sim experiments
 ```
 > Tooling scripts have paths hard-coded to the session workspace (`/tmp/infestation`); adjust on resume.
 
 ## 6. Session context
 - A session Stop-hook with goal **"solve all the puzzles"** may be active in
-  some environments. The current remaining hard set is the 9 rat-bearing CSVs
-  listed in the 2026-06-13 order solve note above. Resume by working §4.
+  some environments. The current active non-hub hard set is the seven CSVs
+  listed near the top of §3; include the two old broken child CSVs only if the
+  task explicitly expands beyond portal-reachable puzzles. Resume by working §4.
 - Fork created with `gh repo fork`; push with `gh auth setup-git --hostname github.com` then
   `git push fork claude/new-puzzles`. No PR was opened to upstream (`davidspies/infestation`).
