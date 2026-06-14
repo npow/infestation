@@ -7767,6 +7767,46 @@ reran bounded exact probes from the repaired ranks.
   no branches, while `cyborgkillreadyratlive` reproduced the same 23-rat,
   9-explosive, 14-trigger branch family already labeled negative.
 
+### Continuation evidence - 2026-06-14 Codex transfer-obligation pass
+
+No new verified win. The pass used bounded, mechanism-specific probes rather
+than broad portfolio search. All solver children were run with external
+timeouts and 900 MB virtual-memory caps, and process-table checks afterward
+showed no leftover `solver`, `timeout`, `clingo`, or `cargo` jobs.
+
+- Run directories:
+  `/tmp/infestation-runs/20260614T_codex_transfer_obligation_230750/` and
+  `/tmp/infestation-runs/20260614T_codex_tinder_timing_231206/`.
+- `tinderrectangle`: the clean P36 all-16 prefix
+  `<^^<v<^^>vvv<<^^^>>>>>>vvv>>^^^>>vvv` is not sufficient. `rectsep`,
+  `rectignite`, lower-safe `geomlure`, and a top-corner `tinderbeam` all
+  returned `NO_SOLUTION` under all-rats/all-explosives guards.
+- `tinderrectangle`: the 60-turn latch
+  `<^^<v<^^>vvv<<^^^>>>>>>vvv>>^^^>>vvv^^^<<vvv<<^^<^<<v<<<v<<^`
+  is valid but locally forced. One-step oracle checks show only `v` and `.`
+  preserve all 16 rats; after forced `vv`, every action either kills the lower
+  rat or kills the player. Do not rank this contact latch as a live finish.
+- `tinderrectangle`: the stronger near-miss
+  `<<<^<<^>>>>^>>v>v<v>>v^>^^>>v>.vvvv<<>^^^^^<<vvv<<^^^<<<<`
+  has player `(6,3)`, lower rat `(6,6)`, and all 16 rats alive. Exact
+  `ratrectplayerrect` and `geomlure` targets for keeping the rat at
+  `(5,6)/(6,6)` while returning to safe cells `(14,7)/(14,8)` returned no
+  branch. The natural return reaches player `(14,7)` but overruns the rat to
+  `(8,6)`.
+- `release`: from the opener `v<vv^^>`, a reduced canonical
+  `branchdump --goal trigger:2` with depth 70 / 180k nodes returned no branch
+  under guards preserving at least 22 rats, 20 reachable rats, <=2 trapped rats,
+  and 4 explosives. Initial-board checks for opening `(18,5)` while preserving
+  the `(18,4)` rat, or getting the player into the nearby right-side rectangle,
+  also returned no branch under guarded depth-85 probes.
+- `reload_v3`: guarded `triganylookup` timed out after the first layer. Its
+  best kept branch is the known trigger-2/7 family
+  `^>>>>>>>^v.<<<<^<^<`, which leaves the bottom-left `(0,21)` rat sealed
+  behind `(1,21)` and should not be treated as fresh progress.
+- `old_levels/on_the_clock`: a smaller canonical P19
+  `reachablege:5` check returned no branch under the 8-rat / 3-explosive /
+  13-trigger guards.
+
 ---
 
 ## 4. Planned next steps (start here)
