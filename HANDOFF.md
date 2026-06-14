@@ -6642,6 +6642,83 @@ shortcut because it would duplicate the real multi-phase Rust engine. Use clingo
 only for bounded event/resource abstractions; keep Rust `step_grid` as the
 transition oracle.
 
+### Portfolio/mechanism audit - 2026-06-14 thirty-eighth Codex pass
+
+No new verified win. This pass deliberately shifted away from broad brute force
+and used a small portfolio:
+
+- bounded exact Rust-oracle predicates for necessary mechanisms,
+- local finite-frontier checks to reject trap basins,
+- side-agent audits split by level cluster,
+- ASP/clingo kept as an event/resource abstraction only, not as a full
+  transition reimplementation.
+
+All local solver runs were foreground and capped with
+`timeout 25s bash -lc 'ulimit -v 750000; exec target/release/solver ...'`. No
+tmux panes, detached jobs, or uncapped solver/clingo processes were used.
+
+- `tinderrectangle`: the known P57 near-miss
+  `<<<^<<^>>>>^>>v>v<v>>v^>^^>>v>.vvvv<<>^^^^^<<vvv<<^^^<<<<`
+  has player `(6,3)`, lower rat `(6,6)`, all 16 rats alive, and all 43
+  explosives. The natural return
+  `>>>>vvv>>^^^>>vvvv` reaches player `(14,7)` but the lower rat has overrun
+  to `(8,6)`. Direct `verify` of every one-step action from that actual
+  overrun state stays `Playing`; it is not a hidden finish. `ratdeathgeom`
+  remains useful but can be misleading when it inserts a synthetic source rat
+  without removing the real lower rat.
+- `tinderrectangle`: targeted predicates from P57 for
+  `ratrectplayerrect:6,6,6,6,14,7,14,8`,
+  `ratrectplayerrectcellis:5,6,5,6,13,6,15,8,6,6,web`, and
+  `ratrectplayerrectcellis:4,6,4,6,13,6,15,8,5,6,web` returned empty under
+  bounded caps. Equivalent initial-board searches for preserving a row-6 east
+  blocker also returned empty. Top-corner inverse checks for `ratat:0,0` and
+  `ratrectplayerrect:0,0,0,0,1,3,6,3` preserving all 16 rats returned empty.
+  `rectready` / oracle `win_ready` also returned empty under the same caps.
+  Continue by finding a release/separation mechanism before the lower rat enters
+  row 6; do not keep deepening the P57 return.
+- `release`: a non-stale trigger-4 branch from lower-carrier prefix
+  `v<vv^^>><<vv>v<<<` is real. Best returned full prefix:
+  `v<vv^^>><<vv>v<<<>^>>^>><^`, with 22 rats, 5 explosives, 7 triggers, and
+  `reachable_rats=19/22`. It still leaves `(18,4)` isolated behind
+  `(18,5)=web`; guarded follow-up for opening `(18,5)` with all survivors
+  reachable returned empty. This is evidence for a possible alternate skeleton,
+  but not a live post-trigger-4 basin.
+- `cyborg_rats/ai_takeover`: N128-style normal-rat staging before trigger 2 did
+  not extend into a central explosive route. Checks for
+  `normalratrectcyborgrect:14,10,15,12,18,4,18,7` from N128 and a tighter
+  separated staging goal from P106 returned empty. The remaining live hypothesis
+  is earlier than P106: change the right-side/normal-rat posture before the
+  trigger-2 cut.
+- `old_levels/on_the_clock`: the resource-richer sibling
+  `>>>^^>>>vvvv.vvvvv` has 8 rats, 4 explosives, 17 triggers, but only
+  `reachable_rats=2/8`. Guarded events from it to `reachable_rats>=3` or
+  `>=4` returned `NO_EVENTS`. The route must change timing before or at the
+  first right-side structural event.
+- `old_levels/overstep`: initial `events` with at least two reachable rats
+  returned `NO_EVENTS` even when relaxing to 5 or 4 rats. The first-event family
+  still collapses to one reachable rat and five trapped rats. Productive work
+  must either accept a weak first event and then prove later component access,
+  or change timing before that first event.
+- `cooperation/blocked_v2`: B23
+  `^< ^^ v^ ^^ v^ ^^ v^ ^> v> ^> vv ^v v^ ^v vv ^v vv ^v v> ^> v< v> ^<`
+  preserves 3 rats but leaves
+  `(0,15)` unreachable and both trigger-2 mouths unreachable. `reachable:5,11`
+  and `reachable:3,14` preserving 3 rats returned empty. Stop deepening B23;
+  make a trigger-2 mouth reachable before this basin.
+- `cooperation/handoff`: H8 `v^ >^ >^ >^ >^ >^ ^^ v^` style first-event states
+  preserve only 4 rats and still seal `(10,6)`. Checks for `cellnot:10,5,web`,
+  `reachable:10,6`, and preserved-rat events returned empty. The sealed rat has
+  to be addressed before H8 / before trigger 2 is spent.
+- `cooperation/tug_of_war`: from `.< v^ <^ >^ <^ <^ >^ <^`, the top rat
+  `(7,0)` remains trapped behind the `(7,1)` / `(8,1)` web mouth. Mutating
+  either cell while preserving all 5 rats and all rats reachable returned empty.
+  Only a pre-event top-pocket access proof is worth pursuing.
+- `reload_v3`: P44
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v><v` remains locally finite.
+  Checks for `cellnot:1,21,web`, `reachable:0,21`, and preserved-resource
+  events returned empty. Change player/helper geometry before P44; do not
+  deepen this spacing.
+
 ---
 
 ## 4. Planned next steps (start here)
