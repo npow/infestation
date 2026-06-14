@@ -7817,6 +7817,43 @@ showed no leftover `solver`, `timeout`, `clingo`, or `cargo` jobs.
   rat attrition and left `(18,4)` unreachable, so demote p38 unless a new
   right-gate topology obligation is found.
 
+### Continuation evidence - 2026-06-14 Codex agent-rec/event-seed pass
+
+No new verified win. Existing side agents had completed read-only audits, so
+their concrete next probes were run together with bounded local parallelism:
+`/tmp/infestation-runs/20260614T_codex_agent_recs_231834/`. The follow-up
+transfer event-seed path wrote
+`/tmp/infestation-runs/event_seeds_codex_after_agent_recs.jsonl`, ran exact
+children under `/tmp/infestation-runs/20260614T_codex_event_seed_portfolio/`,
+and archived/triaged them to
+`/tmp/infestation-runs/archive_codex_event_seed_portfolio.jsonl`,
+`/tmp/infestation-runs/triage_codex_event_seed_portfolio.jsonl`, and
+`/tmp/infestation-runs/seeds_codex_event_seed_portfolio.jsonl`.
+
+- `tinderrectangle`: the T106 top-pack latch/notch probes returned empty
+  immediately (`frontier`, notches at `(2,2)` / `(3,2)`, opening `(3,4)`,
+  and lower-row staging). Treat the current T106 prefix as stale unless a new
+  pre-latch mechanism changes the row-3 contact.
+- `release`: the top-fuse, lower-left actor staging, and strict `2,6,4,5`
+  trigger-order probes returned no branch. The event-seed portfolio again
+  collapsed to one sealed right-side rat with trigger 2 unreachable.
+- `reload_v3`: the rat-fired upper trigger-2 probe reached the requested
+  geometry (`^>>>>>>>^^^vvv<<v<`), but diagnostics show all three rats
+  unreachable. Event/win follow-up only reopens the known sealed `(14,5)` /
+  `(0,21)` basin. Trigger-7 route-changer and bottom-rat-vacate checks remain
+  negative.
+- `old_levels/on_the_clock`: the rat-fired trigger-5 predicate from `>>>^^>>>`
+  returned no branch; event-seed children again ended in no-mechanism two-rat
+  basins.
+- `cooperation/handoff` and `cooperation/blocked_v2`: the side-agent waypoint
+  and rat-lane probes returned no branch; event-seed children for `blocked_v2`
+  again collapsed to no-reachable-rat states with one trapped survivor.
+- `cyborg_rats/ai_takeover`: early alt trigger-3 events produced local
+  resource-preserving states, but no right-gate topology. The best triaged
+  candidate `v>vv^^^v<<v^^^^^^^vvvvvvv^^vv` has 20/21 reachable rats, but
+  exact follow-up for `reachable:18,4`, `trigger:7`, and direct win returned
+  no branch.
+
 ---
 
 ## 4. Planned next steps (start here)
