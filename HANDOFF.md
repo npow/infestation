@@ -7223,6 +7223,70 @@ Bounded run evidence from this pass:
   diagnostics still show only one reachable rat and seven trapped/unreachable
   rats; search needs a setup movement prefix before any structural event.
 
+### Family-diverse archive pass - 2026-06-14 current Codex continuation
+
+No new verified win. This pass added `solver events --families` (alias
+`--family` / `--fess-score`) so the standalone event archive can use the same
+coarse event-family key and FESS score as `solver fess`. The practical reason:
+plain `events` was spending its whole result budget on many paths to the same
+structural event, while the literature-backed FESS/BFWS direction needs one
+representative per mechanism family.
+
+- Validation: `cargo fmt -p solver`, `cargo check -p solver`, and
+  `cargo build --release -p solver` passed after adding `--families`.
+- Search discipline: all probes were foreground, capped with `timeout` and
+  `ulimit -v`; no tmux panes, detached jobs, or uncapped solver/clingo runs
+  were used. A too-tight 650 MB cap caused per-process allocation failures in
+  two `blocked_v2` branchdumps; rerunning sequentially at 850 MB with smaller
+  node caps exited cleanly without host OOM.
+- Literature direction is now concrete, not just "try harder": BFWS/width
+  search motivates novelty over event features, FESS motivates keeping
+  multi-dimensional mechanism buckets instead of one scalar frontier, Rolling
+  Stone/Sokoban motivates local deadlock/relevance cuts and macros, and
+  clingo/ASP remains limited to bounded event/resource/component slices that
+  are verified by the Rust oracle.
+- `cooperation/blocked_v2`: `events --families` exposed an all-9 trigger-4
+  first archive item that plain `events` hid:
+  `v< v^ v^ << <^ <^ <^ >v`. It leaves 9 rats, 15 explosives, 25 webs,
+  14 triggers, and 6 reachable rats. Follow-up `triggeronly:2`,
+  `reachable:0,15`, and a second `events --families` from that prefix returned
+  no branch under resource guards, so treat it as an archive item, not a live
+  continuation.
+- `cooperation/blocked_v2`: a stronger sidecar route is trigger order
+  `5 -> 1 -> 4`:
+  `vv v^ vv <^ <v <^ <. <^ ^^ ^^ ^^ v< v^ v^ v^ ^^`.
+  It reaches turn 16 with all 9 rats, 9 explosives, 12 webs, and 4 triggers.
+  Remaining rats are `(17,4)`, `(18,4)`, `(16,5)`, `(17,5)`, `(3,6)`,
+  `(9,13)`, `(9,14)`, `(0,15)`, `(15,16)`; players are `(20,5)` and
+  `(10,6)`. Relaxed follow-ups from this state for `triggeronly:2` and
+  `triggeronly:3` returned no branches, so the live question is not "deepen
+  P16"; it is how to change the lower-left mouth or trigger-2 access before
+  accepting trigger 4.
+- `cyborg_rats/ai_takeover`: sidecar archive found an alternate early prefix
+  `v<vv^^^`. It reaches the same 23-rat / 9-explosive / 14-trigger phase two
+  moves earlier than `v<vv^^<vv`, with the top cyborg row preserved higher.
+  Bounded `trigger:7`, `reachable:18,4`, and trigger-7/player-position checks
+  from both early prefixes still failed. This is the best current non-stale
+  lead, but the blocker remains right-side gate topology before trigger 4/5
+  commits.
+- `old_levels/on_the_clock`: initial `events --families` with all 8 rats,
+  at least 2 reachable rats, at least 5 explosives, and at least 20 triggers
+  returned `NO_EVENTS`. This confirms the next useful move is a setup-position
+  prefix before any structural event, not a broader initial event search.
+- `old_levels/overstep`: rechecking trigger-5 staging
+  `v<<^^^^^^^>>>>>>>>>>>>><>>` with order `3,4,7` again produced trigger-3/4
+  branches that fall into 4- or 5-rat states with zero reachable survivors.
+  Do not deepen that trigger-5 route without a new upper-shell access predicate.
+- `tinderrectangle`: strict initial `rectignite` with all 16 rats preserved
+  returned no branch under the current cap. This is consistent with the current
+  diagnosis: ignition is known, but the missing step is still separation before
+  the lower rat enters the contact trap.
+- `release`: family archive from lower-carrier prefix
+  `v<vv^^<vvv<>^>v<<<` mostly produced local web-chewing and trigger-4/5
+  variants while preserving the same trapped `(18,4)` shape. Stop spending
+  time on this prefix unless a predicate explicitly changes `(18,4)/(18,5)` or
+  the left trigger-2 route.
+
 ---
 
 ## 4. Planned next steps (start here)
@@ -7243,18 +7307,20 @@ Bounded run evidence from this pass:
    hypothesis must create a side loop or delayed release before `(2,4)` opens,
    because opening `(2,4)` starts the lower rat immediately and the current
    row-6 route loses the timing race.
-4. **Continue `ai_takeover` from AFTER8/P172, not old P130/Q143 cleanup.**
-   P172 proves trigger 2 can be fired remotely while the player is off left
-   trigger `(0,16)`, leaving player `(3,16)`, cyborg `(18,7)`, and normal
-   `(11,9)`. The open problem is a cyborg-first or killing-lane geometry before
-   accepting the one-cyborg trap; direct P172 `cyborgkillreadyratlive`,
-   `cyborgsle:0`, and `ratsle:1` checks returned empty under bounded caps.
+4. **Continue `ai_takeover` before trigger 4/5 commits.** The best current
+   non-stale lead is `v<vv^^^`: it reaches the 23-rat / 9-explosive /
+   14-trigger phase earlier than `v<vv^^<vv`, but bounded checks still cannot
+   fire trigger 7 or reach `(18,4)`. Look for a topology change around the
+   right gate before accepting the high-release family.
 5. **For two-player levels, work in `wp2` waypoint pairs.** Start with
    structural access checks (`cellnot` / `playerat`) before trigger
    choreography. `tug_of_war` may be unwinnable as authored because the top
    pocket has no legal web/plank-clearing event; `handoff` still needs a
    mechanism for the `(10,6)` sealed rat before the P2 sweep.
-6. **`blocked_v2`:** rigorously test winnability before assuming solvable.
+6. **`blocked_v2`:** treat the all-9 `5 -> 1 -> 4` prefix as the best archive
+   frontier, but not yet a live continuation. The next useful predicate should
+   alter lower-left mouth / trigger-2 access before trigger 4, since P16
+   `triggeronly:2` and `triggeronly:3` are empty under relaxed guards.
 
 ---
 

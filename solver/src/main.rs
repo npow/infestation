@@ -4695,7 +4695,7 @@ struct EventSuccessor {
     event_key: String,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 enum EventScoreMode {
     Trigger,
     Fess,
@@ -10151,7 +10151,7 @@ fn main() {
     }
 
     if mode == "events" {
-        // solver events <csv> [--depth N] [--secs S] [--max N] [--min-rats N]
+        // solver events <csv> [--depth N] [--secs S] [--max N] [--min-rats N] [--families]
         // List structural event successors with paths for manual midgame analysis.
         let mut prefix_str = String::new();
         let mut depth = 80usize;
@@ -10159,6 +10159,7 @@ fn main() {
         let mut max_events = 20usize;
         let mut min_rats: Option<usize> = None;
         let mut trap_constraints = TrapConstraints::default();
+        let mut score_mode = EventScoreMode::Trigger;
         let mut i = 3;
         while i < args.len() {
             if let Some(next_i) = parse_trap_constraint_arg(&args, i, &mut trap_constraints) {
@@ -10186,6 +10187,10 @@ fn main() {
                     min_rats = Some(args[i + 1].parse().unwrap());
                     i += 2;
                 }
+                "--families" | "--family" | "--fess-score" => {
+                    score_mode = EventScoreMode::Fess;
+                    i += 1;
+                }
                 _ => {
                     i += 1;
                 }
@@ -10203,13 +10208,14 @@ fn main() {
         }
         let tuples = all_action_tuples(nplayers);
         eprintln!(
-            "events: players={} prefix={} depth={} secs={} max={} min_rats={:?} trap={:?}",
+            "events: players={} prefix={} depth={} secs={} max={} min_rats={:?} score_mode={:?} trap={:?}",
             nplayers,
             prefix.len(),
             depth,
             secs,
             max_events,
             min_rats,
+            score_mode,
             trap_constraints
         );
         match find_event_successors(
@@ -10220,7 +10226,7 @@ fn main() {
             max_events,
             min_rats,
             trap_constraints,
-            EventScoreMode::Trigger,
+            score_mode,
         ) {
             Some(events) => {
                 for (idx, event) in events.iter().enumerate() {
