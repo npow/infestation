@@ -7611,6 +7611,59 @@ round of exact negative evidence.
   move string to `final_solutions.json`; handle it separately unless a
   metadata-aware hub verifier is implemented.
 
+### Transfer subgoal wave 3 - 2026-06-14
+
+No new verified win. This pass switched from reranking old frontiers to
+side-agent mechanism probes: tinderrectangle row-3 latch/blocker, two-player
+handoff/blocked_v2 waypoints, release alternate trigger/actor order, and a
+reload_v3 trigger-7 route.
+
+- Run directory:
+  `/tmp/infestation-runs/20260614T_transfer_subgoal_wave3/`.
+- Archive/triage artifacts:
+  - `/tmp/infestation-runs/archive_transfer_subgoal_wave3.jsonl`
+  - `/tmp/infestation-runs/triage_transfer_subgoal_wave3.jsonl`
+  - `/tmp/infestation-runs/seeds_transfer_subgoal_wave3.jsonl`
+- `tinderrectangle`: the T106 row-3 latch prefix can produce a live row-3
+  rat/player chase with all 16 rats and 43 explosives preserved, but exact
+  row-3 notch/opening predicates and the looser row-3 placement lookup returned
+  empty. Do not retry the same row-3 predicate shape without adding a new
+  blocker/tempo condition.
+- `handoff`: `wp2` baton-pass variants from `v^ >^ >^ >^ >^ >^` reached their
+  first waypoint and failed at the second. A lookup best path can remove the
+  `(10,5)` web, but diag shows it spends all triggers/explosives and leaves two
+  trapped unreachable rats, so it is now labeled negative.
+- `release`: lower-left actor staging, strict `2,6,4,5` trigger order, and a
+  smaller top-pack fuse probe found no qualifying branch. The original top-pack
+  probe only hit its per-process virtual-memory cap; the smaller capped rerun
+  returned empty, so do not rerun it unchanged.
+- `reload_v3`: trigger 7 before the bottom-row route is reachable from
+  `vvv<<<<<<vv<<<<`, producing prefix
+  `vvv<<<<<<vv<<<<>v>>>><^^^^^^^^^^^^^^`. Trigger 7 then trigger 2 is also
+  reachable:
+  `vvv<<<<<<vv<<<<>v>>>><^^^^^^^^^^^^^^^^^^vvvvvvv>>>>>>>>>>>>>vvvv>.<<<<`.
+  The resulting state has no remaining reachable triggers and the bottom-left
+  rat remains trapped, so the direct `7 -> 2` continuation is now labeled
+  negative. A side-agent audit also found that post-trigger-7 event families do
+  not open `(1,21)` or introduce alternate next triggers, so the bare trigger-7
+  seed is now negative unless an earlier prefix changes the bottom-left seal.
+- `blocked_v2`: the rat-lane best prefix
+  `vv v^ vv <^ <v <^ <. <^ ^^ ^^ ^^ v< vv ^v .> v^ v^ ^^ .< v^ <^ ^> ^^ v> .< <^ v> <^ v^ ^v ^v <v >v <>`
+  keeps 7 rats, 9 explosives, 4 triggers, and a reachable upper trigger, but
+  trigger-3/trigger-2 follow-ups found no branch and event expansion only moved
+  rats while preserving the lower-left trapped family. It is now a negative
+  ranking example for upper-lane-only progress.
+- `ai_takeover`: early event expansion from `v<vv^^^` produced only the
+  one-web-change family headed by `v<vv^^^vvv>`. It preserves 23 rats, 9
+  explosives, and 14 triggers, but `(18,4)` remains the only unreachable
+  survivor and no trigger/topology obligation changes. Demote
+  `v<vv^^^vvv>`; keep `v<vv^^^` as the earlier branching point.
+- `old_levels/on_the_clock`: a side-agent probe found no branch for direct
+  trigger-6-before-9 bottom-center release from P18. Treat P18/P19 direct
+  bottom release via trigger 6 or 8 before trigger 9 as stale. The structurally
+  different rat-fired trigger-5 hypothesis from `>>>^^>>>` also returned no
+  branch for clearing `(9,7)=explosive` under 8-rat/2-explosive guards.
+
 ---
 
 ## 4. Planned next steps (start here)
