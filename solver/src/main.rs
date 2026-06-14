@@ -3,6 +3,7 @@
 //! Usage:
 //!   solver verify   <csv_file> <action_string>     -- replay actions, print final state
 //!   solver solve    <csv_file> [--depth N] [--secs S] [--strategy gbfs|astar|bfs] [--weight W]
+//!   solver fess     <csv_file>                     -- feature-space event search
 //!
 //! Action string uses arrows: ^ v < > for N/S/E/W and . for stall (single player).
 //! For two players, use "a1|a2 a1|a2 ..." space-separated turns (each turn pipe-separated).
@@ -4048,6 +4049,49 @@ fn lookup_branch_score(grid: &Grid, path_len: usize) -> i64 {
         - features.triggers as i64 * 20_000
 }
 
+fn fess_branch_score(grid: &Grid, path_len: usize) -> i64 {
+    let features = Features::from_grid(grid);
+    let reachable_rats = reachable_rat_count(grid);
+    let unreachable_rats = features.rats.saturating_sub(reachable_rats);
+    let trapped_unreachable_rats = trapped_unreachable_rat_count(grid);
+    let reachable_triggers = reachable_trigger_count(grid);
+    let dead_cleanup_penalty = if features.rats > 0 && reachable_rats == 0 {
+        2_000_000_000_000
+    } else {
+        0
+    };
+    let stranded_remote_penalty = if unreachable_rats > 0 && reachable_triggers == 0 {
+        unreachable_rats as i64 * 250_000_000_000
+    } else {
+        0
+    };
+    let stuck_progress_penalty = if features.rats > 0
+        && reachable_rats <= 1
+        && features.triggers == 0
+        && features.explosives == 0
+    {
+        features.rats as i64 * 300_000_000_000
+    } else {
+        0
+    };
+
+    features.rats as i64 * 2_000_000_000
+        + unreachable_rats as i64 * 80_000_000_000
+        + trapped_unreachable_rats as i64 * 300_000_000_000
+        + dead_cleanup_penalty
+        + stranded_remote_penalty
+        + stuck_progress_penalty
+        + resource_exhaustion_penalty(features) * 1_000
+        + features.webs as i64 * 5_000
+        + features.planks as i64 * 5_000
+        + path_len as i64
+        - reachable_rats as i64 * 5_000_000
+        - reachable_triggers as i64 * 3_000_000
+        - features.explosives as i64 * 100_000
+        - features.triggers as i64 * 50_000
+        - player_reachable_cell_count(grid) as i64 * 1_000
+}
+
 fn rat_can_step_on(cell: CellKind) -> bool {
     !matches!(
         cell,
@@ -4642,6 +4686,13 @@ struct EventSuccessor {
     path: Vec<Vec<Action>>,
     features: Features,
     score: i64,
+    event_key: String,
+}
+
+#[derive(Clone, Copy)]
+enum EventScoreMode {
+    Trigger,
+    Fess,
 }
 
 #[derive(Clone)]
@@ -4655,6 +4706,267 @@ struct BeamState {
     grid: Grid,
     path: Vec<Vec<Action>>,
     score: i64,
+}
+
+fn feature_bucket_key(grid: &Grid) -> String {
+    let features = Features::from_grid(grid);
+    let reachable_rats = reachable_rat_count(grid);
+    let unreachable_rats = features.rats.saturating_sub(reachable_rats);
+    let reachable_triggers = reachable_trigger_count(grid);
+    let trapped = trapped_unreachable_rat_count(grid);
+    let player_reachable_bucket = player_reachable_cell_count(grid) / 8;
+    let trigger_positions = limited_positions_key(grid, trigger_cell, 16);
+    let web_positions = limited_positions_key(grid, web_cell, 16);
+    let unreachable_positions = unreachable_rat_positions_key(grid, false, 6);
+    let trapped_positions = unreachable_rat_positions_key(grid, true, 6);
+    format!(
+        "r{}:rr{}:ur{}:tr{}:x{}:w{}:t{}:rt{}:p{}:cells{}:cy{}:tp[{}]:urpos[{}]:trap[{}]:wpos[{}]",
+        features.rats,
+        reachable_rats,
+        unreachable_rats,
+        trapped,
+        features.explosives.min(20),
+        features.webs.min(60) / 2,
+        features.triggers,
+        reachable_triggers,
+        features.planks.min(20),
+        player_reachable_bucket,
+        count_cyborg_rats(grid),
+        trigger_positions,
+        unreachable_positions,
+        trapped_positions,
+        web_positions
+    )
+}
+
+fn select_feature_frontier(
+    mut candidates: Vec<Branch>,
+    width: usize,
+    per_bucket: usize,
+) -> Vec<Branch> {
+    if candidates.len() <= width {
+        candidates.sort_by_key(|branch| branch.score);
+        return candidates;
+    }
+
+    candidates.sort_by_key(|branch| branch.score);
+    let mut buckets: HashMap<String, Vec<Branch>> = HashMap::new();
+    for candidate in candidates {
+        buckets
+            .entry(feature_bucket_key(&candidate.grid))
+            .or_default()
+            .push(candidate);
+    }
+
+    let mut bucket_values: Vec<Vec<Branch>> = buckets
+        .into_values()
+        .map(|mut bucket| {
+            bucket.sort_by_key(|branch| branch.score);
+            bucket
+        })
+        .collect();
+    bucket_values.sort_by_key(|bucket| bucket.first().map_or(i64::MAX, |branch| branch.score));
+
+    let mut selected = Vec::new();
+    let mut deferred = Vec::new();
+    for mut bucket in bucket_values {
+        let take = per_bucket.max(1).min(bucket.len());
+        selected.extend(bucket.drain(0..take));
+        deferred.extend(bucket);
+    }
+
+    selected.sort_by_key(|branch| branch.score);
+    if selected.len() > width {
+        selected.truncate(width);
+        return selected;
+    }
+
+    deferred.sort_by_key(|branch| branch.score);
+    for candidate in deferred {
+        selected.push(candidate);
+        if selected.len() >= width {
+            break;
+        }
+    }
+    selected
+}
+
+fn limited_positions_key(grid: &Grid, predicate: fn(CellKind) -> bool, limit: usize) -> String {
+    let mut positions = Vec::new();
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if predicate(grid.cell_kind_at(x, y)) {
+                positions.push(format!("{x},{y}"));
+                if positions.len() >= limit {
+                    return positions.join(";");
+                }
+            }
+        }
+    }
+    positions.join(";")
+}
+
+fn unreachable_rat_positions_key(grid: &Grid, trapped_only: bool, limit: usize) -> String {
+    let dist = player_dist_map(grid);
+    let mut positions = Vec::new();
+    for y in 0..grid.height() {
+        for x in 0..grid.width() {
+            if !matches!(grid.cell_kind_at(x, y), CellKind::Rat | CellKind::CyborgRat)
+                || dist[y][x] != i32::MAX
+            {
+                continue;
+            }
+            if trapped_only && component_has_local_rat_death(grid, (x, y)) {
+                continue;
+            }
+            positions.push(format!("{x},{y}"));
+            if positions.len() >= limit {
+                return positions.join(";");
+            }
+        }
+    }
+    positions.join(";")
+}
+
+fn cell_short_name(cell: CellKind) -> String {
+    match cell {
+        CellKind::Empty => ".".to_string(),
+        CellKind::Wall => "#".to_string(),
+        CellKind::Player => "P".to_string(),
+        CellKind::Rat => "R".to_string(),
+        CellKind::CyborgRat => "C".to_string(),
+        CellKind::Plank => "=".to_string(),
+        CellKind::Spiderweb => "w".to_string(),
+        CellKind::BlackHole => "O".to_string(),
+        CellKind::Explosive => "X".to_string(),
+        CellKind::Trigger(number) => format!("T{number}"),
+    }
+}
+
+fn event_kind_key(before: &Grid, after: &Grid) -> String {
+    let before_features = Features::from_grid(before);
+    let after_features = Features::from_grid(after);
+    let mut removed_triggers = Vec::new();
+    let mut opened_webs = Vec::new();
+    let mut removed_explosives = Vec::new();
+    let mut removed_planks = Vec::new();
+    let mut removed_walls = Vec::new();
+    let mut rat_change_cells = Vec::new();
+
+    for y in 0..before.height() {
+        for x in 0..before.width() {
+            let old = before.cell_kind_at(x, y);
+            let new = after.cell_kind_at(x, y);
+            if old == new {
+                continue;
+            }
+            match (old, new) {
+                (CellKind::Trigger(number), _) => removed_triggers.push(number),
+                (CellKind::Spiderweb, _) => opened_webs.push((x, y)),
+                (CellKind::Explosive, _) => removed_explosives.push((x, y)),
+                (CellKind::Plank, _) => removed_planks.push((x, y)),
+                (CellKind::Wall, _) => removed_walls.push((x, y)),
+                (CellKind::Rat | CellKind::CyborgRat, _)
+                | (_, CellKind::Rat | CellKind::CyborgRat) => {
+                    rat_change_cells.push(format!(
+                        "{x},{y}:{}>{}",
+                        cell_short_name(old),
+                        cell_short_name(new)
+                    ));
+                }
+                _ => {}
+            }
+        }
+    }
+
+    removed_triggers.sort_unstable();
+    opened_webs.sort_unstable();
+    removed_explosives.sort_unstable();
+    removed_planks.sort_unstable();
+    removed_walls.sort_unstable();
+    rat_change_cells.sort_unstable();
+    rat_change_cells.truncate(4);
+
+    format!(
+        "dr{}:dc{}:dx{}:dw{}:dt{}:trig{:?}:web{:?}:exp{:?}:plank{:?}:wall{:?}:rat{:?}",
+        before_features.rats as i32 - after_features.rats as i32,
+        count_cyborg_rats(before) as i32 - count_cyborg_rats(after) as i32,
+        before_features.explosives as i32 - after_features.explosives as i32,
+        before_features.webs as i32 - after_features.webs as i32,
+        before_features.triggers as i32 - after_features.triggers as i32,
+        removed_triggers,
+        opened_webs.into_iter().take(4).collect::<Vec<_>>(),
+        removed_explosives.into_iter().take(4).collect::<Vec<_>>(),
+        removed_planks.into_iter().take(4).collect::<Vec<_>>(),
+        removed_walls.into_iter().take(4).collect::<Vec<_>>(),
+        rat_change_cells
+    )
+}
+
+fn select_event_successors(
+    mut events: Vec<EventSuccessor>,
+    max_events: usize,
+    score_mode: EventScoreMode,
+) -> Vec<EventSuccessor> {
+    events.sort_by_key(|event| event.score);
+    if matches!(score_mode, EventScoreMode::Trigger) || events.len() <= max_events {
+        events.truncate(max_events);
+        return events;
+    }
+
+    let mut buckets: HashMap<String, Vec<EventSuccessor>> = HashMap::new();
+    for event in events {
+        buckets
+            .entry(event.event_key.clone())
+            .or_default()
+            .push(event);
+    }
+    let mut bucket_values: Vec<Vec<EventSuccessor>> = buckets
+        .into_values()
+        .map(|mut bucket| {
+            bucket.sort_by_key(|event| event.score);
+            bucket
+        })
+        .collect();
+    bucket_values.sort_by_key(|bucket| bucket.first().map_or(i64::MAX, |event| event.score));
+
+    let mut selected = Vec::new();
+    let mut deferred = Vec::new();
+    for mut bucket in bucket_values {
+        let take = 2.min(bucket.len());
+        selected.extend(bucket.drain(0..take));
+        deferred.extend(bucket);
+    }
+
+    selected.sort_by_key(|event| event.score);
+    if selected.len() > max_events {
+        selected.truncate(max_events);
+        return selected;
+    }
+
+    deferred.sort_by_key(|event| event.score);
+    for event in deferred {
+        selected.push(event);
+        if selected.len() >= max_events {
+            break;
+        }
+    }
+    selected
+}
+
+fn print_fess_frontier(label: &str, frontier: &[Branch]) {
+    for (index, branch) in frontier.iter().take(5).enumerate() {
+        eprintln!(
+            "  {label}[{index}] score={} path={} bucket={} features={:?} reachable_rats={} trapped={} ascii={}",
+            branch.score,
+            branch.path.len(),
+            feature_bucket_key(&branch.grid),
+            Features::from_grid(&branch.grid),
+            reachable_rat_count(&branch.grid),
+            trapped_unreachable_rat_count(&branch.grid),
+            format_path_ascii(&branch.path)
+        );
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -6432,6 +6744,7 @@ fn find_event_successors(
     max_events: usize,
     min_rats: Option<usize>,
     trap_constraints: TrapConstraints,
+    score_mode: EventScoreMode,
 ) -> Option<Vec<EventSuccessor>> {
     let start_time = Instant::now();
     let start_features = Features::from_grid(start_grid);
@@ -6485,6 +6798,7 @@ fn find_event_successors(
                     path: reconstruct(&nodes, node_idx),
                     features: Features::from_grid(&nodes[node_idx].grid),
                     score: i64::MIN,
+                    event_key: "won".to_string(),
                 }]);
             }
 
@@ -6497,20 +6811,26 @@ fn find_event_successors(
                 }
                 if event_hashes.insert(hash) {
                     let path = reconstruct(&nodes, node_idx);
-                    let score = trigger_branch_score(
-                        &nodes[node_idx].grid,
-                        path.len(),
-                        start_features,
-                        features,
-                    );
+                    let score = match score_mode {
+                        EventScoreMode::Trigger => trigger_branch_score(
+                            &nodes[node_idx].grid,
+                            path.len(),
+                            start_features,
+                            features,
+                        ),
+                        EventScoreMode::Fess => {
+                            fess_branch_score(&nodes[node_idx].grid, path.len())
+                        }
+                    };
+                    let event_key = event_kind_key(start_grid, &nodes[node_idx].grid);
                     events.push(EventSuccessor {
                         grid: next_grid,
                         score,
                         path,
                         features,
+                        event_key,
                     });
-                    events.sort_by_key(|event| event.score);
-                    events.truncate(max_events);
+                    events = select_event_successors(events, max_events, score_mode);
                 }
             } else {
                 q.push_back(node_idx);
@@ -6590,17 +6910,16 @@ fn solve_macro_events(
         let idx = item.idx;
         let prefix = nodes[idx].path.clone();
         let current = nodes[idx].grid.clone();
-        let Some(events) =
-            find_event_successors(
-                &current,
-                &tuples,
-                segment_depth,
-                segment_secs,
-                event_beam,
-                None,
-                TrapConstraints::default(),
-            )
-        else {
+        let Some(events) = find_event_successors(
+            &current,
+            &tuples,
+            segment_depth,
+            segment_secs,
+            event_beam,
+            None,
+            TrapConstraints::default(),
+            EventScoreMode::Trigger,
+        ) else {
             continue;
         };
 
@@ -6635,6 +6954,151 @@ fn solve_macro_events(
         }
     }
 
+    None
+}
+
+#[must_use]
+fn solve_event_fess(
+    grid: &Grid,
+    event_steps: usize,
+    width: usize,
+    per_bucket: usize,
+    events_per_state: usize,
+    segment_depth: usize,
+    segment_secs: f64,
+    total_secs: f64,
+    min_rats: Option<usize>,
+    trap_constraints: TrapConstraints,
+    mop_depth: usize,
+    mop_secs: f64,
+    mop_strategy: &str,
+    mop_weight: i64,
+) -> Option<Vec<Vec<Action>>> {
+    let nplayers = count_players(grid);
+    let tuples = all_action_tuples(nplayers);
+    let started = Instant::now();
+    let mut frontier = vec![Branch {
+        grid: grid.clone(),
+        path: Vec::new(),
+        score: fess_branch_score(grid, 0),
+    }];
+    let mut seen = HashSet::new();
+    seen.insert(grid.search_hash());
+    let mut best = frontier[0].clone();
+
+    for step_idx in 0..event_steps {
+        if started.elapsed().as_secs_f64() > total_secs {
+            break;
+        }
+
+        frontier.sort_by_key(|branch| branch.score);
+        if mop_secs > 0.0 {
+            for branch in frontier.iter().take(width.min(frontier.len())) {
+                if let Some(mop) = solve_with_context(
+                    &branch.grid,
+                    mop_depth,
+                    mop_secs,
+                    mop_strategy,
+                    mop_weight,
+                    &branch.path,
+                ) {
+                    let mut path = branch.path.clone();
+                    path.extend(mop);
+                    return Some(path);
+                }
+            }
+        }
+
+        let mut candidates = Vec::new();
+        for branch in frontier.iter().take(width.min(frontier.len())) {
+            if started.elapsed().as_secs_f64() > total_secs {
+                break;
+            }
+            let remaining_secs = (total_secs - started.elapsed().as_secs_f64()).max(0.0);
+            let this_segment_secs = segment_secs.min(remaining_secs);
+            if this_segment_secs <= 0.0 {
+                break;
+            }
+
+            let before = Features::from_grid(&branch.grid);
+            let Some(events) = find_event_successors(
+                &branch.grid,
+                &tuples,
+                segment_depth,
+                this_segment_secs,
+                events_per_state,
+                min_rats,
+                trap_constraints,
+                EventScoreMode::Fess,
+            ) else {
+                continue;
+            };
+            eprintln!(
+                "  fess step {} branch_path={} bucket={} features={:?} events={}",
+                step_idx + 1,
+                branch.path.len(),
+                feature_bucket_key(&branch.grid),
+                before,
+                events.len()
+            );
+
+            for event in events {
+                let mut path = branch.path.clone();
+                path.extend(event.path);
+                if event.features.rats == 0 {
+                    return Some(path);
+                }
+                if !seen.insert(event.grid.search_hash()) {
+                    continue;
+                }
+                let score = fess_branch_score(&event.grid, path.len());
+                let candidate = Branch {
+                    grid: event.grid,
+                    path,
+                    score,
+                };
+                if candidate.score < best.score {
+                    best = candidate.clone();
+                }
+                candidates.push(candidate);
+            }
+        }
+
+        if candidates.is_empty() {
+            eprintln!("  fess step {}: no event candidates", step_idx + 1);
+            break;
+        }
+
+        frontier = select_feature_frontier(candidates, width, per_bucket);
+        eprintln!(
+            "  fess step {}: frontier={} buckets={} best_score={} best_bucket={} best_path={} best_features={:?} reachable_rats={} trapped={}",
+            step_idx + 1,
+            frontier.len(),
+            frontier
+                .iter()
+                .map(|branch| feature_bucket_key(&branch.grid))
+                .collect::<HashSet<_>>()
+                .len(),
+            frontier[0].score,
+            feature_bucket_key(&frontier[0].grid),
+            frontier[0].path.len(),
+            Features::from_grid(&frontier[0].grid),
+            reachable_rat_count(&frontier[0].grid),
+            trapped_unreachable_rat_count(&frontier[0].grid)
+        );
+    }
+
+    eprintln!(
+        "  [fess stopped after {:.1}s best_score={} best_bucket={} best_path={}]",
+        started.elapsed().as_secs_f64(),
+        best.score,
+        feature_bucket_key(&best.grid),
+        best.path.len()
+    );
+    frontier.sort_by_key(|branch| branch.score);
+    print_fess_frontier("FESS_FRONTIER", &frontier);
+    eprintln!("  BEST_ASCII {}", format_path_ascii(&best.path));
+    eprintln!("  BEST_STATE:\n{}", best.grid.to_csv());
     None
 }
 
@@ -9660,6 +10124,7 @@ fn main() {
             max_events,
             min_rats,
             trap_constraints,
+            EventScoreMode::Trigger,
         ) {
             Some(events) => {
                 for (idx, event) in events.iter().enumerate() {
@@ -9677,10 +10142,11 @@ fn main() {
                     };
                     let full_ascii = format_path_ascii(&full_path);
                     println!(
-                        "EVENT idx={} moves={} score={} features={:?} reachable_rats={} trapped={}",
+                        "EVENT idx={} moves={} score={} key={} features={:?} reachable_rats={} trapped={}",
                         idx,
                         event.path.len(),
                         event.score,
+                        event.event_key,
                         event.features,
                         reachable_rat_count(&event.grid),
                         trapped_unreachable_rat_count(&event.grid)
@@ -10457,6 +10923,152 @@ fn main() {
             segment_nodes,
             segment_results,
             beam,
+            mop_depth,
+            mop_secs,
+            &mop_strategy,
+            mop_weight,
+        ) {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
+                println!(
+                    "SOLVED moves={} time={:.1}s",
+                    path.len(),
+                    t0.elapsed().as_secs_f64()
+                );
+                println!("ARROWS {}", format_path(&path));
+                println!("ASCII {}", format_path_ascii(&path));
+            }
+            None => println!("NO_SOLUTION time={:.1}s", t0.elapsed().as_secs_f64()),
+        }
+        return;
+    }
+
+    if mode == "fess" {
+        // solver fess <csv> [--prefix MOVES] [--steps N] [--width N]
+        //                   [--per-bucket N] [--events N] [--segdepth N]
+        //                   [--segsecs S] [--secs S] [--min-rats N]
+        //                   [--mopdepth N] [--mopsecs S]
+        //
+        // Feature-space event search: keep diverse structural event states
+        // instead of collapsing the frontier to the lowest rat-count branch.
+        let mut prefix_str = String::new();
+        let mut steps = 8usize;
+        let mut width = 64usize;
+        let mut per_bucket = 2usize;
+        let mut events_per_state = 12usize;
+        let mut segment_depth = 80usize;
+        let mut segment_secs = 3.0;
+        let mut secs = 60.0;
+        let mut min_rats: Option<usize> = None;
+        let mut trap_constraints = TrapConstraints::default();
+        let mut mop_depth = 400usize;
+        let mut mop_secs = 0.0;
+        let mut mop_strategy = "gbfs".to_string();
+        let mut mop_weight = 5i64;
+        let mut i = 3;
+        while i < args.len() {
+            if let Some(next_i) = parse_trap_constraint_arg(&args, i, &mut trap_constraints) {
+                i = next_i;
+                continue;
+            }
+            match args[i].as_str() {
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--steps" => {
+                    steps = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--width" => {
+                    width = args[i + 1].parse::<usize>().unwrap().max(1);
+                    i += 2;
+                }
+                "--per-bucket" | "--bucket" => {
+                    per_bucket = args[i + 1].parse::<usize>().unwrap().max(1);
+                    i += 2;
+                }
+                "--events" | "--events-per-state" => {
+                    events_per_state = args[i + 1].parse::<usize>().unwrap().max(1);
+                    i += 2;
+                }
+                "--segdepth" => {
+                    segment_depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--segsecs" => {
+                    segment_secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--secs" => {
+                    secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--min-rats" => {
+                    min_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--mopdepth" => {
+                    mop_depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--mopsecs" => {
+                    mop_secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--mopstrat" => {
+                    mop_strategy = args[i + 1].clone();
+                    i += 2;
+                }
+                "--mopweight" => {
+                    mop_weight = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                _ => i += 1,
+            }
+        }
+
+        let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
+        eprintln!(
+            "fess solve: players={} prefix={} steps={} width={} per_bucket={} events={} segdepth={} segsecs={} secs={} min_rats={:?} trap={:?} mopdepth={} mopsecs={} mopstrat={} mopweight={}",
+            nplayers,
+            prefix.len(),
+            steps,
+            width,
+            per_bucket,
+            events_per_state,
+            segment_depth,
+            segment_secs,
+            secs,
+            min_rats,
+            trap_constraints,
+            mop_depth,
+            mop_secs,
+            mop_strategy,
+            mop_weight
+        );
+        let t0 = Instant::now();
+        match solve_event_fess(
+            &start_grid,
+            steps,
+            width,
+            per_bucket,
+            events_per_state,
+            segment_depth,
+            segment_secs,
+            secs,
+            min_rats,
+            trap_constraints,
             mop_depth,
             mop_secs,
             &mop_strategy,

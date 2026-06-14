@@ -7114,6 +7114,63 @@ changed because no candidate replayed as `result=Won`.
   to `v<v` and look for a non-trigger structural change that alters the future
   trigger-7 approach or right explosive stack before trigger 4 is spent.
 
+### Literature-driven FESS/tooling pass - 2026-06-14 current Codex pass
+
+No new verified win. This pass changed the solver strategy instead of widening
+blind searches. The current authoritative hard inventory remains 9 rat-bearing
+CSVs missing from `solver/solutions/final_solutions.json`; older "8 remaining"
+wording is stale after upstream invalidation.
+
+- Added `solver fess`, a feature-space event search mode inspired by
+  FESS/BFWS/Sokoban-style macro search. It uses real Rust engine transitions but
+  searches over structural event states rather than raw move depth.
+- FESS now uses a deadlock-aware score that penalizes zero-reachable survivors,
+  unreachable/trapped rats, exhausted resources, and stranded remote survivors.
+  This fixed the repeated behavior where low-rat dead basins outranked
+  high-rat states with live mechanisms.
+- Event generation now has a `Trigger` vs `Fess` score mode. Existing `events`
+  and `macro` modes keep the old trigger-local ranking; FESS ranks event
+  candidates by the deadlock-aware score.
+- Added typed event keys and topology-rich FESS buckets: trigger identities,
+  opened webs/explosives/planks/walls, rat/cyborg deltas, remaining trigger
+  positions, selected web positions, and unreachable/trapped survivor
+  positions. This gives FESS diversity over mechanism skeletons, not just
+  counts.
+- Added FESS frontier summaries so failed runs print the best continuation
+  suffixes. This is important because the globally lowest FESS score can be the
+  initial state when "preserve options" is better than making irreversible
+  progress.
+- Confirmed `clingo` is not installed globally, but
+  `/tmp/infestation-clingo-venv/bin/python` has `clingo 5.8.0`. Use ASP only
+  for bounded event/resource/component slices, then verify candidates with the
+  Rust oracle; do not try to port the whole game engine to ASP.
+- `release`: corrected FESS from
+  `v<vv^^<vvv<>^>v<<<` preserves healthier 23-rat / 5-explosive frontiers but
+  still leaves exactly the same blocker: `(18,4)` is sealed behind
+  `(18,5)=web`, both trigger-2 cells are unreachable, and two survivors are
+  trapped. Representative FESS frontier suffixes:
+  `>>^>>>>^^<<v`, `>>^>>>>^v<<^`, `>>^>>>>^vv.^^`,
+  `>>^>>>>^vv^^>`. Diagnostics on the first suffix show player `(9,12)`,
+  23 rats, 5 explosives, 5 triggers, `reachable_rats=20/23`, and
+  `trapped_unreachable_rats=2`. Guarded follow-ups from that state for
+  `cellnot:18,5,web` and `reachable:0,16` returned no accepted branch.
+- `tinderrectangle`: corrected FESS from
+  `<^^<v<^^>vvv<<^^^>>>>>>vvv>>^^^>>vvv` mostly finds top/right web-chewing
+  variants. With `--min-rats 15` it enters the known one-rat-loss contact
+  basin; strict all-16 preservation remains required. Continue as a separation
+  problem before `(2,4)` opens, not by deepening P36/P71/P83 cleanup.
+- `reload_v3`: the pre-P43 sibling
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v>` returned no FESS event
+  candidates under `--min-rats 3 --min-explosives 4 --min-reachable-rats 2
+  --max-unreachable-rats 1`. It still has only one reachable rat and two
+  trapped survivors; back up earlier than this timing.
+- `cyborg_rats/ai_takeover`: corrected FESS from `v<vv^^<vv>>><` keeps the
+  high-reachability trigger-5/top-pack release family diverse, but after
+  trigger reductions no acceptable next event appears under
+  `--min-rats 20 --min-explosives 5 --min-reachable-rats 18
+  --max-unreachable-rats 3`. Continue closer to `v<v` or search for a
+  non-trigger geometry change before trigger 4/5 commit.
+
 ---
 
 ## 4. Planned next steps (start here)
