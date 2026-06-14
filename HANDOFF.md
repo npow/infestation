@@ -6719,6 +6719,67 @@ tmux panes, detached jobs, or uncapped solver/clingo processes were used.
   events returned empty. Change player/helper geometry before P44; do not
   deepen this spacing.
 
+### Earlier-spacing audit - 2026-06-14 thirty-ninth Codex pass
+
+No new verified win. Current inventory still shows 9 rat-bearing CSVs missing
+from `solver/solutions/final_solutions.json`. All local probes were foreground
+and capped with `timeout 25s` or `timeout 35s` plus `ulimit -v 750000`; final
+process check was clean.
+
+- `old_levels/on_the_clock`: found a real timing variant before the old live
+  anchor. Prefix
+  `>>>^^>>>^^^^^vvv><vvvvvv` preserves all 8 rats and reaches
+  `reachable_rats=4`, with rats at
+  `(3,8),(3,9),(14,9),(10,12),(14,14),(1,19),(4,19),(14,19)`.
+  This is distinct from the prior `>>>^^>>>vvv><vvvvvv` branch because the
+  lower-right rat is shifted to `(14,14)`. However, guarded follow-up for
+  `reachablege:5` returned empty; `triggeronly:8` returned empty; and a direct
+  `lookup --goal win` timed out with a 2-rat non-winning best state. The branch
+  is a new live diagnostic, not a solution.
+- `old_levels/overstep`: from weak first event
+  `vvvvvv>>>>>>>>>v>><>>`, compound access checks for an upper rat in
+  `(14..16,2..5)` and player in `(12..18,2..8)` returned empty with all 6 rats,
+  and also empty when relaxed to 5 rats. This closes the P21 weak-first-event
+  access hypothesis under the current caps; useful work must change timing
+  before or outside P21.
+- `reload_v3`: P40
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<` has a clearer pre-station split.
+  `P40+vvv` puts the helper rat at `(3,19)` with all 3 rats, all 6 explosives,
+  and all 14 triggers still present, but player approaches to trigger 1 either
+  die to the helper rat or kill the helper. The useful station event is the
+  rat-triggered `P40+v>` state: player `(2,18)`, helper `(4,18)`, 3 rats, 5
+  explosives, 12 triggers. From that state, `reachablege:2` preserving all 3
+  rats returned immediately empty, the compound bottom-gate mutation
+  `cellnot:1,21,web` with helper/player near the gate returned empty, and
+  `lookup --goal win` timed out in a basin with the bottom-left rat still
+  sealed. This closes P42/P43/P44 spacing; next reload work needs a pre-P40
+  spacing change.
+- `release`: lower-carrier prefix `v<vv^^>><<vv>v<<<` cannot stage a right-side
+  actor before trigger 4 under stricter checks. Actor-in-column predicates near
+  `(16..19,4..8)` with `(18,5)=web` intact returned empty, and opening
+  `(18,5)` before spending a trigger from that carrier prefix also returned
+  empty. The next release hypothesis should branch before this lower-carrier
+  route.
+- `cyborg_rats/ai_takeover`: P105/P106 timing is too late for both normal-rat
+  separation and pre-trigger-2 cyborg staging. From P105, checks for moving the
+  normal rat to `(12..13,8..9)` with player separated in the lower/right area
+  returned empty, as did checks for moving the cyborg to `(18,5..7)` while
+  preserving the normal rat.
+- `cooperation/handoff`: initial-board top-access staging around sealed rat
+  `(10,6)` returned empty for
+  `ratrectplayerrectcellis:10,6,10,6,9,4,10,5,11,7,trigger2`, preserving 5
+  rats and 4 triggers. `wp2 --waypoints "10,4|."` was unreachable. The top
+  access route is closed under this cap.
+- `cooperation/blocked_v2`: initial lower-mouth check
+  `cellnotratrectplayerrect:4,15,web,0,14,1,16,5,14,6,15` returned empty while
+  preserving 9 rats, 9 triggers, and 6 reachable rats. `wp2 --waypoints
+  "5,11|."` was unreachable. Continue from an earlier resource event, not B23
+  or direct trigger-2 mouth access.
+- `cooperation/tug_of_war`: direct player waypoint access to upper mouth cells
+  remains closed: `wp2 --waypoints "7,3|."` and `wp2 --waypoints ".|8,3"`
+  returned unreachable. The top pocket needs a rat/plank/resource mutation
+  proof, not a player-route proof.
+
 ---
 
 ## 4. Planned next steps (start here)
