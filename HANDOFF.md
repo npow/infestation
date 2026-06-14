@@ -6246,6 +6246,57 @@ outer shell; otherwise the solver silently starts from prefix length 0.
   rat inaccessible. Continue by looking for a different pre-event handoff, not
   by replaying the obvious detonation event.
 
+### OOM-safe continuation - 2026-06-14 thirty-third Codex pass
+
+No new verified win. This pass used bounded foreground solver runs only and left
+no `target/release/solver`, `cargo`, `clingo`, or infestation-local `timeout`
+processes running. The current authoritative inventory is still 9 rat-bearing
+unsolved CSVs, despite the older "8 remaining" wording in the goal context:
+`cooperation/blocked_v2.csv`, `cooperation/handoff.csv`,
+`cooperation/tug_of_war.csv`, `cyborg_rats/ai_takeover.csv`,
+`old_levels/on_the_clock.csv`, `old_levels/overstep.csv`, `release.csv`,
+`reload_v3.csv`, and `tinderrectangle.csv`.
+
+- `tinderrectangle`: the exact T106 separation/ignition checks were rerun with
+  valid prefix handling (`prefix=106`). From
+  `T106=<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv`,
+  all of the following returned empty under 80k-node / 20s caps:
+  `ratrectplayerrectcellis:2,5,3,6,13,6,15,8,2,4,empty`,
+  `cellnotplayerrect:2,4,web,13,6,15,8`, and `lookup --goal rectignite`.
+  The best `rectignite` state still had the lower rat parked at `(2,3)` and
+  player `(14,6)`. This reinforces that T106 solves right-pocket staging but
+  not release/separation; do not repeat T106 suffix searches without a new door
+  timing idea.
+- `cyborg_rats/ai_takeover`, `reload_v3`, and `old_levels/on_the_clock`: a
+  bounded direct portfolio pass (`lookup --goal win`, 60s / 300k nodes / 850MB
+  each) found no wins. `ai_takeover` again ended in a 2-enemy basin with cyborgs
+  around `(18,4)` and `(16,6)` and no direct finish. `reload_v3` again reached
+  a stranded bottom-left rat state with the familiar `(1,21)=web` /
+  `(2,21)=explosive` blockage. `on_the_clock` again reached a 3-rat
+  stranded-component basin. Treat these as confirmation that the generic
+  heuristic is still attracted to known traps, not as new leads.
+- `old_levels/overstep`: read-only structural probes from
+  `A=v<<^^^^>>>><^^^>>>>>>>>>>>><<<>>` returned empty for opening `(14,4)` or
+  `(15,4)` while the upper rat stays in `(15..16,3..5)` with all 6 rats and at
+  least 5 explosives, and also empty for combining `(16,4)=empty` with player
+  access near `(13..15,5..8)`. A pre-`A` breakpoint
+  `v<<^^^^>>>><^^^>>>>>>>>>>>>` was also empty for the same combined geometry.
+  Even relaxing `(15,4)` to allow one explosive spent returned empty. The `A`
+  family should be considered finite for the upper-shell opening; future
+  `overstep` work needs to change the timing before `A`.
+- `reload_v3`: trigger-aware lookup did not solve. The free-order pass again
+  kept trigger 7/2 basins; the seeded `7,1,2,3,4,5,6` order timed out without a
+  win. A side-agent did find a real relay/station pair from
+  `P40=>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<`: `P40+vvv` preserves all 3
+  rats, all 6 explosives, and all 14 triggers, while `P40+v><v` fires station 1
+  and reaches player `(1,19)`, helper rat `(2,19)`, sealed rat `(0,21)`, 3 rats,
+  5 explosives, 16 webs, and 12 triggers. Follow-ups were empty for direct
+  `cellnot:1,21,web`, `triggeronlycellnot:6,2,21,explosive`,
+  `triggeronlycellnot:5,10,5,web --next-trigger 6`, carrying the helper into
+  the trigger-2 runway, and staging the helper lower before spending trigger 1.
+  `P40+v><v` is a better documented relay prefix, but not yet a live solve
+  unless a new post-station crossing mechanism is found.
+
 ---
 
 ## 4. Planned next steps (start here)
