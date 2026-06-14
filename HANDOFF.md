@@ -7727,6 +7727,46 @@ No new verified win. Run directory:
   `NO_SOLUTION`; its best path is the already labeled upper rat-lane basin, so
   do not retry that predicate unchanged.
 
+### Live transfer archive repair and follow-up - 2026-06-14
+
+No new verified win. This pass fixed a transfer-loop data quality bug and then
+reran bounded exact probes from the repaired ranks.
+
+- Tooling fix: `go_explore_portfolio.py::archive_candidates` now treats
+  `FULL_ASCII` as globally complete only for `events` records. Search-log
+  `BEST_FULL_ASCII` records are still relative to the command prefix and must be
+  joined with that prefix. Before this fix, old FESS/dropchain logs could replay
+  tiny suffixes such as tinder `<^^^>>` or reload `>^vvvv...` as if they were
+  full paths, polluting transfer-ranked seeds.
+- Wave 1 human-subgoal probes:
+  `/tmp/infestation-runs/20260614T_live_transfer_probe_wave1/`.
+  New archive/triage:
+  `/tmp/infestation-runs/archive_live_transfer_probe_wave1.jsonl`,
+  `/tmp/infestation-runs/triage_live_transfer_probe_wave1_fixed.jsonl`,
+  `/tmp/infestation-runs/seeds_live_transfer_probe_wave1_fixed.jsonl`.
+  Release, reload, clock, and tinder structural predicates returned empty or
+  `NO_SOLUTION`; AI produced only the already-known cyborg-ready family.
+- Repaired transfer ranking:
+  `/tmp/infestation-runs/transfer_rank_live_wave1_archivefix2.jsonl`
+  and filtered missing-only seed file
+  `/tmp/infestation-runs/transfer_rank_live_wave1_archivefix2_missing_only.jsonl`.
+  The frozen Sokoban prior remained frozen; only the small Infestation head was
+  retrained on solved, triage, and obligation examples.
+- Repaired exact wave:
+  `/tmp/infestation-runs/20260614T_live_transfer_exact_wave1_archivefix2/`.
+  It ran 36 capped jobs over the seven rat-bearing unsolved levels, produced no
+  `SOLVED` marker, and generated:
+  `/tmp/infestation-runs/archive_live_transfer_exact_wave1_archivefix2.jsonl`,
+  `/tmp/infestation-runs/triage_live_transfer_exact_wave1_archivefix2.jsonl`,
+  `/tmp/infestation-runs/seeds_live_transfer_exact_wave1_archivefix2.jsonl`.
+- Follow-up two-player / AI human-subgoal wave:
+  `/tmp/infestation-runs/20260614T_access_ai_human_subgoals/`.
+  The handoff `wp2` baton gates, blocked lower-gate `wp2` probes, blocked
+  trigger-2 lure lookup, and handoff rat-unseal lookup all returned
+  `NO_SOLUTION`. The AI normal-rat/cyborg/player rectangle predicate returned
+  no branches, while `cyborgkillreadyratlive` reproduced the same 23-rat,
+  9-explosive, 14-trigger branch family already labeled negative.
+
 ---
 
 ## 4. Planned next steps (start here)
@@ -7785,8 +7825,9 @@ solver/solutions/
 
 ## 6. Session context
 - A session Stop-hook with goal **"solve all the puzzles"** may be active in
-  some environments. The current active non-hub hard set is the six CSVs
-  listed near the top of §3; include `old_levels/on_the_clock.csv` only if the
-  task explicitly expands beyond portal-reachable puzzles. Resume by working §4.
+  some environments. The current missing inventory is 8 CSVs: seven rat-bearing
+  hard levels (`blocked_v2`, `handoff`, `ai_takeover`, `on_the_clock`,
+  `release`, `reload_v3`, `tinderrectangle`) plus the zero-rat
+  `claude/gauntlet.csv` portal hub. Resume by working §4.
 - Fork created with `gh repo fork`; push with `gh auth setup-git --hostname github.com` then
   `git push fork claude/new-puzzles`. No PR was opened to upstream (`davidspies/infestation`).

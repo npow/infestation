@@ -210,7 +210,8 @@ def archive_candidates(archive: pathlib.Path) -> list[Candidate]:
         except json.JSONDecodeError:
             continue
 
-        prefix = record.get("full_ascii") or record.get("ascii")
+        full_ascii = record.get("full_ascii")
+        prefix = full_ascii or record.get("ascii")
         source = record.get("source")
         if not isinstance(prefix, str) or not prefix.strip() or not isinstance(source, str):
             continue
@@ -219,7 +220,8 @@ def archive_candidates(archive: pathlib.Path) -> list[Candidate]:
         meta = source_meta_cache[source]
         if meta is None:
             continue
-        if record.get("kind") != "branch" and meta.prefix:
+        full_ascii_is_global = full_ascii is not None and record.get("kind") == "event"
+        if not full_ascii_is_global and record.get("kind") != "branch" and meta.prefix:
             prefix = join_prefix(
                 meta.prefix,
                 prefix.strip(),
