@@ -6297,6 +6297,53 @@ unsolved CSVs, despite the older "8 remaining" wording in the goal context:
   `P40+v><v` is a better documented relay prefix, but not yet a live solve
   unless a new post-station crossing mechanism is found.
 
+### Compound-waypoint continuation - 2026-06-14 thirty-fourth Codex pass
+
+No new verified win. The release solver was rebuilt after adding two compound
+lookup goals:
+
+- `cellnotratrectplayerrect:cellx,celly,kind,ratx1,raty1,ratx2,raty2,playerx1,playery1,playerx2,playery2`
+- `ratrectplayerrectcellnot:ratx1,raty1,ratx2,raty2,playerx1,playery1,playerx2,playery2,cellx,celly,kind`
+
+These are deliberately "human waypoint" predicates: do not accept "a gate
+opened" unless the relevant rat and player are also on the right sides of the
+mechanism. This directly addresses the current bottleneck: broad search keeps
+finding single-condition wins that later prove to be irreversible traps.
+`cargo check -p solver` and `cargo build --release -p solver` both passed.
+
+- `tinderrectangle`: from
+  `T106=<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv`,
+  three compound checks returned empty under 80k-node caps:
+  `cellnotratrectplayerrect:2,4,web,2,5,3,6,13,6,15,8`,
+  `cellnotratrectplayerrect:3,4,web,2,5,3,6,13,6,15,8`, and
+  `ratrectplayerrectcellnot:2,5,3,6,13,6,15,8,3,5,web`.
+  The best states still collapsed into the known contact shaft. Treat T106 as a
+  solved right-pocket staging prefix but not a live lower-release topology.
+- `reload_v3`: from `P40+v><v`, compound bottom-left gate checks for
+  `cellnotratrectplayerrect:1,21,web,0,20,2,21,0,18,3,21` and
+  `cellnotratrectplayerrect:2,21,explosive,0,20,2,21,0,18,3,21` returned empty.
+  From `P40`, `ratrectplayerrectcellnot:0,20,3,21,0,18,4,21,1,21,web`
+  also returned empty. This tightens the relay finding: the station is real, but
+  no checked variant both preserves the helper geometry and mutates the
+  bottom-left gate.
+- `old_levels/on_the_clock`: backing up to
+  `A12=>>>^^>>>vvv>` found loose early-opening positives:
+  `>>>^^>>>vvv><vv.vvvv^^>>>^><<vv<<<<v<vvv` opens `(1,18)`, and
+  `>>>^^>>>vvv><vv.vvvv^^>>>^><<vv<<<<v<vvv^^^^^>^^<<<<vv>vvvvvvvvvv^`
+  opens `(4,18)` while the trigger-9 hazard rectangle `(13..15,8..10)` is
+  clear. Both are weak: diagnostics show only 6 rats left and poor reachability,
+  and bounded continuations did not solve. Tightened all-rat/resource-preserving
+  branchdumps from A12/A18 for the same early-opening geometry returned empty.
+  So the phase diagnosis is sharper: early bottom-left opening is possible, but
+  only after spending too much material under these checked constraints.
+
+This pass also tried to dispatch new parallel side agents, but the agent thread
+limit was already full. Existing side-agent reports were resumed instead and
+confirmed the previous finite-family conclusions for `release`,
+`tinderrectangle`, `reload_v3`, `overstep`, and `on_the_clock`. Process checks
+after the bounded batches found no infestation-local `target/release/solver`,
+`cargo`, `clingo`, or `timeout` jobs left running.
+
 ---
 
 ## 4. Planned next steps (start here)
