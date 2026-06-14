@@ -7664,6 +7664,54 @@ reload_v3 trigger-7 route.
   different rat-fired trigger-5 hypothesis from `>>>^^>>>` also returned no
   branch for clearing `(9,7)=explosive` under 8-rat/2-explosive guards.
 
+### Transfer exact wave 4 - 2026-06-14
+
+No new verified win. This pass took the wave-3 transfer-ranked seeds, generated
+one more oracle event layer with the frozen Sokoban prior in the loop, and ran a
+bounded exact portfolio over only the unsolved rat-bearing levels. There were no
+active solver processes left afterward and no `SOLVED` / `result=Won` markers in
+the logs.
+
+- Generated event seeds:
+  `/tmp/infestation-runs/event_seeds_wave3_labels.jsonl` (108 records).
+- Targeted probe logs:
+  `/tmp/infestation-runs/20260614T221726Z_targeted_transfer_probes/`.
+- Exact portfolio logs:
+  `/tmp/infestation-runs/20260614T221726Z_wave3_transfer_exact/`.
+- New archive/triage artifacts:
+  - `/tmp/infestation-runs/archive_20260614T221726Z_wave3_exact.jsonl`
+  - `/tmp/infestation-runs/triage_20260614T221726Z_wave3_exact.jsonl`
+  - `/tmp/infestation-runs/seeds_20260614T221726Z_wave3_exact.jsonl`
+- `ai_takeover`: the targeted cyborg/rat staging branch
+  `v<vv^^^vvvv>>^>v<<<^^^^v` preserves 23 rats, 9 explosives, 14 triggers, and
+  22 reachable rats, but FESS, dropchain, lookup-win, and novelty all returned
+  `NO_SOLUTION` quickly or no structural events. It is now a negative label;
+  do not treat `cyborgkillreadyratlive` alone as sufficient progress.
+- `reload_v3`: the rat-staging predicate
+  `ratcell:17,13,2,21,explosive` finds 18-move branches such as
+  `^>>>>>>>^^^vvv<<v<`, but the resulting state has all 3 rats trapped and only
+  2 reachable triggers. `triggeronly:2` lookup returned `NO_SOLUTION`; a
+  two-step trigger-any check only found trigger 7 and timed out in the same
+  sealed family. The transfer-selected bottom-station event
+  `vvv<<<<<<vv<<<<^>>^>^^^^^^^^>>>>>>>>>>>>>><<<<<<<<<<<<<^^<^^^^^^^^^^vvvv<<<^`
+  was also negative across the portfolio.
+- `blocked_v2`: transfer-selected pre-T5 event
+  `vv v^ vv <^ <v <^ <. ^< ^^ ^^ >^ ^< <^ >v` timed out under FESS/dropchain,
+  and lookup/novelty found no win. Triage best descendants reduce to 2/3 rats
+  with no reachable triggers and an unreachable-rat warning, so this event is
+  now a negative label.
+- `tinderrectangle`: the late T106 transfer event
+  `<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv^^^<<vvv<<^^^<<<vvv<<<<<`
+  remained a high neural-rank basin, but exact follow-up either timed out or
+  dropped to 15 rats with no recoverable ignition. It is now labeled negative;
+  future tinder work needs a genuinely different separation/delay condition
+  before this late T106 basin.
+- `release` and `on_the_clock`: transfer-selected exact runs repeated the known
+  failure shape. `release` descendants reduce to one sealed right rat behind
+  the `(18,5)` obligation; `on_the_clock` descendants reach one or two rats with
+  no remaining mechanism. No new labels were added because existing labels
+  already cover these basins.
+
 ---
 
 ## 4. Planned next steps (start here)
