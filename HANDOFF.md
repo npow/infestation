@@ -6398,6 +6398,51 @@ useful work should either find a genuinely different early event family or add a
 stronger solver predicate that proves actor accessibility/reachability at the
 same time as resource mutation.
 
+### Release/reload/tinder continuation - 2026-06-14 thirty-sixth Codex pass
+
+No new verified win. This pass kept the same OOM-safe discipline: a few
+parallel foreground runs, each capped with `ulimit -v 850000` and short
+`timeout`s. No solution artifact changed.
+
+- `release`: focused on the actual isolated-rat requirement instead of loose
+  trigger events. The compound state
+  `cellnotnoratsrect:18,5,web,18,4,18,4` returned empty from the initial board,
+  from `P8=v<vv^^>>`, and from the newer timing branch
+  `P21=v<vv^^^^^v^vvvvv>>><^`, all with at least 22 rats and useful resource
+  floors. Diagnostics at P21 show player `(9,12)`, 23 rats, 5 explosives, 7
+  triggers, 20/23 reachable rats, and exactly two trapped rats: isolated
+  `(18,4)` behind `(18,5)=web` plus the lower rat around `(9,19)`. A P21
+  left-trigger-2 carrier staging check
+  `ratrectplayerrectcellis:0,13,2,17,0,13,6,17,0,16,trigger2` was empty.
+  Side-agent follow-up closed the trigger-6 fuse hypothesis from P21:
+  resource-preserving `triggeronlycellnot:6,1,16,explosive` and direct
+  `cellnot:1,16,explosive` returned empty; unrestricted lookup to trigger 6
+  reaches only a dead basin with lone rat `(18,4)`, `(18,5)=web`, and both
+  trigger-2 cells unreachable. Do not continue P21 via trigger 6.
+- `reload_v3`: a side-agent deliberately avoided the known P40 suffix family and
+  checked alternate relay mechanisms from the initial board. Events only
+  reproduced the known 2-rat bottom-left basin. The following returned empty
+  under 80k-node/20s caps: direct `reachable:0,21`, top-trigger-6 carrier
+  `ratrectcellis:9,4,10,5,9,4,trigger6` with both strict and relaxed resource
+  floors, strict `triggeronlycellnot:6,2,21,explosive`, remote-5
+  `triggeronlycellnot:5,10,5,web`, bottom-fuse change while player is near the
+  top-6 station
+  `cellnotratrectplayerrect:2,21,explosive,0,20,2,21,8,3,10,6`, and bottom
+  trigger-6 reachability `reachable:2,22`. The only constructive route remains
+  the P40/P40+v><v station, but obvious non-P40 relays are now closed.
+- `tinderrectangle`: three strict specialized `tinderbeam` lanes were tried with
+  lower-rat targets `(2,6)`, `(3,6)`, `(4,6)` and safe targets on the right side
+  (`(14,6)`, `(15,8)`, `(13,8)`). All timed out at depth 33 with best states
+  still in early lower-rat lure geometry, not separated ignition geometry. This
+  did not add a new route; keep treating the puzzle as a separation/topology
+  problem rather than a target-score problem.
+
+Practical next move: stop trying release P21/P8 trigger-2/6 variants, reload
+non-P40 relay variants, and tinder target-score beams. The remaining useful
+work needs either an inverse proof/solver for the exact intended event skeleton
+or a new predicate that searches for "all remaining rats reachable after the
+irreversible event" rather than separate local mutations.
+
 ---
 
 ## 4. Planned next steps (start here)
