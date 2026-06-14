@@ -10,7 +10,6 @@ conservative with memory and wall time so parallel runs do not OOM the host.
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import dataclasses
 import datetime as dt
 import hashlib
@@ -18,7 +17,9 @@ import json
 import os
 import pathlib
 import re
+import resource
 import shlex
+import signal
 import subprocess
 import sys
 import time
@@ -60,6 +61,15 @@ class Job:
     timeout_sec: int
     mem_mb: int
     prune_dead: bool
+
+
+@dataclasses.dataclass
+class ActiveJob:
+    job: Job
+    process: subprocess.Popen[None]
+    log_path: pathlib.Path
+    log_handle: Any
+    started: float
 
 
 STATIC_SEEDS: dict[str, list[tuple[str, str]]] = {
@@ -402,42 +412,91 @@ def jobs_for_candidate(
     ]
 
 
-def run_job(job: Job, out_dir: pathlib.Path) -> tuple[str, int, float, pathlib.Path, bool]:
+def _limit_child_memory(mem_mb: int) -> None:
+    limit = mem_mb * 1024 * 1024
+    resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+
+
+def start_job(job: Job, out_dir: pathlib.Path) -> ActiveJob:
     log_path = out_dir / f"{job.name}.log"
     command = [str(SOLVER), *job.args]
-    wrapped = [
-        "bash",
-        "-lc",
-        f"ulimit -v {job.mem_mb * 1024}; exec {shlex.join(command)}",
-    ]
-    started = time.monotonic()
     env = None
     if job.prune_dead:
         env = dict(os.environ)
         env["PRUNE_DEAD"] = "1"
-    with log_path.open("w", encoding="utf-8") as log:
-        log.write("$ " + shlex.join(command) + "\n")
-        if job.prune_dead:
-            log.write("# env PRUNE_DEAD=1\n")
-        log.flush()
-        try:
-            proc = subprocess.run(
-                wrapped,
-                cwd=ROOT,
-                env=env,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                timeout=job.timeout_sec,
-                check=False,
-            )
-            code = proc.returncode
-        except subprocess.TimeoutExpired:
-            log.write(f"\nTIMEOUT after {job.timeout_sec}s\n")
-            code = 124
-    elapsed = time.monotonic() - started
-    text = log_path.read_text(encoding="utf-8", errors="replace")
+
+    log = log_path.open("w", encoding="utf-8")
+    log.write("$ " + shlex.join(command) + "\n")
+    if job.prune_dead:
+        log.write("# env PRUNE_DEAD=1\n")
+    log.flush()
+    process = subprocess.Popen(
+        command,
+        cwd=ROOT,
+        env=env,
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        preexec_fn=lambda: _limit_child_memory(job.mem_mb),
+    )
+    return ActiveJob(
+        job=job,
+        process=process,
+        log_path=log_path,
+        log_handle=log,
+        started=time.monotonic(),
+    )
+
+
+def finish_job(active: ActiveJob, code: int) -> tuple[str, int, float, pathlib.Path, bool]:
+    elapsed = time.monotonic() - active.started
+    active.log_handle.write(f"\nEXIT {code}\n")
+    active.log_handle.close()
+    text = active.log_path.read_text(encoding="utf-8", errors="replace")
     solved = "SOLVED " in text or "result=Won" in text
-    return job.name, code, elapsed, log_path, solved
+    return active.job.name, code, elapsed, active.log_path, solved
+
+
+def stop_timed_out_job(active: ActiveJob) -> int:
+    active.log_handle.write(f"\nTIMEOUT after {active.job.timeout_sec}s\n")
+    active.log_handle.flush()
+    active.process.send_signal(signal.SIGTERM)
+    try:
+        active.process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        active.process.kill()
+        active.process.wait()
+    return 124
+
+
+def run_jobs(jobs: list[Job], out_dir: pathlib.Path, concurrency: int) -> bool:
+    pending = deque(jobs)
+    active: list[ActiveJob] = []
+    found_solution = False
+
+    def launch_ready() -> None:
+        while pending and len(active) < concurrency:
+            job = pending.popleft()
+            active.append(start_job(job, out_dir))
+
+    launch_ready()
+    while active:
+        now = time.monotonic()
+        for running in list(active):
+            code = running.process.poll()
+            if code is None and now - running.started >= running.job.timeout_sec:
+                code = stop_timed_out_job(running)
+            if code is None:
+                continue
+            active.remove(running)
+            name, code, elapsed, log_path, solved = finish_job(running, code)
+            found_solution = found_solution or solved
+            marker = "SOLVED" if solved else "done"
+            print(f"{marker} {name} code={code} elapsed={elapsed:.1f}s log={log_path}")
+            sys.stdout.flush()
+            launch_ready()
+        if active:
+            time.sleep(0.25)
+    return found_solution
 
 
 def interleave_by_level(jobs: Iterable[Job]) -> list[Job]:
@@ -567,15 +626,7 @@ def main() -> int:
             print("$", shlex.join([str(SOLVER), *job.args]))
         return 0
 
-    found_solution = False
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as executor:
-        futures = [executor.submit(run_job, job, out_dir) for job in jobs]
-        for future in concurrent.futures.as_completed(futures):
-            name, code, elapsed, log_path, solved = future.result()
-            found_solution = found_solution or solved
-            marker = "SOLVED" if solved else "done"
-            print(f"{marker} {name} code={code} elapsed={elapsed:.1f}s log={log_path}")
-            sys.stdout.flush()
+    found_solution = run_jobs(jobs, out_dir, args.jobs)
     if not found_solution:
         print("no solved job in this go-explore portfolio")
     return 0
