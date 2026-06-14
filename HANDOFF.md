@@ -6780,6 +6780,73 @@ process check was clean.
   returned unreachable. The top pocket needs a rat/plank/resource mutation
   proof, not a player-route proof.
 
+### Parallel mechanism pass - 2026-06-14 fortieth Codex pass
+
+No new verified win. Current inventory still shows 9 rat-bearing CSVs missing
+from `solver/solutions/final_solutions.json`. Work was split across independent
+level probes plus local follow-up; all solver runs were foreground and capped
+with `timeout 20s`/`25s`/`35s` and `ulimit -v 650000` or `750000`. Final
+process check was clean.
+
+- `cooperation/blocked_v2`: found a stronger resource-preserving branch than
+  the old B23/trigger-5 basin. Prefix
+  `^< ^^ v^ ^^ v> v> v> vv vv ^^ ^v ^v ^v ^v vv ^> v> ^<`
+  reaches 4 rats with 15 explosives, 10 webs, 9 triggers, and opens `(14,19)`.
+  Diagnostics: players `(25,1)` and `(14,12)`, rats `(9,13)`, `(9,14)`,
+  `(0,15)`, `(14,17)`, reachable rats `2/4`, reachable triggers `5/9`.
+  A two-turn suffix `v< ^^` reaches a 3-rat state by removing `(14,17)`, still
+  preserving 15 explosives and 9 triggers. However, this branch still appears
+  to be a lower-left basin: from the 4-rat state, `triggeronly:2`,
+  `cellnot:1,15,web`, and `cellnot:2,15,explosive` all returned no branches
+  while preserving 4 rats and resources; from the 3-rat state, `triggeronly:2`,
+  `cellnot:1,15,web`, `ratsle:2`, and direct `lookup --goal win` also returned
+  no useful branch. The branch is a better proof point, not a solution.
+- `reload_v3`: a sidecar found an alternate trigger-1 station before the known
+  P40/P42 spacing:
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<vv<v>`. It verifies as `Playing` at
+  43 turns with player `(2,18)`, helper rat `(3,18)`, rats `(14,5)`,
+  `(3,18)`, `(0,21)`, 5 explosives, 12 triggers, and reachable rats `1/3`.
+  This differs from the known P40+`v>` station where the helper is `(4,18)`.
+  Immediate bottom-left probes `cellnot:1,21,web` and `reachable:0,21` returned
+  no solution. Local follow-up shows the station cannot reach trigger 7 while
+  preserving all 3 rats and 5 explosives; relaxing to 2 rats reaches trigger 7,
+  but kills the helper and leaves `reachable_rats=0`. Treat this spacing as
+  closed unless a pre-P43 route changes the helper before trigger 1 fires.
+- `old_levels/overstep`: the known weak first-event prefix
+  `vvvvvv>>>>>>>>>v>><>>` still does not give real upper-shell access even when
+  relaxed to 4 rats. Direct `reachable:16,4` and `reachable:16,9` branchdumps
+  returned empty; a loose player-shell route such as
+  `vvvvvv>>>>>>>>>v>><>>>^>^>^^^` still leaves all upper rats unreachable.
+  Back up before this weak first event.
+- `old_levels/on_the_clock`: rechecked the prefix
+  `>>>^^>>>^^^^^vvv><vvvvvv` and targeted likely gates. It still preserves 8
+  rats and reaches `reachable_rats=4/8`, but `cellnot:14,15,web`,
+  `cellnot:1,18,web`, direct sealed-rat removal from the earlier A18 timing
+  point, and a capped direct win lookup all failed or returned the known
+  stranded basin. A short `macro` run found another 8-rat branch
+  `>>^>^v<vv>>vvv<<<<v` with 10 explosives and 35 webs but no solution.
+- `tinderrectangle`: tested the alternate right-pack-drop hypothesis and a new
+  94-move all-rat state surfaced by `geomlure`:
+  `<<<<^>>>^<<<vv<^>>>>^^vv<v<<<<>^>^>>^<<vv<<>>^>>>^>>v>vv>>^^^>>vvvvv<>>^^^^^<<<vvv<<^^<^<<v<<<`.
+  Diagnostics: all 16 rats live, 43 explosives, 19 webs, player `(4,4)`, lower
+  rat `(2,3)`. Corrected follow-up from that exact prefix found no `rectsep`,
+  no lower-row rat plus safe player rectangle, no `rectignite`, and `geomlure`
+  to row-6/safe-side targets returned `NO_SOLUTION` immediately. The branch is
+  another contact basin.
+- `cyborg_rats/ai_takeover`: a relaxed `triganylookup` first step surfaced
+  `v<vv^^<vv>>><^`, a 14-move event with 23 rats, 9 explosives, 32 webs, 12
+  triggers, and reachable rats `22/23`. Exact follow-ups from that prefix for
+  `triggeronly:7`, normal/cyborg/player separation, and direct `win` returned
+  no branch quickly. This is a high-reachability diagnostic branch, but it does
+  not solve the trigger-7 timing problem as tested.
+- `cooperation/handoff`: the `1 -> 2` route remains dead: after 18 turns it has
+  2 rats, 0 explosives, 0 triggers, and `(10,6)` remains an unreachable rat.
+- `cooperation/tug_of_war`: a small top-pocket mutation exists: `^v` can move
+  the top rat from `(7,0)` to `(8,0)` without consuming resources, but it
+  oscillates back with `v^`; no capped branch found a trigger-1 consumption
+  while keeping that rat displaced. A `macro` run timed out without a usable
+  event-chain summary.
+
 ---
 
 ## 4. Planned next steps (start here)
