@@ -6954,6 +6954,109 @@ capped with `timeout 25s` plus `ulimit -v 650000`.
   unchanged, but `reachablege:3` and `triggeronly:2` returned empty from both
   B4 and B4+`v<`.
 
+### OOM-safe continuation - 2026-06-14 current Codex pass
+
+No new verified win yet. Local probes stayed foreground and capped with
+`timeout 25s..35s` plus `ulimit -v 650000`. Two side workers were still running
+bounded `reload_v3` / `ai_takeover` probes while this note was written.
+
+- `tinderrectangle`: rechecked the strict lower ignition topology from the
+  initial board, not only from old suffixes. The direct compound goals
+  `ratrectplayerrectcellis:5,6,5,6,13,6,15,8,6,6,web`,
+  `ratrectplayerrectcellis:6,6,6,6,13,6,15,8,7,6,web`, and
+  `ratrectplayerrectcellis:4,6,4,6,13,6,15,8,5,6,web` all returned no
+  branches with all 16 rats preserved under 600k-node caps. Relaxing the
+  top-corner idea to allow the lower rat to be killed (`--min-rats 15`) still
+  found no `winready` / corner staging branch.
+- `tinderrectangle`: the corrected P71 safe-side frontier
+  `<^^^>>v>vv>>^^^>>vvvv^^^^><<<vvv<<^^^<<<<vvv<<<^>^>>>^>>v>vv>>^^^>>vvvv`
+  is finite under all-rat preservation. With the prefix applied correctly
+  (`prefix=71`), `frontier --mechanisms --depth 16 --min-rats 16` only chews
+  right-side webs; the lower rat remains pinned at `(2,3)` in every printed
+  structural signature. Do not repeat this P71 family unless the release gate
+  changes before the player goes safe-side.
+- `tinderrectangle`: a side worker found a shorter clean staging state:
+  `P36=<^^<v<^^>vvv<<^^^>>>>>>vvv>>^^^>>vvv`. Diagnostics: player `(14,6)`,
+  lower rat `(2,3)`, all 16 rats alive, all 43 explosives intact, and
+  `(2,4)=web`. From P36, `rectignite` with `--min-rats 16` or `15`,
+  `cellnotratrectplayerrect:2,4,web,2,3,2,3,13,6,15,8`,
+  `cellnotratrectplayerrect:3,4,web,2,3,2,3,13,6,15,8`, and
+  `ratrectplayerrectcellis:1,4,1,4,13,6,15,8,2,4,web` all returned empty.
+  `ratgeom` says the held rat `(2,3)` can only step to `(1,4)` with the player
+  back at `(1,5)` or `(1,6)`, so the missing mechanism is a non-local
+  release/opening of `(2,4)` or a way to shift the rat without re-entering the
+  left contact trap.
+- `release`: the early trigger-4-first fork `v>vv^^^` is a real distinct
+  posture: 23 rats, 5 explosives, 9 triggers, 21 reachable rats, and only one
+  trapped survivor. Follow-up checks from it returned no branch for opening
+  `(18,5)` while preserving the isolated `(18,4)` rat
+  (`cellnotnoratsrect:18,5,web,18,4,18,4`), no all-rats-reachable state, and no
+  clean next event with 22 reachable survivors. Treat this fork as closed under
+  the current guards; it does not fix the isolated-rat requirement.
+- `release`: a side worker found a distinct early order `5 -> 4 -> 3`.
+  `v>>>vv^^<<v` consumes 5 then 4 and leaves 23 rats, 5 explosives, 27 webs, 7
+  triggers, and 21 reachable rats. `v>>>vv^^<<vv><<<^` then consumes 3 and
+  leaves 23 rats, 5 explosives, 25 webs, 5 triggers, 20 reachable rats,
+  `(18,5)=web`, and `trapped=2`. Dynamic `wp` to trigger 6 at `(17,16)` from
+  that state returned `UNREACHABLE`, and an unconstrained initial-board
+  `cellnot:18,5,web` branchdump still printed no branches. For `release`, both
+  delayed staging and `5 -> 4 -> 3` fail to reach trigger 6 dynamically; the
+  next useful test is pre-3/4/5 rat-driven trigger-2 geometry.
+- `reload_v3`: a timing side worker checked a pre-P43 sibling
+  `>>>^>>>>vvv.v<^<<<v<<<<<<<^^<^<<<<<<<<v<v>`. It preserves 3 rats, 5
+  explosives, 12 triggers, and a reachable helper, but trigger 7 still only
+  reaches 2-rat states with `reachable_rats=0`. The older `vv<v^` trigger-1
+  branch was also reconfirmed: no trigger-7 branch within the tested window
+  preserved all 3 rats and 5 explosives. Back up earlier than pre-P43; both
+  `vv<v^` and `v<v>` station timings lead to the same trigger-7 trap.
+- `old_levels/on_the_clock`: a safer first trigger exists:
+  `>>>^^>>>^^^^^vvv><vvvvvv^^>>>` fires trigger 5 while preserving all 8 rats
+  and 3 explosives. The resulting state has 6 triggers left and
+  `reachable_rats=4/8`, with only triggers 6 and 8 reachable. Immediate trigger
+  6 (`...^><<<<<<^<<<<v`) and immediate trigger 8
+  (`...>v^<<vv<<<<v<vvv`) both drop to 6 rats and 2 explosives, and a direct
+  post-trigger-5 search reached a dead 2-rat basin. Keep trigger 5 first as a
+  live anchor, but insert timing/lure moves before committing to trigger 6 or 8.
+- `old_levels/overstep`: from the all-rat diagnostic family, trigger 4 first is
+  reachable and resource-preserving:
+  `vvvvvv>>>>>>>>>v>><>>><<^<` leaves 6 rats, 6 explosives, and 18 triggers,
+  but trigger 3 afterward collapses to 4 rats with `reachable_rats=0`.
+  Trigger 6 first (`vvvvvv>>>>>>>>>v>><>>><<<v^`) also preserves resources, but
+  no safe second trigger was found under all-six preservation. The sibling
+  `v<<^^^^^^^>>>>>>>>>>>>><>>><<<^^` remains positionally interesting, but
+  trigger 3 immediately creates a dead low-reachability basin. Continue with
+  rat-positioning before any trigger, especially around the `(13,13)` /
+  `(10,14)` helper pair.
+- `cooperation/blocked_v2`: a cooperation side worker found a distinct trigger
+  order worth continuing: trigger `1` then `5`, before B4's trigger `3`.
+  Prefix `^< ^^ v^ ^^ v> v> v> vv vv <^ <v <v <v <^` leaves 8 rats, 15
+  explosives, 12 webs, 6 triggers, `reachable_rats=6/8`, and `trapped=0`.
+  Direct trigger-3 follow-up is unsafe (`.v` kills P2 by rat interception), and
+  bounded `playerat:13,11` / `triggeronly:3` searches found no branch from this
+  exact state. Continue this family by staging a rat near trigger 4 at
+  `(15,16)`, not by forcing player-triggered 3.
+- `cooperation/handoff`: the sealed `(10,6)` rat remains the blocker. From the
+  known trigger-1 landmark, synthetic geometry says `(10,6)->(11,7)` is only
+  possible with a player far right near `(14,7)/(14,8)`, but a reachable search
+  from the landmark found no path that puts a rat on `(11,7)` within 20 turns
+  while preserving 4 rats. The landmark's immediate rat-drop branch also did
+  not solve.
+- `cooperation/tug_of_war`: direct player trigger-1 is confirmed fatal; example
+  `<. <.` fires `(12,11)`, ignites adjacent `(11,11)`, and kills P1. Trigger 2
+  or 3 first produced no preserving branch. Trigger 1 likely needs indirect
+  activation or pre-cleared explosives.
+- `cyborg_rats/ai_takeover`: strict early `triggeronly:2`, `triggeronly:7`,
+  `triggeronly:8`, and bottom-web opening `cellnot:17,19,web` all returned
+  empty under capped probes. From high-reachability prefix `v<vv^^<vv>>><^`,
+  event frontier only surfaced trigger-5 variants; the best remains
+  `v<vv^^<vv>>><^^>>v` with 23 rats, 9 explosives, 32 webs, 10 triggers, and
+  22 reachable rats. A left-lure idea for the remote `(18,4)` cyborg did not
+  work dynamically: initial waypoint `(5,5)` is reachable, but after a stall the
+  cyborg stays at `(18,4)`; after the high-release prefix, both `(5,5)` and
+  trigger-7 cell `(16,9)` are dynamically unreachable. Focus between "only
+  trigger 3 consumed" and "trigger 4 consumed", before high-release closes the
+  lure and trigger-7 routes.
+
 ---
 
 ## 4. Planned next steps (start here)
