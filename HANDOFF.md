@@ -7806,6 +7806,16 @@ showed no leftover `solver`, `timeout`, `clingo`, or `cargo` jobs.
 - `old_levels/on_the_clock`: a smaller canonical P19
   `reachablege:5` check returned no branch under the 8-rat / 3-explosive /
   13-trigger guards.
+- Transfer rerank after these labels wrote
+  `/tmp/infestation-runs/transfer_rank_codex_after_obligation_labels.jsonl`.
+  It promoted `cyborg_rats/ai_takeover.csv` prefix
+  `v<vv^^^vvvv<<^^^<<<vv<<^^^^vv^^vv^^v^^` (`p38_clean`): 20 rats,
+  19 reachable, 9 explosives, 14 triggers. Follow-up topology probes under
+  `/tmp/infestation-runs/20260614T_codex_ai_p38_topology_231523/` returned no
+  branch for `trigger:7`, `trigger:8`, `cellnot:16,8,web`,
+  `cellnot:17,19,web`, or direct win. `events` from p38 only produced local
+  rat attrition and left `(18,4)` unreachable, so demote p38 unless a new
+  right-gate topology obligation is found.
 
 ---
 
