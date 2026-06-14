@@ -6598,6 +6598,50 @@ survivor reachability. The highest-value live question is `ai_takeover`: can the
 normal rat leave `(11,9)` with the player separated and all three rats alive
 before trigger 2 is fired?
 
+### Unreachable-survivor guard pass - 2026-06-14 forty-first Codex pass
+
+No new verified win. Added `--max-unreachable-rats` / `--max-unreachable` to
+the shared trap constraints. This differs from `--max-trapped-rats`: it rejects
+survivors that are not player-reachable even when their component has theoretical
+local death geometry. This matters for cyborg/resource puzzles where a cyborg
+can be in the same abstract component as explosives but still be inaccessible
+to the player at the current event boundary.
+
+Verification:
+
+- `cargo check -p solver` passed.
+- `cargo build --release -p solver` passed.
+- `cargo test -p solver --no-run` passed.
+
+Fresh guarded event checks:
+
+- `release`: from delayed rat-triggered top-4 frontier
+  `v<vv^^>>>..^>>vvv><^<v<<^v<<`, `events --min-rats 22
+  --min-reachable-rats 21 --max-unreachable-rats 1 --min-explosives 5
+  --min-triggers 5` returned `NO_EVENTS` under depth 55 / 20s. The family still
+  cannot improve the `(18,4)/(18,5)` isolation enough to be a clean event
+  skeleton.
+- `old_levels/on_the_clock`: from `>>>^^>>>vvv><vvvvvv`, `events --min-rats 8
+  --min-reachable-rats 5 --max-unreachable-rats 3 --min-explosives 2
+  --min-triggers 8` returned `NO_EVENTS` under depth 45 / 20s. The live anchor
+  does not have a shallow event that opens bottom-left cage access while
+  preserving the all-rat resource shape.
+- `cyborg_rats/ai_takeover`: from P106, filtered `events --min-rats 3
+  --min-reachable-rats 2 --max-unreachable-rats 1 --min-explosives 2` still
+  finds only bottom-web / bottom-rat movement events. The best-looking E1
+  branch
+  `P106+>^^^^^^^^<<<<<<vvv<<<<<<<<^^^<<<<` parks the bottom rat at `(1,16)`
+  next to left trigger 2 while preserving all three rats and all five
+  explosives, but local frontier preserving three rats is a single-state trap.
+  Relaxed `trigger:2`, `triggeronly:2`, and normal-rat-route checks from E1 all
+  returned empty. Treat E1 as proof that the left-trigger actor can be staged,
+  not as a live trigger-2 route.
+
+The ASP audit concluded exact clingo transition modeling is not a near-term
+shortcut because it would duplicate the real multi-phase Rust engine. Use clingo
+only for bounded event/resource abstractions; keep Rust `step_grid` as the
+transition oracle.
+
 ---
 
 ## 4. Planned next steps (start here)

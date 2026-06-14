@@ -1024,6 +1024,7 @@ impl LookupOrder {
 struct TrapConstraints {
     min_reachable_rats: Option<usize>,
     all_rats_reachable: bool,
+    max_unreachable_rats: Option<usize>,
     max_trapped_rats: Option<usize>,
     min_reachable_cells: Option<usize>,
     min_reachable_triggers: Option<usize>,
@@ -1043,6 +1044,9 @@ impl TrapConstraints {
         self.min_reachable_rats
             .is_none_or(|minimum| reachable_rat_count(grid) >= minimum)
             && (!self.all_rats_reachable || all_rats_reachable(grid))
+            && self.max_unreachable_rats.is_none_or(|maximum| {
+                features.rats.saturating_sub(reachable_rat_count(grid)) <= maximum
+            })
             && self
                 .max_trapped_rats
                 .is_none_or(|maximum| trapped_unreachable_rat_count(grid) <= maximum)
@@ -5776,6 +5780,10 @@ fn parse_trap_constraint_arg(
         }
         "--max-trapped-rats" | "--max-trapped" => {
             trap_constraints.max_trapped_rats = Some(args[index + 1].parse().unwrap());
+            Some(index + 2)
+        }
+        "--max-unreachable-rats" | "--max-unreachable" => {
+            trap_constraints.max_unreachable_rats = Some(args[index + 1].parse().unwrap());
             Some(index + 2)
         }
         "--min-reachable-cells" => {
