@@ -6064,6 +6064,81 @@ were left running.
   `reachable:3,14`, `cellnotratrect:2,15,explosive,0,14,1,16`, and initial
   `(6,11)` carrier-lane clearing returned empty under the tested caps.
 
+### OOM-safe continuation - 2026-06-13 thirtieth Codex pass
+
+No new verified win. Work stayed OOM-safe after the prior machine OOM: solver
+probes used external `timeout` plus `ulimit -v 850000`, no tmux or detached jobs
+were used, and process checks found no leftover solver/cargo/clingo jobs. The
+36 saved solutions in `solver/solutions/final_solutions.json` were reverified
+directly against the current Rust oracle; all 36 still return `result=Won`.
+`clingo` is not installed in this workspace, so an ASP route would require setup
+before it can be exercised locally.
+
+- `release`: a read-only side pass found a genuinely different family from the
+  old player-trigger-5/6 line: delay triggers 4/5 and let a rat fire top trigger
+  4. The concrete branch
+  `v<vv^^>>>..^>>vv<<<v>>>>` reaches a rat-triggered top-4 state with
+  `rats=23`, `explosives=5`, `webs=25`, `triggers=5`, and
+  `reachable_rats=20`. An even better staging branch
+  `v<vv^^>>>..^>>vvv><^<v<<^v<<` has player `(6,14)`, keeps 20/23 rats
+  reachable, keeps trigger 6 reachable, and preserves the right-side blocker
+  `(18,5)=web`. This is real structural progress and should replace the old
+  `v<vv^^>>v` trigger-5/6 basin as the next release hypothesis.
+- `release`: the new rat-triggered-top-4 family is not solved yet. Guarded
+  checks from `v<vv^^>>>..^>>vvv><^<v<<^v<<` returned empty for
+  `reachable:0,16`, `triggeronly:2`, `triggeronlycellnot:2,18,5,web`,
+  `cellnot:18,5,web`, `cellnotplayerrect:1,16,explosive,0,16,2,17`,
+  `cellnotratrect:18,5,web,16,4,19,8`, and
+  `triggeronlycellnot:6,18,5,web` under the tested caps. A relaxed direct win
+  lookup still drifted back to the familiar lone `(18,4)` trap. Continue by
+  changing pre-top-4 staging, not by deepening this exact P28 continuation.
+- `tinderrectangle`: side analysis confirmed the post-overrun suffix is the
+  wrong place to work. The useful target is earlier row-6 topology: lower rat
+  at `(5,6)` with `(6,6)=web`, or lower rat at `(4,6)` with `(5,6)=web`, while
+  the player is already on the lower-right safe side. Tight predicates from the
+  two suggested topology variants returned empty at depth 18 / 5s:
+  `ratrectplayerrectcellis:5,6,5,6,14,6,15,8,6,6,web` after
+  `<^^<<<<>>>>^>>v>v<v>>v^>^^>>v>.vvvv<<>^^^^^<<vvv<<^^^<<<<`, and
+  `ratrectplayerrectcellis:4,6,4,6,14,6,15,8,5,6,web` after
+  `<<^^<<<>>>>^>>v>v<v>>v^>^^>>v>.vvvv<<>^^^^^<<vvv<<^^^<<<<`. This does not
+  close the topology idea; it only rules out the exact old continuation plus a
+  small local fix.
+- `old_levels/overstep`: the earlier 2-rat state is confirmed too late. From
+  `C=v<<^^^^>>>><^^^>>>>>>>>>>>><<<>><^<<<<<<<<^^>>>v<<<<<vvv<<<vvv>v^<^v<><>`,
+  rat `(14,2)` is the real blocker: cardinally unreachable, no explosives
+  remain, and trigger zaps cannot clean it up. Firing trigger 6 after C is
+  reachable but only walls off more of the board while preserving that blocker.
+- `old_levels/overstep`: a better pre-deadlock extraction exists. From anchor
+  `A=v<<^^^^>>>><^^^>>>>>>>>>>>><<<>>`, the predicate
+  `ratrectplayerrectcellis:15,3,16,5,18,3,19,6,16,4,empty` is positive with
+  all 6 rats and 5 explosives preserved; representative branch
+  `v<<^^^^>>>><^^^>>>>>>>>>>>><<<>>^><>v>v>v` leaves player `(18,3)`, rats
+  `(14,2)` and `(15,3)` in the right-chute component, and `(16,4)` cleared.
+  This is useful evidence for the intended extraction, but diagnostics still
+  show only 1/6 rats reachable. Follow-up checks for `triggeronly:3`,
+  `triggeronly:4`, `allreachable`, and a direct win lookup from this extracted
+  state did not solve; trigger 4 branches still report only one reachable rat.
+  Next overstep work should alter the extraction so the player can enter/open
+  the 24-cell top component, not continue from the same isolated component.
+- `old_levels/on_the_clock`: the 2-rat best state from the earlier A* lookup is
+  a trap, not progress. Full path
+  `>>>^^>>>vvv><vvvvvv^^>>>>^^^vvvvv>>v>>>>>>vv^^<<<<<<^<^^<<<<<<<^<<<<v^>>>>vvvv<vv>>>>>vv>><><<<<`
+  leaves player `(2,14)`, rats `(1,14)` and `(12,14)`, zero explosives, zero
+  triggers, and only 1/2 rats reachable. `ratsle:1` simply kills the reachable
+  rat and strands `(12,14)`; `allreachable` returned empty. Do not continue this
+  P96 basin.
+- `reload_v3`: R42 immediate next-trigger options are more tightly bounded.
+  From `R42=^>>>>>>>^^vvvvvv<<<^^<<^^<<<<^<<<<<<<<v<v>`, guarded
+  `triggeronly:3`, `triggeronly:4`, `triggeronly:5`, and `triggeronly:6`
+  returned empty with at least one reachable rat/trigger required. Earlier
+  trigger 2/7 checks were already traps. The trigger-1 station remains real,
+  but this exact R42 continuation appears finite.
+- `cooperation/tug_of_war`: initial diagnostics still show only the top rat
+  `(7,0)` unreachable in the two-cell pocket. Fresh `wp2` checks to top-left
+  trigger waypoints `(5,4)`, `(5,5)`, and `(6,7)` returned `UNREACHABLE`, and
+  a capped `allreachable` branchdump from the initial board returned empty. The
+  top pocket remains the structural blocker.
+
 ---
 
 ## 4. Planned next steps (start here)
