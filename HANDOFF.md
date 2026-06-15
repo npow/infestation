@@ -9583,6 +9583,12 @@ rat-position or component falsifiers.
     the initial board. There was no state with a rat in `(11..13,7..9)`, player
     in `(6..9,10..13)`, left trigger 2 still present at `(0,16)`, trigger 6
     reachable, and the 23-rat/20-reachable useful-resource guards satisfied.
+  - `release`: the other subagent handle, trigger 6 first creating live left
+    trigger-2 access, also returned no branch. Exact `triggeronlycellis:6,0,16,trigger2`
+    with `(0,16)` reachable, trigger 2 reachable, 23 rats, 18 reachable rats,
+    and useful-resource guards produced no branch under a 900 MB capped run.
+    Do not pursue trigger-6-first as a left-trigger-2 access mechanism without
+    a different invariant.
 - `cooperation/blocked_v2`: a sibling of the demoted trigger-5/1 branch was
   inspected from `vv v^ vv <^ <v <^ <v <^`. It preserves all 9 rats, has 4
   reachable rats and only 1 trapped rat after opening the top web `(19,4)` with
