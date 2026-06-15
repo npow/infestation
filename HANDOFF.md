@@ -9660,6 +9660,32 @@ rat-position or component falsifiers.
     `cellnotratrect:2,15,explosive,0,15,4,15` from
     `v< v^ v^ << <^ <^ ^^` hit the 600 MB cap. It is not a negative; rerun with
     a smaller intermediate predicate before labeling.
+- Retrospect checkpoint - 2026-06-15 continuation: no verified wins, but the
+  next-wave splits closed several previously ambiguous handles without OOM.
+  - `tinderrectangle`: the inner-baffle candidate remains useful as evidence,
+    but tighter necessary-condition probes show it is not an immediate route.
+    From `<^<<<<^>^>v`, all-16/all-43/zero-trapped branchdump for any live
+    row-6 lower-rat placement returned no branches. Corner targets `ratat:0,0`
+    and `ratat:16,0`, plus `winready`, also returned no branches. Row-5 states
+    do exist (`<^<<<<^>^>vv`, `<^<<<<^>^>v>v`, `<^<<<<^>^>v>>v`), but direct
+    step checks show they become contact/static traps unless a different baffle
+    changes the geometry. Keep the candidate as a clue, but do not force the
+    recorded row-5/right-corridor continuations.
+  - `cooperation/blocked_v2`: the prior lower-mouth explosive sidecar run was
+    inconclusive due to the 600 MB cap. Smaller split predicates from
+    `v< v^ v^ << <^ <^ ^^` now returned clean no-branch results for both
+    `cellnot:2,15,explosive` and `cellnot:3,15,explosive` under 8-rat,
+    5-reachable-rat, max-1-trapped, 16-explosive, and 8-trigger guards. This
+    closes the simple lower-mouth explosive disturbance handle from that prefix.
+  - `reload_v3`: sidecar-tested pre-trigger-3 down pulse
+    `^>>>>>>>^^^vvvvvvv<<<<<^^<<<<<<^^^^<<<<<<^<v` preserves 3 rats but cannot
+    produce a strict healthy trigger-3 branch. The sidecar-suggested `>` plank
+    break from the same pre-trigger base also returned no strict trigger-3
+    branch under all-3-rat / reachable-rat guards.
+  - `old_levels/on_the_clock`: the sidecar did not run its suggested probe, so
+    it was executed locally. `vvvv>` before trigger 6 returned no branch for a
+    strict healthy trigger-6-first state with all 8 rats, `reachable_rats >= 2`,
+    `max_trapped <= 6`, and a reachable trigger.
 
 ---
 
