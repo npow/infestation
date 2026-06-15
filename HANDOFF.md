@@ -9832,6 +9832,32 @@ rat-position or component falsifiers.
     families or generate new parents from different invariants. Simply retraining
     the same frozen-prior head on the current archive still points too much exact
     runtime at stale basins.
+- Retrospect checkpoint - 2026-06-15T14:32Z run-control failure: still no new
+  verified wins; the remaining set is unchanged at 7 rat-bearing levels plus
+  the route-verified `claude/gauntlet.csv`. The current delay is not explained
+  by too little CPU alone. The real failure pattern is spending exact runtime on
+  stale basins after their local necessary conditions were already falsified,
+  then allowing bounded sidecar probes to become opaque background activity.
+  Treat this as a process bug.
+  - Human-style solving cadence for the next work block: write the hypothesis,
+    the necessary condition/predicate, and the implication before each probe.
+    After any negative, either change the topology predicate or ban the whole
+    family from the next seed/ranking wave. Do not deepen a prefix just because
+    it is familiar or transfer-ranked highly.
+  - Retrospect cadence: after every 2-3 bounded probes, any 30-minute wall-clock
+    block, or any no-win exact wave, append a checkpoint here with: closed
+    family, command-level evidence, and the next non-overlapping hypothesis.
+  - Run-control rule: at most three solver children; each child needs an
+    explicit `timeout` and memory cap when it can branch broadly. Sidecar agents
+    may only run independent read-only probes with a concrete stop condition.
+    If a sidecar has not produced a useful result by the next status checkpoint,
+    close it rather than letting it create invisible solver state.
+  - Immediate implication: do not restart the post-sidecar transfer wave from
+    the same parents. The next productive work should generate fresh parents
+    from different invariants, especially for the two-player cooperation levels,
+    or add hard filters for the repeated tinder P57, release trigger-2,
+    reload bottom-station, and clock P18/P20 families before running anything
+    exact.
 
 ---
 
