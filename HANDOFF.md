@@ -9600,6 +9600,40 @@ rat-position or component falsifiers.
   checks hit the memory cap and are not counted. Treat this as a closed sibling
   of `blocked_v2.post_t5_t1_all9_no_t2_or_t3_handle`: opening the top web does
   not repair left trigger-2 access.
+- Retrospect checkpoint - 2026-06-15: this wave changed behavior in the right
+  direction. It used three narrow sidecars plus one local probe, each with a
+  named human mechanism and bounded memory caps, then recorded positives and
+  negatives immediately in `solver/solutions/tools/obligation_labels.jsonl`.
+  No verified win was found, but the wave produced one real new handle and
+  three clean demotions:
+  - `reload_v3`: strict trigger 3 first is now a live candidate. Exact BFS found
+    prefix `^>>>>>>>^^^vvvvvvv<<<<<^^<<<<<<^^^^<<<<<<^<^^`, which preserves all
+    3 rats, 5 explosives, 12 triggers, and one reachable rat. This is distinct
+    from the demoted trigger-2 and bottom-station families. However, the adjacent
+    rat at `(3,10)` is a forced kill: `^`, `v`, `<`, and `.` from that state all
+    die, while `>` kills the rat and leaves the two remaining rats sealed. From
+    the forced-kill state, `triggeronly:1`, `triggeronly:4`, and
+    `cellnot:1,21,web` returned no branches, and an 80s/300k-node direct
+    `lookup win` returned `NO_SOLUTION` with the best state still showing the
+    bottom-left rat sealed. Next `reload_v3` work should reshape just before the
+    forced kill, not deepen after `...^<^^>`.
+  - `release`: from the clean post-trigger-3/4/5 prefix `v<vv^^>>v`, smaller
+    canonical reruns found no branch for trigger 6 clearing `(1,16)=explosive`
+    while trigger 2 remains reachable, and no branch staging a rat/player around
+    left trigger 2 while `(0,16)=trigger2` remains live. The first broad paired
+    runs hit their per-process memory cap and are not counted. Next `release`
+    work must change the right-pocket topology before `v<vv^^>>v` or find a
+    different lower-left invariant before committing to that prefix.
+  - `cooperation/handoff`: body-block/death geometry around the known seven-turn
+    staging only reproduced the familiar 5-to-4-rat explosion class; the hard
+    `(10,6)` rat remains sealed behind `(10,5)`. Next work should test an exact
+    pre-seven-turn two-rat blocker shape that keeps `(14,7)` alive and stages
+    material around `(9,5)..(10,6)` while trigger 2 remains live.
+  - `old_levels/on_the_clock`: the `vvvv^` top-pulse before trigger 6 returned
+    no branch for a healthy strict trigger-6-first state with all 8 rats,
+    `reachable_rats >= 2`, `trapped <= 6`, and a reachable trigger. Next work
+    should target a bottom-right topology reshape before trigger 6, not local
+    top tempo.
 
 ---
 
