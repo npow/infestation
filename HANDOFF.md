@@ -9588,6 +9588,17 @@ rat-position or component falsifiers.
   `vvvvv`; the next hypothesis should either reshape before firing trigger 6 or
   find a non-trigger setup that improves reachability without spending the
   reachable rat.
+- `old_levels/on_the_clock`: the newer trigger-1/2 route was also backed up to
+  its forced decision points. From P20
+  `^>>v>^^>>>vvv>>v<<vv`, healthy event enumeration found only `vvvv`. From
+  the resulting P24 state, trigger 9 fires on every one-step action
+  (`^`, `>`, `<`, or stall). The four post-trigger-9 player/facing variants
+  then produced only the already-closed local `^^` tempo branch, the same
+  trigger-5 commitment, or `NO_EVENTS`; direct P26 branchdumps to strict
+  healthy trigger 6/7/8 returned no branches. Combined with the closed
+  final-trigger mop-up above, this demotes the whole
+  P20 -> P24 -> trigger9 -> trigger5 family unless an earlier prefix changes
+  the forced event sequence.
 - Parallel handle wave - 2026-06-15: no verified wins. Logs are under
   `/tmp/infestation-runs/20260615T_parallel_handles/` and
   `/tmp/infestation-runs/20260615T_release_ai/`.
@@ -9711,10 +9722,35 @@ rat-position or component falsifiers.
     produce a strict healthy trigger-3 branch. The sidecar-suggested `>` plank
     break from the same pre-trigger base also returned no strict trigger-3
     branch under all-3-rat / reachable-rat guards.
+  - `reload_v3`: a local timing audit around the strict trigger-3 candidate
+    found more variants, then mostly closed them. From
+    `^>>>>>>>^^^vvvvvvv<<<<<^^<<<<<<^^^^<<<<<<^<`, branchdump can fire trigger
+    3 with suffixes `^>`, `^^`, `^v`, `^<`, and `^.` while preserving all
+    3 rats, 5 explosives, 12 triggers, and one reachable rat. The known `^^`
+    variant forces an east kill; the other variants leave the rat adjacent at
+    `(3,11)` or `(3,12)` with different player facings, but exact event
+    enumeration from each returned `NO_EVENTS` under live-resource guards. The
+    missing pre-trigger left/stall plank-break sibling `^<<` also returned no
+    strict trigger-3 branch, matching the earlier `^<>` and `^<v` negatives.
+    Treat strict trigger 3 as a clue, but do not deepen these local adjacent-rat
+    timing variants without a new nonlocal invariant.
   - `old_levels/on_the_clock`: the sidecar did not run its suggested probe, so
     it was executed locally. `vvvv>` before trigger 6 returned no branch for a
     strict healthy trigger-6-first state with all 8 rats, `reachable_rats >= 2`,
     `max_trapped <= 6`, and a reachable trigger.
+- Retrospect checkpoint - 2026-06-15 `on_the_clock` trigger-chain follow-up:
+  the newer trigger-1/2 chain is useful, but the post-trigger-5 branch is now a
+  closed cleanup basin. The chain
+  `^>>v>^^>>>vvv>>v<<vvvvvv^^>>>` reaches P29 with all 8 rats, 3 explosives,
+  6 triggers, 4 reachable rats, player `(10,7)`, and remaining triggers
+  `6/7/8`. Strict healthy next-trigger checks for 6/7/8 had already returned no
+  branch; relaxing into trigger-6 sacrifices reaches both final-trigger orders
+  but leaves 6 rats, zero explosives, and zero triggers. Direct capped
+  `lookup win` from both final-trigger orders ran 60s / about 205k expansions
+  and returned `NO_SOLUTION`, with two rats still isolated. Do not deepen this
+  final-trigger cleanup route. Next `on_the_clock` work should branch before
+  trigger 5, or require a concrete pre-trigger-5 invariant such as preserving a
+  named bottom/right cleanup handle while trigger 6 or 8 remains useful.
 
 ---
 
