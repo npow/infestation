@@ -9369,6 +9369,10 @@ rat-position or component falsifiers.
   `triggeronly:2` and `triggeronly:3` returned no branches under 8-rat,
   5-reachable-rat, max-1-trapped, useful-resource guards. Noncanonical reruns
   hit the 650 MB cap and are not evidence.
+- `cooperation/blocked_v2`: quick sibling checks on
+  `^< ^^ v^ ^^ v^ ^^ v^` and `v< v^ v^ <^ <^ << ^^` also found no canonical
+  `triggeronly:3` branch under the same 8-rat, 5-reachable-rat, max-1-trapped,
+  useful-resource guards.
 - Retrospective: the useful discovery is that `blocked_v2` does have high-resource
   non-trigger first events, but the representative bottom event still lacks a
   trigger-2/3 handle. Next `blocked_v2` work should compare the other first
