@@ -8017,6 +8017,57 @@ Triage confirms the ranked event seeds are not live continuations:
 
 No new verified win strings were found in this pass.
 
+### Transfer-ensemble continuation - 2026-06-15
+
+No new verified wins. This pass changed the transfer method instead of rerunning
+the same single-prior ranking:
+
+- `transfer_ranker.py` now accepts repeated or comma-separated
+  `--pretrained-checkpoint` values. It trains one small Infestation head per
+  frozen Sokoban prior, records mean `learned_score`, and ranks by the best
+  member's penalty-adjusted `rank_score`.
+- `event_seed_builder.py --transfer-rank` uses the same ensemble path, so
+  structural event successors can be scored by DRC11 + DRC33 rather than by only
+  `drc11/eue6pax7/cp_2002944000`.
+- `solver/solutions/tools/README.md` documents the ensemble workflow and keeps
+  exact Rust verification as the only source of truth for solutions.
+
+Artifacts:
+
+- `/tmp/infestation-runs/transfer_rank_20260615T005425Z_ensemble_drc11_drc33.jsonl`
+- `/tmp/infestation-runs/event_seeds_20260615T005425Z_ensemble_drc11_drc33.jsonl`
+  (203 scored event successors)
+- `/tmp/infestation-runs/20260615T005425Z_ensemble_exact_portfolio`
+  (64 jobs, 4 workers, 1.2 GB caps)
+- `/tmp/infestation-runs/archive_20260615T005425Z_ensemble_exact_portfolio.jsonl`
+  and `/tmp/infestation-runs/triage_20260615T005425Z_ensemble_exact_portfolio.jsonl`
+- `/tmp/infestation-runs/event_seeds_20260615T005425Z_ai_takeover_second_layer_relaxed19.jsonl`
+- `/tmp/infestation-runs/20260615T005425Z_ai_takeover_second_layer_relaxed19_exact`
+  (16 jobs)
+- `/tmp/infestation-runs/archive_20260615T005425Z_ai_takeover_second_layer_relaxed19_exact.jsonl`
+  and `/tmp/infestation-runs/triage_20260615T005425Z_ai_takeover_second_layer_relaxed19_exact.jsonl`
+
+Evidence:
+
+- The ensemble changed candidate ordering as intended: it promoted earlier
+  `tinderrectangle` P57/P60 states and `cyborg_rats/ai_takeover` P38/FESS
+  frontiers instead of only reranking the old T106 and early-trigger basins.
+- The 64-job exact ensemble portfolio found no `SOLVED`/`result=Won` marker.
+  `blocked_v2` and `on_the_clock` A* jobs hit only their per-child memory caps;
+  the host stayed healthy.
+- `tinderrectangle` P57 exact children mostly collapse to 15-rat states, so
+  they should become negative transfer examples unless a new all-16 separation
+  obligation is found before P57.
+- `ai_takeover` P38 second-layer events were hidden by the previous
+  `--min-rats 20` guard. Relaxing only that level to `--min-rats 19
+  --min-reachable-rats 15` produced four variants with 19 rats / 18 reachable.
+  The targeted 16-job exact wave still found no win.
+- The best relaxed `ai_takeover` near-miss reaches 2 rats, 10 triggers, and 9
+  explosives, with rats at `(18,4)` and `(16,6)`. Direct larger lookup from the
+  140-turn near-miss returns `NO_SOLUTION time=0.0s`, including with
+  `--no-canonical`; branchdump also found no `reachable:18,4` or `ratgone:18,4`
+  branch at depth 80. Treat this as a dead continuation, not a timeout problem.
+
 ## 4. Planned next steps (start here)
 
 1. **Do not repeat broad direct searches.** The grid-step/hash speedup is already

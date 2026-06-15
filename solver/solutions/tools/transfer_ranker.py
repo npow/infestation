@@ -45,6 +45,15 @@ class SnapshotExample:
     source: str
 
 
+@dataclasses.dataclass
+class TrainedTransfer:
+    repo: str
+    checkpoint: str
+    model: "TransferRanker"
+    mean: np.ndarray
+    std: np.ndarray
+
+
 def move_tokens(moves: str, players: int) -> list[str]:
     if players == 2 or " " in moves:
         return moves.split()
@@ -652,6 +661,83 @@ def score_snapshot(
     return rank_score_snapshot(model, mean, std, example, height, width)
 
 
+def normalize_pretrained_checkpoints(checkpoints: list[str] | None) -> list[str]:
+    if not checkpoints:
+        return [DEFAULT_PRETRAINED_CHECKPOINT]
+    result = []
+    for checkpoint in checkpoints:
+        for item in checkpoint.split(","):
+            item = item.strip()
+            if item:
+                result.append(item)
+    return result or [DEFAULT_PRETRAINED_CHECKPOINT]
+
+
+def train_transfer_ensemble(
+    examples: list[SnapshotExample],
+    repo: str,
+    checkpoints: list[str],
+    epochs: int,
+    seed: int,
+    freeze_prior: bool,
+    head: str,
+) -> list[TrainedTransfer]:
+    ensemble = []
+    for index, checkpoint in enumerate(checkpoints):
+        pretrained = load_pretrained_params(repo, checkpoint)
+        model, mean, std = train_model(
+            examples,
+            pretrained,
+            epochs=epochs,
+            seed=seed + index,
+            freeze_prior=freeze_prior,
+            head=head,
+        )
+        ensemble.append(
+            TrainedTransfer(
+                repo=repo,
+                checkpoint=checkpoint,
+                model=model,
+                mean=mean,
+                std=std,
+            )
+        )
+    return ensemble
+
+
+def score_ensemble_snapshot(
+    ensemble: list[TrainedTransfer],
+    example: SnapshotExample,
+    height: int,
+    width: int,
+) -> tuple[float, float]:
+    learned_scores = [
+        learned_score_snapshot(member.model, member.mean, member.std, example, height, width)
+        for member in ensemble
+    ]
+    learned_score = float(sum(learned_scores) / len(learned_scores))
+    badness = snapshot_badness(example.snapshot, example.level, example.prefix)
+    rank_score = float(max(learned_scores) - badness)
+    return learned_score, rank_score
+
+
+def transfer_metadata(
+    repo: str,
+    checkpoints: list[str],
+    freeze_prior: bool,
+    head: str,
+) -> dict[str, Any]:
+    return {
+        "repo": repo,
+        "checkpoint": checkpoints[0] if len(checkpoints) == 1 else ",".join(checkpoints),
+        "checkpoints": checkpoints,
+        "frozen_prior": freeze_prior,
+        "head": head,
+        "learned_aggregation": "mean",
+        "rank_aggregation": "max",
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--archive", action="append", type=pathlib.Path, default=[])
@@ -666,7 +752,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--oracle-timeout-sec", type=float, default=4.0)
     parser.add_argument("--pretrained-repo", default=DEFAULT_PRETRAINED_REPO)
-    parser.add_argument("--pretrained-checkpoint", default=DEFAULT_PRETRAINED_CHECKPOINT)
+    parser.add_argument(
+        "--pretrained-checkpoint",
+        action="append",
+        help=(
+            "pretrained checkpoint to use as a frozen spatial prior; repeat or "
+            "comma-separate values to ensemble checkpoints"
+        ),
+    )
     parser.add_argument("--obligation-labels", action="append", type=pathlib.Path, default=[])
     parser.add_argument("--head", choices=("linear", "small-mlp"), default="linear")
     parser.add_argument("--fine-tune-prior", action="store_true")
@@ -679,7 +772,6 @@ def main() -> int:
     if not SOLVER.exists():
         raise SystemExit(f"missing solver binary: {SOLVER}")
 
-    pretrained = load_pretrained_params(args.pretrained_repo, args.pretrained_checkpoint)
     solved = load_solved_examples(args.samples_per_solution, args.oracle_timeout_sec)
     triage = load_triage_examples(args.triage, args.oracle_timeout_sec)
     obligations = load_obligation_examples(args.obligation_labels, args.oracle_timeout_sec)
@@ -687,9 +779,11 @@ def main() -> int:
     if len(train_examples) < 16:
         raise SystemExit("not enough oracle examples for transfer head training")
 
-    model, mean, std = train_model(
+    checkpoints = normalize_pretrained_checkpoints(args.pretrained_checkpoint)
+    ensemble = train_transfer_ensemble(
         train_examples,
-        pretrained,
+        args.pretrained_repo,
+        checkpoints,
         epochs=args.epochs,
         seed=args.seed,
         freeze_prior=not args.fine_tune_prior,
@@ -740,11 +834,7 @@ def main() -> int:
     )
     ranked = sorted(
         (
-            (
-                learned_score_snapshot(model, mean, std, example, height, width),
-                rank_score_snapshot(model, mean, std, example, height, width),
-                example,
-            )
+            (*score_ensemble_snapshot(ensemble, example, height, width), example)
             for example in candidate_examples
         ),
         key=lambda row: row[1],
@@ -767,12 +857,12 @@ def main() -> int:
                     "source": example.source,
                     "learned_score": learned_score,
                     "rank_score": rank_score,
-                    "transfer": {
-                        "repo": args.pretrained_repo,
-                        "checkpoint": args.pretrained_checkpoint,
-                        "frozen_prior": not args.fine_tune_prior,
-                        "head": args.head,
-                    },
+                    "transfer": transfer_metadata(
+                        args.pretrained_repo,
+                        checkpoints,
+                        not args.fine_tune_prior,
+                        args.head,
+                    ),
                     "diag": {
                         "state": example.snapshot["play_state"],
                         "turns": example.snapshot["turn"],
@@ -788,7 +878,7 @@ def main() -> int:
                 out.write(json.dumps(record, sort_keys=True) + "\n")
 
     print(
-        f"pretrained={args.pretrained_repo}/{args.pretrained_checkpoint} "
+        f"pretrained={args.pretrained_repo}/{' + '.join(checkpoints)} "
         f"head={args.head} frozen_prior={not args.fine_tune_prior} "
         f"train={len(train_examples)} solved={len(solved)} triage={len(triage)} "
         f"obligations={len(obligations)} "

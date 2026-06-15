@@ -38,12 +38,14 @@ paths; check before reusing those.
   `AlignmentResearch/learned-planner/drc11/eue6pax7/cp_2002944000`, decodes the
   Flax/msgpack conv filters, freezes them as a spatial prior, trains a
   repo-local linear probe by default on `trajectory-json` oracle snapshots plus
-  obligation labels, and writes Go-Explore-compatible ranked seeds. This is
-  intentionally transfer learning, not from-scratch RL: the expensive
-  representation comes from the pretrained board-planning model, while the local
-  fit is only a small calibration/ranking head. This is not a second game engine
-  and does not prove a solution. Ranked JSONL uses `learned_score` for the raw
-  frozen-probe sigmoid and `rank_score` for the penalty-adjusted search priority.
+  obligation labels, and writes Go-Explore-compatible ranked seeds. Repeating
+  `--pretrained-checkpoint` enables an ensemble of frozen Sokoban priors, for
+  example DRC11 plus DRC33; JSONL records keep the mean `learned_score` and use
+  the best member's penalty-adjusted `rank_score` so a single useful prior can
+  propose a branch. This is intentionally transfer learning, not from-scratch
+  RL: the expensive representation comes from pretrained board-planning models,
+  while the local fit is only a small calibration/ranking head. This is not a
+  second game engine and does not prove a solution.
 - `obligation_labels.jsonl` — human-style supervision for the hard set. Each
   row labels a prefix as satisfying, staging for, or violating a level-specific
   access/resource obligation such as "open this web before spending that
@@ -96,6 +98,8 @@ OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 .venv-ml/bin/python solver/solutions/tools/t
   --seed-file /tmp/infestation-runs/seeds_recent.jsonl \
   --triage /tmp/infestation-runs/triage_recent.jsonl \
   --obligation-labels solver/solutions/tools/obligation_labels.jsonl \
+  --pretrained-checkpoint drc11/eue6pax7/cp_2002944000 \
+  --pretrained-checkpoint drc33/bkynosqi/cp_2002944000 \
   --head linear \
   --include-static --jsonl-out /tmp/infestation-runs/transfer_rank_recent.jsonl
 
@@ -109,6 +113,8 @@ OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 .venv-ml/bin/python solver/solutions/tools/e
   --transfer-rank \
   --triage /tmp/infestation-runs/triage_recent.jsonl \
   --obligation-labels solver/solutions/tools/obligation_labels.jsonl \
+  --pretrained-checkpoint drc11/eue6pax7/cp_2002944000 \
+  --pretrained-checkpoint drc33/bkynosqi/cp_2002944000 \
   --head linear \
   --jsonl-out /tmp/infestation-runs/event_seeds_recent.jsonl
 

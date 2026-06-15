@@ -334,12 +334,11 @@ def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[t
             SnapshotExample,
             canonical_level as transfer_level,
             load_obligation_examples,
-            load_pretrained_params,
             load_solved_examples,
             load_triage_examples,
-            learned_score_snapshot,
-            rank_score_snapshot,
-            train_model,
+            normalize_pretrained_checkpoints,
+            score_ensemble_snapshot,
+            train_transfer_ensemble,
         )
     except ImportError as error:
         raise SystemExit(
@@ -348,8 +347,9 @@ def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[t
         ) from error
 
     pretrained_repo = args.pretrained_repo or DEFAULT_PRETRAINED_REPO
-    pretrained_checkpoint = args.pretrained_checkpoint or DEFAULT_PRETRAINED_CHECKPOINT
-    pretrained = load_pretrained_params(pretrained_repo, pretrained_checkpoint)
+    pretrained_checkpoints = normalize_pretrained_checkpoints(
+        args.pretrained_checkpoint or [DEFAULT_PRETRAINED_CHECKPOINT]
+    )
     solved = load_solved_examples(args.samples_per_solution, args.oracle_timeout_sec)
     triage = load_triage_examples(args.triage, args.oracle_timeout_sec)
     obligations = load_obligation_examples(args.obligation_labels, args.oracle_timeout_sec)
@@ -357,9 +357,10 @@ def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[t
     if len(train_examples) < 16:
         raise SystemExit("not enough oracle examples for transfer head training")
 
-    model, mean, std = train_model(
+    ensemble = train_transfer_ensemble(
         train_examples,
-        pretrained,
+        pretrained_repo,
+        pretrained_checkpoints,
         epochs=args.epochs,
         seed=args.seed,
         freeze_prior=not args.fine_tune_prior,
@@ -394,18 +395,10 @@ def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[t
     scores = {}
     for example in candidate_examples:
         key = (canonical_level(example.level), example.prefix)
-        learned_score = learned_score_snapshot(
-            model,
-            mean,
-            std,
-            example,
-            height,
-            width,
-        )
-        rank_score = rank_score_snapshot(model, mean, std, example, height, width)
+        learned_score, rank_score = score_ensemble_snapshot(ensemble, example, height, width)
         scores[key] = (learned_score, rank_score)
     print(
-        f"transfer_rank pretrained={pretrained_repo}/{pretrained_checkpoint} "
+        f"transfer_rank pretrained={pretrained_repo}/{' + '.join(pretrained_checkpoints)} "
         f"head={args.head} frozen_prior={not args.fine_tune_prior} "
         f"train={len(train_examples)} solved={len(solved)} triage={len(triage)} "
         f"obligations={len(obligations)} scored_events={len(scores)}",
@@ -469,7 +462,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--oracle-timeout-sec", type=float, default=4.0)
     parser.add_argument("--pretrained-repo")
-    parser.add_argument("--pretrained-checkpoint")
+    parser.add_argument(
+        "--pretrained-checkpoint",
+        action="append",
+        help=(
+            "pretrained checkpoint to use as a frozen spatial prior; repeat or "
+            "comma-separate values to ensemble checkpoints"
+        ),
+    )
     parser.add_argument("--head", choices=("linear", "small-mlp"), default="linear")
     parser.add_argument("--fine-tune-prior", action="store_true")
     parser.add_argument("--jsonl-out", type=pathlib.Path, required=True)
