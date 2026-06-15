@@ -8675,6 +8675,25 @@ rat-position or component falsifiers.
    alter lower-left mouth / trigger-2 access before trigger 4, since P16
    `triggeronly:2` and `triggeronly:3` are empty under relaxed guards.
 
+### Retrospective cycle - 2026-06-15
+
+- `tinderrectangle`: P30
+  `<^^<vv<^<v<^^>^>.>>.>>>vvv<<<>` is demoted. It preserves all 16 rats and
+  all 43 explosives, but exact checks for `rectignite`, lower rat in `(2..6,6)`
+  with the player in the southeast safe rect, and the same predicate with
+  `(7,6)` opened all returned no branch. A later P78 escape reaches player
+  `(14,6)` with rat `(8,6)`, but `ratgeom` shows moving that rat west requires
+  the player west of it; branchdump could not keep southeast safety while moving
+  the rat to `(7,6)` or `(6,6)`.
+- `reload_v3`: V29 `vvv>>>>>>><<<<<<<<<<<<<vv<<<<` is demoted as a second
+  handle. It can reach strict trigger 1 while preserving resources, but
+  `reachablege:2` is empty. Direct cleanup from the best trigger-1 child found
+  no solution, and trigger-1 then trigger-6 opening `(1,21)` returned no branch
+  under a 1.2 GB capped rerun.
+- Process lesson: every promising prefix should immediately face a necessary
+  continuation predicate. Do not bank "clean" branches as progress unless they
+  change the exact rat/topology obligation that blocked the previous branch.
+
 ---
 
 ## 5. File map
