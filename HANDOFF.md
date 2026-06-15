@@ -9148,9 +9148,11 @@ rat-position or component falsifiers.
   `ratplayer:6,6,14,7` and `ratplayer:6,6,14,8` returned no branch with all
   16 rats/all explosives. Relaxing to 15 rats first hit the 650 MB memory cap
   under non-canonical search; smaller canonical reruns to depth 90 / 220k nodes
-  also returned no branch. This demotes the direct "hold `(6,6)` while the
-  player escapes" story under current caps. The next hypothesis must change the
-  row-6 lane or timing before P57/P75, not deepen the post-return basin.
+  also returned no branch. A further controlled relaxation allowing one
+  explosive to differ (`--min-explosives 42`) also returned no branch. This
+  demotes the direct "hold `(6,6)` while the player escapes" story under
+  current caps. The next hypothesis must change the row-6 lane or timing before
+  P57/P75, not deepen the post-return basin.
 - `release`: sidecar checked lower-carrier top-4 child
   `v<vv^^>><<vv>v<<<>^>>^>><^`. The intended handle was trigger 6 clearing
   `(1,16)` while keeping trigger 2 reachable, then using trigger 2 to open
