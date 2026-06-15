@@ -10230,6 +10230,27 @@ rat-position or component falsifiers.
     normal rat, high right cyborg, and mid-board player. Do not pursue
     bottom-trigger-6/8 role-split stories from this skeleton without changing
     the earlier actor route.
+- Retrospect checkpoint - 2026-06-15 cooperation/clock differential batch: no
+  new verified wins, and all capped children exited. This batch deliberately
+  relaxed one assumption at a time instead of launching another broad search.
+  - `cooperation/blocked_v2`: from high-resource non-trigger representative
+    `v< v^ v^ <^ <^ << <^`, allowing one extra rat sacrifice still produced no
+    trigger-2 handle. Branchdump for `triggeronly:2` with min 7 rats, min
+    4 reachable rats, max 2 trapped rats, 16 explosives, and 8 triggers returned
+    no branches. The earlier all-8 closure was not just one-sacrifice too strict.
+  - `cooperation/handoff`: an alternate left-side door predicate also returned
+    empty. From the initial board, branchdump for
+    `cellnotratrectplayerrect:8,6,web,8,5,10,6,6,4,10,8` found no branches while
+    preserving all 5 rats, one reachable rat, 18 explosives, all 4 triggers,
+    and one reachable trigger. This closes the cheap `(8,6)` door variant; it is
+    not a different route around the sealed `(10,6)` rat.
+  - `old_levels/on_the_clock`: handle-aware first-trigger search remains empty
+    even after relaxing the prior 3-reachable-rat condition to 2 reachable rats
+    and max 5 trapped rats. `triganylookup --steps 1` returned
+    `trigger-any lookup step 1: no reachable branches` under 7-rat,
+    2-reachable-rat, 2-explosive, 4-trigger, and one-reachable-trigger guards.
+    The absence of useful first trigger events is not only the cleanup-cell
+    requirement or the 3-reachable-rat bound.
 
 ---
 
