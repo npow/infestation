@@ -8827,6 +8827,67 @@ rat-position or component falsifiers.
   "Can reach the coordinate" is not enough when the lure depends on facing or on
   an adjacent rat/web/explosive still occupying its old role.
 
+### Retrospective cycle - 2026-06-15 candidate demotion pass
+
+- `tinderrectangle`: the short parked-rat branch
+  `<^^<vv<^<v<^^>^>.>>.>>>vvv<<<` is demoted. It is still a real all-16/all-43
+  clean state with the lower rat at `(8,6)`, but exact `rectsep`,
+  `rectignite`, `geomlure` to lower safe targets, corner ignition predicates,
+  and explicit pull-shape branchdumps all returned no branch. Generic
+  `winready` only found a new contact state with rat `(7,5)` / player `(7,4)`;
+  follow-up predicates from that contact state to `(6,6)`/safe lower targets
+  were also empty. Event discovery from the right-safe sibling only produced
+  one-web shaves, so this branch should not be ranked as a live finish path.
+- `cyborg_rats/ai_takeover`: the old high-score P38 transfer prefix
+  `v<vv^^^vvvv<<^^^<<<vv<<^^^^vv^^vv^^v^^` is demoted. It keeps 20 rats, 19
+  reachable, and no trapped rats, but the accumulated exact evidence now closes
+  the simple trigger-7/right-gate, cyborg-displacement, relaxed attrition, and
+  trigger-5-child repairs. The remaining live `ai_takeover` story is the Q54
+  trigger-8 timing family, and only if it can reach left trigger 2 without the
+  known contact trap.
+- `handoff`: a sidecar found a different role-reversal staging prefix,
+  `vv >^ >^ >^ >^ >^ ^^ v^ v^ ^< v^ ^< vv <v v^ v^`. It leaves the sealed
+  `(10,6)` rat alive and another rat at `(0,3)`, but it has already collapsed
+  to 2 rats and delayed `triggeronly:2` returned no branch. Treat it as a
+  low-confidence cleanup candidate, not evidence that the main sealed-rat
+  obligation is solved.
+- `blocked_v2`: a sidecar relaxed the first-event family to allow one early rat
+  sacrifice. `triggeronly:1`, `triggeronly:3`, and direct `ratgone:0,15` all
+  returned no branches under useful reachability/resource guards. That closes
+  early trigger-1/3 rerouting and direct lower-blocker removal before the known
+  trigger-4/5 basins.
+
+### Updated transfer/exact wave - 2026-06-15 after demotions
+
+- Reran frozen-prior transfer ranking after demoting stale `tinderrectangle` and
+  `ai_takeover` candidates. Output:
+  `/tmp/infestation-runs/transfer_rank_20260615T083110Z_after_demotions.jsonl`.
+  The corrected ranking moved `blocked_v2` prefixes above the old P38
+  `ai_takeover` prefix.
+- Ran a small capped exact wave over the updated ranked seeds: 18 jobs,
+  concurrency 3, 900 MB per child, 110 s timeout:
+  `/tmp/infestation-runs/20260615T083303Z_after_demotions_exact_small`.
+  Archive and triage outputs:
+  `/tmp/infestation-runs/archive_20260615T083303Z_after_demotions_exact_small.jsonl`
+  and
+  `/tmp/infestation-runs/triage_20260615T083303Z_after_demotions_exact_small.jsonl`.
+  No verified solution was found.
+- `blocked_v2`: the top transfer-ranked 7-rat prefix still has the lower
+  `(0,15)` blocker unreachable. Exact event discovery produced only web shaves
+  and trigger-1 burns; direct win timed out with best states still carrying the
+  `blocked-unreachable-rat` flag. The wave's best `blocked_v2` descendants
+  collapse to 3-rat / 2-reachable states with no trigger access repair.
+- `cyborg_rats/ai_takeover`: P38 descendants found a superficially promising
+  2-cyborg frontier with player `(16,8)`, cyborgs `(18,4)` and `(16,6)`, 9
+  explosives, and 10 triggers. Direct unguarded win, `cyborgkillready`,
+  `ratsle:1`, and `cyborgsle:1` all returned no branch. The only immediate
+  trigger-7 move strands both cyborgs with zero reachable rats/triggers, so this
+  is another contact/topology trap, not a finish path.
+- `release`, `reload_v3`, `handoff`, `on_the_clock`, and `tinderrectangle` in
+  this exact wave reproduced existing blockers: sealed survivor with trigger 2
+  unreachable, top-left sealed reload rat, sealed handoff rat, no-mechanism clock
+  tail, and 15-rat tinder lower-sacrifice states respectively.
+
 ---
 
 ## 5. File map
