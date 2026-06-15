@@ -8806,6 +8806,27 @@ rat-position or component falsifiers.
   `cyborgkillready`. Treat trigger-5-first as a local burn, not the right-cyborg
   mechanism.
 
+### Retrospective cycle - 2026-06-15 handoff role-reversal check
+
+- Status remains 38 verified rat-win solutions, with the same 8 paths missing
+  from `final_solutions.json`. `claude/gauntlet.csv` is still a zero-rat portal
+  route, not a rat-win entry.
+- Why this cycle took too long: the synthetic `ratgeom` clue was under-specified.
+  From the pre-trigger-1 handoff prefix `v^ >^ >^ >^ >^ >^`, one-step geometry
+  says the `(10,6)` rat can move to `(11,7)` when player 2 is at `(14,8)`
+  facing north. A `wp2` probe can reach player 2 at `(14,8)`, but it arrives
+  facing south and has displaced the right-side rat geometry that made the
+  synthetic stance plausible.
+- Exact follow-up from that staged `wp2` prefix found no branch for
+  `ratrectplayerrect:11,7,11,7,13,7,14,8` and no branch for opening `(10,5)`
+  while keeping the `(10,6)` rat. Separate `branchdump` and `lookup` checks for
+  `playerfacing:14,8,up` from the pre-trigger-1 prefix also returned no branch
+  under 5-rat/useful-resource guards.
+- Retrospective rule for future cycles: every synthetic geometry lead must
+  include orientation and blocker preservation as explicit exact predicates.
+  "Can reach the coordinate" is not enough when the lure depends on facing or on
+  an adjacent rat/web/explosive still occupying its old role.
+
 ---
 
 ## 5. File map
