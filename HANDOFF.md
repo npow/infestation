@@ -9275,6 +9275,55 @@ rat-position or component falsifiers.
   cleanup geometry, then prove route-to-geometry before spending time on
   prefix variants.
 
+### Retrospective checkpoint - 2026-06-15 inverse-handle sidecars
+
+- Status remains 38 verified rat-win solutions. No new move string reached
+  `result=Won`. The missing inventory is unchanged: `blocked_v2`, `handoff`,
+  `ai_takeover`, `on_the_clock`, `release`, `reload_v3`, `tinderrectangle`,
+  plus route-verified zero-rat `claude/gauntlet`.
+- Process note: this wave used bounded sidecars and a small transfer-ranked
+  second slice. It avoided the previous OOM pattern: no solver process was left
+  active after the wave. The local portfolio wrapper exited before normal
+  trailers for two logs, so only completed sidecar predicates and completed
+  local FESS logs are treated as evidence below.
+- `cooperation/handoff`: the sidecar tested a final-neighborhood version of the
+  hard `(10,6)` rat obligation. A one-rat state with that rat in the right
+  trigger-2 blast neighborhood `(10,6)..(12,8)` and a player near left trigger
+  2 had no branch. A looser two-rat version found only dead precursors such as
+  `v^ >^ >^ >^ >^ >^ ^^ v^ ^^ ^^` and
+  `vv >^ >^ >^ >^ >^ ^^ v^ ^^ ^^`, all with zero reachable rats. This demotes
+  loose right-neighborhood staging unless the predicate also preserves an
+  immediate cleanup handle.
+- `old_levels/on_the_clock`: the sidecar worked backward from the bad two-rat
+  tail and tested the post-trigger-2/P28 family. From
+  `vvvvv^^^^>>^>^vv>^^^^<^<^^^^`, both row-14 cleanup-ring entry and
+  all-reachable recovery returned no branches under useful resource guards.
+  This closes `6 -> 1 -> 7 -> 8 -> 2 -> 5` as a route that merely needs a mop-up;
+  future work should branch before trigger 2, likely before trigger 1 or by
+  changing the initial trigger-6 setup.
+- `tinderrectangle`: the sidecar tested two backward geometries for the final
+  lower-row ignition. From the P57 timing prefix, holding the lower rat at
+  x=2..7 on row 6 while the player reaches upper-right row 3 returned no
+  branches. From the initial board, holding the lower rat at `(5,5)/(6,5)`
+  while the player is already safe at `(13..15,6..8)` also returned no branches.
+  This pushes the missing mechanism earlier than P57 and earlier than a simple
+  row-5 pre-drop hold.
+- `cyborg_rats/ai_takeover`: the transfer-ranked second slice promoted
+  `v<vv^^^^^^^^^^^v^vvvvvvv.v`. FESS found no solution and its best frontiers
+  still had the familiar sole unreachable survivor `(18,4)` with no trapped
+  rats. This is another instance of the already-known right-survivor-no-handle
+  family, not progress.
+- `release`: the transfer-ranked second slice promoted `v<vv^^>>>>v`. FESS ran
+  80.3 s with no solution; best frontiers still carried trapped unreachable
+  `(18,4)` and `(13,5)`, with `(18,5)` webbed and trigger-2 access unresolved.
+  This is another sealed-right-rat basin.
+- Retrospective: the failure mode is now sharper than "search is hard." The
+  candidate generator is still overvaluing states that preserve many rats while
+  leaving exactly one required final handle absent. The next wave should either
+  add explicit negative penalties for these signatures before ranking, or run
+  inverse predicates that require the missing handle and the next resource in
+  the same goal.
+
 ---
 
 ## 5. File map
