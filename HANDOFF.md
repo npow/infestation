@@ -9229,6 +9229,52 @@ rat-position or component falsifiers.
   triggers, and 3 reachable triggers. This demotes the T1 lower-right offset as
   a cleanup-preserving handle.
 
+### Retrospective checkpoint - 2026-06-15 post-parallel closure wave
+
+- Status remains 38 verified rat-win solutions. No new move string reached
+  `result=Won`. The current worktree was clean before recording this checkpoint;
+  no solver processes were active after the sidecars finished.
+- Process note: bounded parallelism worked better here. The local lane tested
+  `reload_v3`, `blocked_v2`, and `release` while sidecars independently tested
+  `tinderrectangle` and `ai_takeover`. No OOM occurred, and every run produced
+  either a concrete demotion or a no-solution result.
+- `reload_v3`: the p82 bottom-station descendant
+  `vvv<<<<<<vv<<<<^>>^>^^^^^^^^^^^^^^^vvvvvvvvvvvvvvvvvv>><^^^>>>>>>>>>>>>>^^^^^^vv<<`
+  has 2 rats, 6 explosives, 14 triggers, one reachable rat at `(18,13)`, and
+  sealed rat `(0,21)`. It still has no last handle: `ratsle:1` with a reachable
+  rat and trigger, `cellnot:1,21,web` with both rats preserved, and direct
+  lookup-win all returned no branch or `NO_SOLUTION`.
+- `cooperation/blocked_v2`: the relocated-bottom-rat prefix
+  `v< v^ v^ <^ <^ << ^v ^^` is now closed beyond the trigger-4 test. Direct
+  `triggeronly:2`, `reachable:5,11`, and `reachable:3,14` all returned no
+  branches under 8-rat, 6-reachable, useful-resource, max-1-trapped guards.
+  This family does not repair trigger-2 access by either trigger-4 or a direct
+  trigger-2 station route.
+- `release`: strict `4,2` trigger lookup timed out, but isolated evidence is
+  clean: from the trigger-4 best child `v>vv^^^`, direct `triggeronly:2`
+  returned no branches under 23-rat, 20-reachable, low-trap, useful-resource,
+  and 2-reachable-trigger guards. Treat trigger-4-first as another local burn
+  unless a future hypothesis changes the right-pocket topology before this
+  child.
+- `cyborg_rats/ai_takeover`: sidecar tested the stronger Q54 trigger-8 variant
+  before trigger-2 commitment. The safe reduced pre-trigger-2 predicate
+  `ratsleplayer:3,2,16` returned no branch. `cyborgkillreadyratlive` found only
+  a superficial 9-enemy/8-reachable handle; direct lookup from that handle
+  returned `NO_SOLUTION` in 0.6 s. This demotes the Q54-variant
+  cyborg-ready/right-cleanup story under the current guards.
+- `tinderrectangle`: sidecar found that the short all-16/all-43 row-5 contact
+  prefix `<^^<v<<<<>` is real, but not live. Baffle predicates preserving
+  `(2,4)` or `(3,4)` as web returned no branches, and from the contact prefix
+  there was no bounded all-16/all-43 continuation to a southeast safe-side
+  rat/player geometry. This closes that early row-5 contact idea as a route to
+  the P57-style safe-side handle.
+- Retrospective: the repeated false-positive shape is now extremely consistent:
+  a branch proves one visually plausible contact or trigger event, but cannot
+  preserve the next handle. Future work should prefer inverse tests for
+  necessary final handles first: for each level, define the final two-step
+  cleanup geometry, then prove route-to-geometry before spending time on
+  prefix variants.
+
 ---
 
 ## 5. File map
