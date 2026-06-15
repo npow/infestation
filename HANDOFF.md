@@ -9971,6 +9971,78 @@ rat-position or component falsifiers.
     ignition geometry, `ai_takeover` pre-trigger-2/topology phase before Q54,
     or `blocked_v2` access predicates that are not direct trigger 2/3/5
     continuations from the already-closed high-resource non-trigger family.
+- Retrospect checkpoint - 2026-06-15 next-batch predicate probes: no new
+  verified wins. The batch stayed within the run-control rules: at most three
+  solver children, each with external `timeout` and `ulimit -v 700000`, and no
+  solver/clingo/cargo child left running afterward.
+  - `tinderrectangle`: the lifted inner-baffle fork
+    `<^<<<<^>^>v^` was tested as a non-right-corridor side-ignition tempo. At
+    that state the lower rat has moved to row 3, but `geomlure` to side target
+    `(13,8)` with safe player targets returned `NO_SOLUTION` immediately, and
+    exact `ratrectplayerrect:13,8,13,8,13,3,15,8` returned no branches under
+    all-16-rat/all-43-explosive/all-reachable/zero-trapped guards. This closes
+    the simple lifted-row-3 side-ignition formulation from the inner-baffle
+    candidate.
+  - `cooperation/blocked_v2`: the high-resource prefix
+    `v< v^ v^ << <^ <^ ^^` now has two more adjacent lower-mouth fuse closures.
+    In addition to the prior `reachable:5,11`, `reachable:3,14`, and
+    `cellnot:6,11,explosive` negatives, exact branchdumps found no branch
+    opening `(7,12)=explosive` or `(8,11)=explosive` while preserving at least
+    8 rats, 5 reachable rats, max one trapped rat, 16 explosives, and
+    8 triggers.
+  - `cyborg_rats/ai_takeover`: the stronger Q54 trigger-8 variant was tested
+    for a different pre-trigger-2 escape square. `ratsleplayer:3,3,16` returned
+    no branches while preserving at least 3 enemies, 3 reachable enemies,
+    zero trapped enemies, 2 explosives, one trigger, and reachable trigger 2.
+    This extends the earlier `(2,16)` escape-square closure to the adjacent
+    `(3,16)` square.
+  - Next non-overlapping work: for `tinderrectangle`, do not test more `(13,8)`
+    targets from this lifted inner-baffle state without changing the target or
+    baffle. For `blocked_v2`, the left-mid prefix is now strongly demoted as a
+    lower-mouth access repair; compare a different first non-trigger event or a
+    waypoint sequence before the `v< v^ v^ << <^ <^ ^^` cut. For
+    `ai_takeover`, look before the Q54 trigger-8 corridor or test a non-escape
+    topology handle; the nearby pre-trigger-2 escape squares are now closed.
+- Retrospect checkpoint - 2026-06-15 cadence correction and fresh predicate
+  batch: no new verified wins. A status check found no active solver children
+  again, which is the process failure to avoid. The delay is not mainly raw CPU
+  saturation: the remaining levels keep producing high-resource, human-looking
+  branches that fail one later necessary handle. Search time is being wasted
+  when those basins are allowed back into the queue under renamed predicates.
+  The correction for future cycles is: reject duplicate side-agent suggestions
+  by grepping the labels first, run only predicates that change a cell/actor or
+  first event, and record a next non-overlapping handle before stopping.
+  - Side-agent proposals were filtered before launch. The `handoff`
+    pre-trigger-1 `(9,5)` bridge, `reload_v3` pre-trigger-3 `(15,22)` clear
+    with trigger 4 reachable, and `on_the_clock` P28 `(10,13)` gate with
+    trigger 5 live were all stale duplicates of already recorded closures, so
+    they were not rerun.
+  - `cooperation/blocked_v2`: a fresh initial-board one-rat-sacrifice carrier
+    predicate tested opening `(6,11)=explosive` while keeping trigger 2 at
+    `(5,11)` intact. Capped branchdump returned no branches under 8-rat,
+    5-reachable-rat, max-one-trapped, 15-explosive, and 15-trigger guards.
+    This closes the shallow initial `(6,11)` carrier repair; the next
+    `blocked_v2` work needs a different first structural event or a waypoint
+    proof that changes the trigger-2 mouth before the familiar left-mid basin.
+  - `cyborg_rats/ai_takeover`: from the earlier `v<v` cutpoint, a pre-Q54
+    right-stack predicate tested clearing `(18,6)=explosive` while staging the
+    player in `(12..17,7..12)`. Branchdump returned no branches preserving at
+    least 22 enemies, 21 reachable enemies, zero trapped enemies, 8 explosives,
+    13 triggers, and two reachable triggers. This closes the cheap right-stack
+    mutation from `v<v`; the next AI handle must alter a different right-side
+    cell or test a nonlocal pre-trigger-4 actor route.
+  - `tinderrectangle`: from the live inner-baffle clue `<^<<<<^>^>v`, exact
+    branchdump tested opening the upper release aperture `(3,3)=web` while
+    keeping the lower rat controlled in `(3..4,4..5)` and the player separated
+    in `(6..8,3..5)`. It returned no branches under all-16-rat, 16-reachable,
+    zero-trapped, all-43-explosive guards. This means the inner-baffle clue is
+    now closed for `(13,8)` side ignition, row-6 prep, east-door separation, and
+    this upper-aperture release unless a different baffle/target is introduced.
+  - Retrospect cadence remains mandatory: after every 2-3 bounded probes, any
+    no-win wave, or 30 minutes of wall-clock work, append the closed family,
+    evidence, and next non-overlapping predicate. If no solver process is
+    active at a status checkpoint, either start the next capped batch or record
+    exactly why no safe batch is ready.
 
 ---
 
