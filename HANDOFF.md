@@ -8717,6 +8717,11 @@ rat-position or component falsifiers.
   and player at `(10,4)`, no branch opened/spent `(12,7)` with the rat alive
   and player staged on `(11,7)/(12,7)`, and the archived courier prefix could
   not open `(10,8)` while preserving the sealed rat.
+- `old_levels/on_the_clock`: P19
+  `>>>^^>>>vvv><vvvvvv` is now fully demoted as a resource-preserving local
+  branch. With all 3 explosives and all 13 triggers preserved, exact
+  `ratsle:7`, `swordready`, and `reachablege:5` checks all returned no branch.
+  Any useful continuation must spend a mechanism or back up before P19.
 
 ---
 
