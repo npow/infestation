@@ -10110,6 +10110,58 @@ rat-position or component falsifiers.
     reason no safe predicate is ready. Retrospect every two or three probes by
     recording the hypothesis, the necessary condition, the evidence, and what is
     learned if it fails.
+- Retrospect checkpoint - 2026-06-15 goal-resume predicate batch: no new
+  verified wins. The run-control state was clean at the start: branch
+  `claude/new-puzzles` was up to date with `fork`, `final_solutions.json` still
+  had 38 entries, and no solver/clingo/cargo children were active. This batch
+  kept to the current discipline: duplicate-check the predicate family, run only
+  capped children (`timeout` plus `ulimit -v 700000`), then record clean
+  closures before moving on.
+  - `reload_v3`: from the one-move-before-strict-trigger-3 clue
+    `^>>>>>>>^^^vvvvvvv<<<<<^^<<<<<<^^^^<<<<<<^<`, branchdump tested whether
+    trigger 3 could be fired while the top cage mouth `(10,5)=web` was already
+    open. This asks whether the strict-T3 clue can also repair the sealed
+    `(14,5)` rat before the forced adjacent-rat kill. The predicate
+    `triggeronlycellnot:3,10,5,web` returned no branches under all-3-rat,
+    one-reachable-rat, max-two-trapped, 5-explosive, 12-trigger, and
+    one-reachable-trigger guards. So the strict-T3 clue does not combine with
+    the obvious top-cage opening; next reload work must change a different
+    nonlocal lower-row/top-cage cell before this cut.
+  - `cooperation/handoff`: a controlled early-sacrifice version of the hard-rat
+    door story was tested from the initial board instead of the all-5
+    pre-trigger-1 bridge. Branchdump for
+    `cellnotratrectplayerrect:10,5,web,8,5,10,6,6,4,10,8` returned no branches
+    while allowing one rat loss but preserving at least one reachable rat, two
+    triggers, one reachable trigger, and 8 explosives. This closes the broader
+    "open `(10,5)` with the hard rat or right-side body still controlled"
+    formulation; do not spend more on the lower door without changing a
+    different door or early baton.
+  - `cooperation/handoff`: the sidecar's different upper-right baton idea was
+    also tested. Branchdump for
+    `cellnotratrectplayerrect:12,2,web,14,7,14,7,13,1,14,4` returned no
+    branches under 4-rat, 18-explosive, all-4-trigger, one-reachable-trigger,
+    and max-four-trapped guards. This closes the cheap `(12,2)` upper-right
+    pocket door while the `(14,7)` rat remains alive; future handoff hypotheses
+    need a different non-obvious door/baton invariant, not another version of
+    the `(10,5)/(11,7)` lower route or this upper pocket.
+  - `reload_v3`: the sidecar's nonlocal trigger-4-before-trigger-3 formulation
+    was tested from the pre-trigger-3 staging state
+    `^>>>>>>>^^^vvvvvvv<<<<<^^<<<<<<^^^^<<<<<<^^`. Branchdump for
+    `triggeronlycellnot:4,18,22,explosive` while trigger 3 remained reachable
+    returned no branches under all-3-rat, one-reachable-rat, max-two-trapped,
+    5-explosive, and 12-trigger guards. This is distinct from the older
+    station-first check that required trigger 5 still reachable, but it still
+    closes the simple "clear lower trigger-4 fuse, then use strict trigger 3"
+    ordering from this staging state.
+  - `tinderrectangle`: the sidecar's west-mouth version of the inner-baffle clue
+    was tested instead of the stale right-corridor/east-door variants. From
+    `<^<<<<^>^>v`, branchdump for
+    `cellnotratrectplayerrect:2,4,web,3,4,4,5,1,2,4,4` returned no branches
+    under all-16-rat, 16-reachable-rat, zero-unreachable, zero-trapped, and
+    all-43-explosive guards. This closes the cheap "retreat west/top and open
+    `(2,4)` while the lower rat remains controlled" handle from the inner-baffle
+    candidate. Future tinder work needs a different baffle or earlier prefix,
+    not more local `(2,4)` mouth opening from this candidate.
 
 ---
 
