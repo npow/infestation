@@ -193,6 +193,37 @@ fn rat_component_map(grid: &Grid) -> (Vec<Vec<i32>>, Vec<usize>) {
     (comp, sizes)
 }
 
+fn rat_component_size_at(grid: &Grid, point: (i32, i32)) -> Option<usize> {
+    let (x, y) = point;
+    if x < 0 || y < 0 || x as usize >= grid.width() || y as usize >= grid.height() {
+        return None;
+    }
+    if !rat_at(grid, point) {
+        return None;
+    }
+
+    let (components, sizes) = rat_component_map(grid);
+    let component_id = components[y as usize][x as usize];
+    if component_id < 0 {
+        return None;
+    }
+    Some(sizes[component_id as usize])
+}
+
+fn max_rat_component_size_in_rect(
+    grid: &Grid,
+    x1: i32,
+    y1: i32,
+    x2: i32,
+    y2: i32,
+) -> Option<usize> {
+    rat_positions(grid)
+        .into_iter()
+        .filter(|&point| point_in_rect(point, x1, y1, x2, y2))
+        .filter_map(|point| rat_component_size_at(grid, point))
+        .max()
+}
+
 fn rat_walkable_static(cell: CellKind) -> bool {
     !matches!(cell, CellKind::Wall | CellKind::Spiderweb)
 }
@@ -1102,6 +1133,8 @@ enum LookupGoal {
     PlayerAt(i32, i32),
     PlayerFacing(i32, i32, Dir4),
     RatAt(i32, i32),
+    RatComponentAtLeast(i32, i32, usize),
+    RatRectComponentAtLeast(i32, i32, i32, i32, usize),
     RatAtFarFromPlayer(i32, i32, i64),
     RatAtWithPlayer(i32, i32, i32, i32),
     RatInRectWithPlayerInRect(i32, i32, i32, i32, i32, i32, i32, i32),
@@ -1505,6 +1538,30 @@ impl LookupGoal {
             "ratat" => {
                 let (x, y) = parse_required_point(arg);
                 Self::RatAt(x, y)
+            }
+            "ratcomponentge" | "ratcompge" | "ratcomponentatleast" => {
+                let values: Vec<i32> = arg
+                    .split(',')
+                    .map(|part| part.trim().parse().expect("coordinate or component size"))
+                    .collect();
+                assert_eq!(values.len(), 3, "expected x,y,min_component_size");
+                assert!(values[2] >= 0, "component size must be non-negative");
+                Self::RatComponentAtLeast(values[0], values[1], values[2] as usize)
+            }
+            "ratrectcomponentge" | "ratrectcompge" | "ratinrectcomponentatleast" => {
+                let values: Vec<i32> = arg
+                    .split(',')
+                    .map(|part| part.trim().parse().expect("coordinate or component size"))
+                    .collect();
+                assert_eq!(values.len(), 5, "expected x1,y1,x2,y2,min_component_size");
+                assert!(values[4] >= 0, "component size must be non-negative");
+                Self::RatRectComponentAtLeast(
+                    values[0],
+                    values[1],
+                    values[2],
+                    values[3],
+                    values[4] as usize,
+                )
             }
             "ratfar" | "ratatfar" => {
                 let ((x, y), distance) = parse_point_and_distance(arg);
@@ -2141,6 +2198,13 @@ fn lookup_goal_reached(
         }
         LookupGoal::PlayerFacing(x, y, dir) => player_facing(current, (x, y), dir),
         LookupGoal::RatAt(x, y) => rat_at(current, (x, y)),
+        LookupGoal::RatComponentAtLeast(x, y, minimum) => {
+            rat_component_size_at(current, (x, y)).is_some_and(|size| size >= minimum)
+        }
+        LookupGoal::RatRectComponentAtLeast(x1, y1, x2, y2, minimum) => {
+            max_rat_component_size_in_rect(current, x1, y1, x2, y2)
+                .is_some_and(|size| size >= minimum)
+        }
         LookupGoal::RatAtFarFromPlayer(x, y, min_distance) => {
             rat_at(current, (x, y))
                 && nearest_player_distance_from(current, (x, y))
@@ -2505,6 +2569,21 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         LookupGoal::RatAt(x, y) => {
             let rats = rat_positions(current);
             nearest_target_distance(&rats, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::RatComponentAtLeast(x, y, minimum) => {
+            let rats = rat_positions(current);
+            let rat_distance = nearest_target_distance(&rats, &[(x, y)]);
+            let component_deficit =
+                minimum.saturating_sub(rat_component_size_at(current, (x, y)).unwrap_or(0)) as i64;
+            component_deficit * 100_000 + rat_distance * 1_000 + heuristic(current) / 1_000
+        }
+        LookupGoal::RatRectComponentAtLeast(x1, y1, x2, y2, minimum) => {
+            let rats = rat_positions(current);
+            let rect_distance = nearest_rect_distance(&rats, x1, y1, x2, y2);
+            let component_deficit = minimum.saturating_sub(
+                max_rat_component_size_in_rect(current, x1, y1, x2, y2).unwrap_or(0),
+            ) as i64;
+            component_deficit * 100_000 + rect_distance * 1_000 + heuristic(current) / 1_000
         }
         LookupGoal::RatAtFarFromPlayer(x, y, min_distance) => {
             let target = (x, y);
@@ -2945,6 +3024,12 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
                 + (!player_facing(current, (x, y), dir) as i64)
         }
         LookupGoal::RatAt(x, y) => !rat_at(current, (x, y)) as i64,
+        LookupGoal::RatComponentAtLeast(x, y, minimum) => {
+            minimum.saturating_sub(rat_component_size_at(current, (x, y)).unwrap_or(0)) as i64
+        }
+        LookupGoal::RatRectComponentAtLeast(x1, y1, x2, y2, minimum) => minimum
+            .saturating_sub(max_rat_component_size_in_rect(current, x1, y1, x2, y2).unwrap_or(0))
+            as i64,
         LookupGoal::RatAtFarFromPlayer(x, y, min_distance) => {
             let target = (x, y);
             let rats = rat_positions(current);

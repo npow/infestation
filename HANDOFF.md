@@ -7924,6 +7924,64 @@ Per-level notes from this pass:
 
 ---
 
+### Topology-predicate transfer pass - 2026-06-15
+
+Added exact rat-component lookup goals to the Rust oracle:
+
+- `ratcomponentge:x,y,min` verifies that the rat at `(x,y)` belongs to a
+  rat-walkable component of at least `min` cells.
+- `ratrectcomponentge:x1,y1,x2,y2,min` verifies the same condition for any rat
+  in a rectangle.
+
+These predicates turn the transfer/human obligation "do not strand a survivor"
+into a direct exact-search goal instead of inferring it indirectly from rat
+counts. The release build passes after the change:
+`cargo build --release -p solver`.
+
+Fresh bounded artifacts:
+
+- `/tmp/infestation-runs/20260615T001531Z_component_obligation_wave`
+- `/tmp/infestation-runs/20260615T001746Z_access_obligation_wave`
+- `/tmp/infestation-runs/20260615T001959Z_tinder_t106_win_no_minrats.log`
+- `/tmp/infestation-runs/20260615T002240Z_tinder_event_cleanup_wave`
+
+Results from this pass:
+
+- `release`: from `v<vv^^`, both `ratcomponentge:18,4,2` and
+  `reachable:18,4` returned no branch while preserving all 24 rats and at least
+  10 triggers. The known `v<vv^^>>v` opener again timed out in the same sealed
+  `(18,4)` basin. `cellnot:18,5,web` hit only the per-child memory cap, so rerun
+  that as a single-worker/lower-node check if needed; do not treat it as proof.
+- `cyborg_rats/ai_takeover`: at `v<vv^^^`, `(18,4)` is already in a large
+  rat-walkable component, so component size alone is too weak. Exact
+  `reachable:18,4` and `triggeropen:7,75` checks still found no branch while
+  preserving the 23-rat / 9-explosive / 14-trigger phase. The next predicate
+  must target actual right-gate player access or trigger-7 setup before this
+  prefix.
+- `reload_v3`: component-growth checks from the documented bottom-station
+  prefix for `(0,21)` and `(14,5)` returned immediately negative; that prefix
+  is already a dead topology state for these obligations.
+- `cooperation/handoff`: the broad gate component predicate was true but weak;
+  the specific `reachable:10,6` lookup from `v^ >^ >^ >^ >^ >^` returned
+  `NO_SOLUTION`. Back up before this WP2 baton prefix.
+- `cooperation/blocked_v2`: broad lower-left component predicates were weak.
+  Specific reachability goals for `(0,15)` and `(14,19)` from
+  `vv v^ vv <^ <v <^ <. ^< ^^ ^^ ^^ ^< >v` returned immediately negative under
+  9-rat / 6-reachable-rat guards.
+- `old_levels/on_the_clock`: from `>>>^^>>>`, `ratrectcomponentge:0,13,3,16,2`
+  plus `reachable:1,19` and `reachable:16,19` all returned no branch while
+  preserving 8 rats and 8 triggers. The best states converge to the same lower
+  singleton-access basin.
+- `tinderrectangle`: the T106 direct cleanup was rerun without the mistaken
+  `--min-rats 16` win guard. It still returned `NO_SOLUTION` in 120s, best
+  state 15 rats. Event cleanup from all-rats-preserved web-collapse successors
+  (`^`, `>^<`, `>^>^^`, `>^>^>^<`, and two right-side 23-move suffixes) also
+  converged to the same 15-rat basin. Treat the current T106 web-collapse macro
+  as a dead cleanup pattern unless a new separation/ignition obligation is
+  proven first.
+
+No new verified win strings were found in this pass.
+
 ## 4. Planned next steps (start here)
 
 1. **Do not repeat broad direct searches.** The grid-step/hash speedup is already

@@ -53,6 +53,12 @@ paths; check before reusing those.
   obligations. It runs `branchdump`/`geomlure` predicates in parallel with a
   per-child memory cap and writes one log per obligation under
   `/tmp/infestation-runs/`.
+- The Rust `lookup`/`branchdump` goals include topology predicates for
+  human-style access checks: `ratcomponentge:x,y,min` requires the rat at
+  `(x,y)` to sit in a rat-walkable component of at least `min` cells, and
+  `ratrectcomponentge:x1,y1,x2,y2,min` applies the same test to any rat in a
+  rectangle. Use these to test sealed-rat obligations before launching broad
+  cleanup searches.
 - `learned_macro_ranker.py` — older NumPy-only macro-feature ranker. Keep it as
   a low-dependency fallback, but prefer `transfer_ranker.py` when the `.venv-ml`
   PyTorch environment is available.
