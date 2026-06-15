@@ -8366,6 +8366,102 @@ new.
   Next useful `ai_takeover` work should back up before the trigger-8 corridor
   and test a right-gate topology change before the left trigger-2 cut.
 
+### Strategic hypothesis matrix pass - 2026-06-15
+
+No new verified win. The useful outcome was a stronger decision tree: every
+probe asked what must be true for a human-plausible mechanism to survive, and
+branches that failed those necessary conditions were demoted instead of being
+sent to longer cleanup search.
+
+- `old_levels/on_the_clock`: the `6 -> 1 -> 7 -> 8 -> 2 -> 5` family is now
+  demoted as a late trap. From P24
+  `vvvvv^^^^>>^>^vv>^^^^<^<`, opening either adjacent kill web
+  `(10,13)` or `(14,15)` while preserving all 8 rats and useful resources
+  returned empty under tightened 900 MB / 35 s probes. From pre-trigger-8
+  `vvvvv^^^^>>^>^vv>`, `reachablege:1`, `triggeronly:4`, and `triggeronly:5`
+  all returned empty. From post-trigger-1 `vvvvv^^^^>>^>`, `triggeronly:3`
+  was also empty. This means the next `on_the_clock` hypothesis must branch
+  before trigger 1 or change the initial trigger-6 setup; longer P24/P34
+  cleanup is not an efficient use of search.
+- `release`: from the earlier branch point `v`, the right-gate obligation did
+  not survive. `cellnot:18,5,web` and strict `triggeronly:2` both returned no
+  branch while preserving 24 rats, high explosives, high triggers, and at least
+  two reachable triggers. `events` from `v` only found low trigger-family burns
+  with zero reachable rats and no right-gate topology change. Back up to the
+  initial move or define a different first irreversible condition; do not
+  deepen the known `v<...` / `v>...` basins.
+- `cyborg_rats/ai_takeover`: the same earlier-branch audit from `v` returned
+  no branch for opening `(16,8)`, strict `triggeronly:7`, or
+  `cyborgkillready` under high-resource guards. `events` again produced only
+  zero-reachable-rat trigger-family burns. The next useful hypothesis must
+  start at initial or use a different first move/resource invariant.
+- `cooperation/handoff`: backing up to `v^ >^ >^ >^` proved only weak staging.
+  A player can be staged in the safe rect while trigger 2 remains live, but the
+  actual obligations `ratcell:10,5,11,7,trigger2` and
+  `cellnotratat:10,5,web,10,6` returned no branch. Treat safe staging as
+  insufficient; the live mechanism must move the sealed `(10,6)` rat or open
+  `(10,5)` before the known sweep.
+- `cooperation/blocked_v2`: initial `events` produced the known trigger-4
+  seed family, but direct lower-left obligations failed. From the initial
+  state, opening `(1,15)` while preserving the `(0,15)` rat returned no branch,
+  and reaching the lower-left trigger-2 station `(3,14)` also returned no
+  branch under all-rat/high-resource guards. Promote the trigger-4 seeds only
+  as archive diagnostics, not as live continuations.
+- `reload_v3`: initial trigger-6 gate repair remains unproven and mostly
+  demoted. `triggeronlycellnot:6,1,21,web` hit the 650 MB cap and is
+  inconclusive, but companion obligations `triggeronlycellnot:6,2,21,explosive`
+  and top-access/gate-change
+  `cellnotratrectplayerrect:10,5,web,13,4,15,6,8,3,11,6` returned no branch.
+  Event scans still only promote known bottom-station/top-rat-motion families
+  that preserve the same sealed `(0,21)` and trigger-2 blockers.
+- `tinderrectangle`: the clean short latch `<^^^vvv<<<<<<` is demoted as a
+  live precursor. It preserves all 16 rats and all 43 explosives, but local
+  `ratgeom` from `(1,4)` to `(2,4)` / `(2,5)`, the right-safe
+  `ratrectplayerrect` obligation, and all-16 `events` from that prefix all
+  returned empty. The missing mobility-changing event must happen before this
+  latch/lower-rat contact, not in P36/P52 cleanup.
+
+### Transfer-ranked exact wave after matrix - 2026-06-15
+
+Artifacts:
+
+- `/tmp/infestation-runs/event_seeds_20260615_strategic_matrix.jsonl`
+- `/tmp/infestation-runs/20260615_strategic_matrix_exact`
+- `/tmp/infestation-runs/archive_20260615_strategic_matrix_exact.jsonl`
+- `/tmp/infestation-runs/triage_20260615_strategic_matrix_exact.jsonl`
+
+The event builder expanded 14 parent candidates and transfer-scored 47 event
+successors with frozen DRC11 + DRC33 priors, 55 triage examples, and all 116
+obligation labels. The exact follow-up spent 14 bounded jobs (`lookup_win` and
+`fess`, 4 workers, 1.2 GB per child, 140 s cap). No job solved a level.
+
+Important frontier shapes:
+
+- `release`: both exact methods returned the same sealed-right-rat family.
+  Triage of the best descendants still flags `release-right-rat-sealed` and
+  `release-trigger2-unreachable`; the best exact descendants reduce to one rat
+  with zero reachable rats, not a live route.
+- `reload_v3`: the transfer-ranked bottom-station event collapses to the known
+  sealed `(0,21)` family. FESS reaches one-rat states with trigger 2 still
+  unreachable, and lookup-win returns no solution.
+- `old_levels/on_the_clock`: transfer re-promoted the old P19 branch. FESS can
+  reduce rats, but the best reduced descendants have no remaining mechanism and
+  a trapped survivor. This is a label-confirming failure, not a new lead.
+- `tinderrectangle`: the top-ranked event from initial is just `<`; exact
+  descendants drop to 15-rat top-pack states. This confirms the lower-rat
+  sacrifice/top-pack shortcut is not a current solution path.
+- `blocked_v2`: both top transfer seeds are the known trigger-4 family. FESS
+  keeps useful early reachability for a while but timeout frontiers collapse to
+  3-rat / 0-reachable-rat states with one trapped survivor.
+- `cyborg_rats/ai_takeover`: the only frontier that did not immediately carry a
+  triage hard flag was a 20/21-reachable state from the early-row5 family, but
+  its FESS frontiers still list `(18,4)` as the sole unreachable enemy and do
+  not open the right-gate webs. Direct follow-up predicates from
+  `v<vv^^^^^^^^v^v^v^vvvvvv.v` for opening `(16,8)`, reaching `(18,4)`, and
+  strict `triggeronly:7` all returned empty under 20-rat / 19-reachable /
+  9-explosive / 10-trigger guards, so this clean-looking frontier is demoted
+  too.
+
 ## 4. Planned next steps (start here)
 
 1. **Do not repeat broad direct searches.** Use pretrained transfer ranking plus
