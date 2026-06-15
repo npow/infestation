@@ -9502,6 +9502,39 @@ rat-position or component falsifiers.
   Treat this as a process miss, not new evidence: before launching another wave,
   grep `solver/solutions/tools/obligation_labels.jsonl` and `HANDOFF.md` for
   the target predicate/prefix.
+- Goal-continuation checkpoint - 2026-06-15: no verified wins. A small capped
+  Go-Explore exact wave used 3 workers, 700 MB per child, and 100 s caps from
+  `/tmp/infestation-runs/event_seeds_20260615T095043Z_necessary_handle.jsonl`.
+  It found no solved job:
+  `/tmp/infestation-runs/20260615T115549Z_go_explore/`. The wave mostly
+  repeated known basins: `release` still had `(18,5)=web` with trapped
+  `(18,4)`, `ai_takeover` still had sole unreachable `(18,4)`, and `reload_v3`
+  still had `(0,21)` sealed. Treat this as confirmation that the exact
+  portfolio should not be promoted unless the seed changes one of those named
+  blockers first.
+- `cooperation/blocked_v2`: the distinct trigger `1 -> 5` family
+  `^< ^^ v^ ^^ v> v> v> vv vv <^ <v <v <v <^` was checked against the
+  recommended rat-trigger-4 staging handle. At this prefix, diagnostics show
+  8 rats, 6 reachable rats, no trapped rats, 15 explosives, and 6 triggers.
+  Exact predicates for a rat in `(14..16,15..16)` while `(15,16)=trigger4`,
+  `ratat:15,16`, and `triggeronly:4` returned no branches under all-8/useful
+  guards; relaxing to 7 rats still produced no branch or `NO_EVENTS`. Do not
+  force player-triggered 3 or rat-triggered 4 from this exact state without a
+  new staging invariant.
+- `tinderrectangle`: the p29 safe-side family is now narrower. From
+  `<<<<<>^>>^>^>>v>vv>>^^^>>vvvv`, a too-weak predicate accepted the known
+  lower rat pinned at `(2,3)`, but tightened release-down checks requiring the
+  lower rat in `x=1..2,y=4..6` with the player safe in the southeast returned
+  no branches under all-16-rat/all-43-explosive/zero-trapped guards. Backups to
+  prefixes before or at the pin also returned no lower-mouth release branch.
+  The next tinder mechanism must change the lower rat before the turn-12
+  `(2,3)` pin, not deepen from p29.
+- `cyborg_rats/ai_takeover`: P93 pre-trigger-8/right-gate discriminators did
+  not expose a new topology handle. `ratcell:18,5,18,19,trigger8` returned no
+  branch; opening `(17,19)` with bottom actor/player only found a branch after
+  trigger 8 was already consumed; and the stricter
+  `cellnotcellis:17,19,web,18,19,trigger8` returned no branch. This folds back
+  into the known post-trigger-8 family, not a new pre-trigger-8 route.
 
 ---
 
