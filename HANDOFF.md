@@ -331,6 +331,35 @@ Operational note: all probes were run with serialized or low parallelism,
   variants such as `v>>><^^v>><^^>>>vvv><^vv^`; these keep all 8 rats but only
   one reachable rat, so they are not a useful continuation by themselves.
 
+### Retrospective checkpoint - 2026-06-15
+
+No new verified win. The process fix from this checkpoint is to make every
+bounded wave state a hypothesis, the necessary condition that would make it
+worth deepening, and the stop condition. Do not widen a family after its local
+handle fails; record the blocker and switch families.
+
+- `old_levels/on_the_clock.csv`: reran the previously uncaptured
+  no-resource pre-shape check. `reachablege:2` while preserving all 8 rats, all
+  11 explosives, all 26 triggers, and at most 6 trapped rats returned no
+  branches. Stop trying to make two rats reachable before any resource spend;
+  the next live path probably starts from weak trigger-6-first (`vvvvv`) or a
+  different first resource spend, then asks for a second handle.
+- `tinderrectangle.csv`: from the inner-baffle candidate `<^<<<<^>^>v`, the
+  row-6 landing-prep idea failed. Exact branchdumps for opening `(4,6)`,
+  `(5,6)`, or `(6,6)` while the lower rat remains controlled in row 4/5 and the
+  player remains nearby returned no branches under all-rat/all-explosive/
+  all-reachable/zero-trapped guards. The next tinder attempt should change the
+  row-3/row-4 lateral path or find a top-corner route, not pre-cut row 6.
+- `reload_v3.csv`: backing up one move from the strict trigger-3 candidate
+  exposes a real tempo detail: after trigger 3 fires at
+  `^>>>>>>>^^^vvvvvvv<<<<<^^<<<<<<^^^^<<<<<<^<^`, the east-facing hold suffix
+  `>` lets the roaming rat break plank `(3,11)` while preserving all 3 rats, 5
+  explosives, and 12 triggers. That still did not produce a live continuation:
+  guarded `triggeronly:1`, `triggeronly:4`, `cellnot:1,21,web`, useful event
+  enumeration, and a 45s direct lookup-win from the held state all returned no
+  branch / `NO_SOLUTION`. Treat it as a closed sibling unless a new invariant
+  explains why another post-trigger-3 facing should matter.
+
 ### Current run notes - 2026-06-11
 
 No new verified wins yet. Useful observations to preserve:
