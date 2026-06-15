@@ -8601,9 +8601,15 @@ rat-position or component falsifiers.
   `v<vv^^>>vv<>>>^` produced no reachable trigger-6 branch. Backing up to
   `v<vv^^^`, strict trigger 5 and resource-preserving trigger 6 were empty;
   unconstrained trigger 6 still strands only rat `(18,4)` with `(18,5)=web`.
-  The sibling `ai_takeover` has the same skeleton but `(18,5)` is open, so the
-  next `release` hypothesis should alter that exact web before or during the
-  release event.
+  The remote-trigger-2 theory was also tested: source confirms a rat can
+  activate a trigger, and firing left trigger 2 at `(0,16)` should zap remote
+  trigger 2 at `(19,7)` and detonate `(18,6..8)`, clearing `(18,5)`. However,
+  from `v<vv^^^`, exact `ratat:0,16`, left trigger-zone
+  `ratrectplayerrect:0,14,2,17,0,12,4,18`, and relaxed
+  `triggeronlycellnot:2,18,5,web` all returned no branch under useful 23-rat
+  guards. The sibling `ai_takeover` has the same skeleton but `(18,5)` is open,
+  so the next `release` hypothesis should alter that exact web through a
+  different pre-release event.
 - `cyborg_rats/ai_takeover`: transfer from `release` remains useful only as a
   diagnostic. The `v<vv^^^` skeleton has no trapped rats because the right
   pocket is already open, but no verified continuation was found. Use it to
