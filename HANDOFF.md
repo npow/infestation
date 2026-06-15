@@ -9767,6 +9767,42 @@ rat-position or component falsifiers.
   final-trigger cleanup route. Next `on_the_clock` work should branch before
   trigger 5, or require a concrete pre-trigger-5 invariant such as preserving a
   named bottom/right cleanup handle while trigger 6 or 8 remains useful.
+- Retrospect checkpoint - 2026-06-15 sidecar necessary-condition wave: no
+  verified wins. This pass deliberately avoided broad portfolios: three
+  read-only sidecars proposed falsifiable human-style handles, and the local
+  runner executed at most three capped solver processes at once (`timeout 45s`,
+  `ulimit -v 700000`). All solver processes were stopped before this update.
+  - `reload_v3`: Goodall's nonlocal strict-trigger-3 escape condition returned
+    no branches. The tested condition required trigger 3 already gone, all 3
+    rats alive, 5 explosives, 12 triggers, at least one reachable rat, the
+    middle rat in the trigger-3 mouth `(3..5,10..12)`, and the player retreated
+    below `(1..5,12..14)`. This further demotes strict trigger 3 as a
+    one-handle trap unless a different earlier topology changes the rat/player
+    geometry.
+  - `old_levels/on_the_clock`: from P28
+    `^>>v>^^>>>vvv>>v<<vvvvvv^^>>`, both proposed pre-trigger-5 recovery checks
+    returned empty. There was no branch to `reachablege:5` under all-8-rat /
+    3-explosive / 8-trigger / reachable-trigger-5 guards, and no branch to open
+    `(14,15)=web` under the fallback 4-reachable-rat guard. This means the
+    trigger-1/2 route still needs an earlier branch before this P28 cutpoint,
+    not a last-move cleanup repair before trigger 5.
+  - `tinderrectangle`: Darwin's east-door separation from the live inner-baffle
+    clue was checked from `P12 = <^<<<<^>^>v>`. Both gap predicates returned no
+    branches while preserving all 16 rats, all 43 explosives, all rats
+    reachable, zero trapped rats, lower rat controlled in `(4..6,4..5)`, and
+    left baffle `(2,4)=web`: first with player `(8..10,5..6)`, then with player
+    on the true safe side `(13..15,6..8)`. Do not continue the pure P12
+    east-door branch without a different baffle-changing invariant.
+  - `release`: Hume's direct stance-kill idea returned empty. From `v<vv^^^`,
+    no branch put the player at `(18,5)` while the `(18,4)` rat remained alive
+    under 22-rat / 20-reachable-rat / useful-resource guards. The concrete
+    early rat-fired lower-right trigger-6 setup also returned empty from prefix
+    `v`: no branch staged rat `(18,17)` with player `(19,19)` while preserving
+    all 24 rats, 30 explosives, 9 triggers, and two reachable triggers.
+  - `cyborg_rats/ai_takeover`: the same direct stance-kill predicate from
+    `v<vv^^^` returned empty under 22-enemy / 21-reachable / zero-trapped /
+    useful-resource guards. This does not close AI takeover globally, but it
+    closes the simple "same board, use the web as a stance square" variant.
 
 ---
 
