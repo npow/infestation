@@ -8513,26 +8513,88 @@ after the necessary condition fails.
   branch point; the next useful hypothesis is a delayed retreat/side-loop
   before moving the rat down, not another lower-rat contact race.
 
+### Retrospective checkpoint - parked-rat and sidecar audit - 2026-06-15
+
+No new verified win. This checkpoint changed the branch ranking and caught one
+process error: do not put `--min-rats` / `--min-explosives` preservation guards
+on terminal `win` lookups. A real solution is expected to spend rats/explosives
+on the final ignition, so resource guards belong on staging predicates such as
+`ratrectplayerrect`, `rectignite`, `winready`, and trigger/web obligations, not
+on the terminal explosion proof itself.
+
+- `tinderrectangle`: promoted a shorter all-16 lower-rat frontier found by
+  target-guided `tinderbeam`. Prefix
+  `<^^<vv<^<v<^^>^>.>>.>>>vvv<<<` reaches turn 29 with all 16 rats, all 43
+  explosives, 40 webs, the lower rat parked at `(8,6)`, and the player at
+  `(10,6)`. From there, exact `branchdump` found right-safe staging states such
+  as
+  `<^^<vv<^<v<^^>^>.>>.>>>vvv<<<^^<>vv>>^^^>>>v<v>v`, which leaves the player
+  at `(15,6)`, the lower rat still at `(8,6)`, all 16 rats, all 43 explosives,
+  and 26 webs. This is a better live frontier than the previous 65-turn
+  `(8,6)` geomlure because it is shorter and preserves more structure.
+- `tinderrectangle`: the parked-rat frontier is not itself a finish. Direct
+  unguarded `lookup --goal win` from both the turn-29 parked state and the
+  turn-48 right-safe state returned no solution under the tested caps, and
+  guarded `winready` from the right-safe state returned no branch. One-step
+  checks from `(15,6)` show `^`, `v`, `<`, and `.` preserve play while `>` is
+  `GameOver`; none is a one-step win. The next useful condition is not "deepen
+  the parked state"; it is to find a rat/player phase where the lower rat takes
+  a detonating step while the player is already out of the blast.
+- `tinderrectangle`: the early `<^^` family was audited across lower-rat rows
+  `(1,4)`, `(1,5)`, and `(1,6)`. `rectignite` from `<^^<`, `<^^v<`, and
+  `<^^vv<` returned empty under all-16/all-43 guards. The earlier side-loop
+  `<^^<<^>>>>v>` also failed stricter safe-notch, lower-lane, and top-corner
+  predicates. This demotes the idea that the same early side-loop only needs a
+  longer delayed retreat.
+- `release`: sidecar checks demoted the known post-release family. After
+  `v<vv^^>>v`, `(18,4)` is already sealed as an unreachable singleton behind
+  `(18,5)=web`. From both `v<vv^^>>v` and
+  `v<vv^^>>vv<>>>^`, predicates for opening `(18,5)` while `(18,4)` remains
+  alive, or doing so via trigger 6 or trigger 2, returned no branch. Back up
+  before the first release commitment; do not spend more search on repairing
+  `(18,5)` afterward.
+- `cyborg_rats/ai_takeover`: the same transferred post-release idea is
+  demoted. The topology is slightly better than `release` because `(18,4)` can
+  be in the rat component, but the player still cannot reach it, and `(16,8)`
+  could not be opened from the immediate or follow-up post-release states under
+  23-rat / 22-reachable guards. The next useful attack must change the right
+  gate before accepting the trigger-4/5 release skeleton.
+- `old_levels/on_the_clock`: sidecar promoted P18 -> P19 as a real early
+  alternative. From `>>>^^>>>vvv><vvvvv`, the branch
+  `>>>^^>>>vvv><vvvvvv` fires trigger 4, keeps all 8 rats, and improves
+  reachability from 2/8 to 4/8. Tested follow-ups did not make it live:
+  trigger 5, 6, and 8 were unavailable under useful guards, while trigger 9 was
+  reachable but stranded a singleton at `(13,9)` and had no `reachablege:5`,
+  trigger-6, or trigger-8 continuation. Keep P19 as a branch point, but do not
+  accept the immediate trigger-9 cut.
+- `reload_v3`: sidecar demoted both named event families as staging-only. Top
+  family prefixes such as `^>>>>>>>^^^^vvvv<<` and `^>>>>>>>^^^^vvv<<^` could
+  not produce `reachablege:2`, strict trigger 2, or the `(10,5)` gate. Bottom
+  station prefixes `vvvv<<<<<<vvv>` and `vvv<<<<<<vv<<<<` could not produce a
+  second reachable rat, open `(1,21)` while preserving `(0,21)`, or fire
+  trigger 1 under useful guards.
+
 ## 4. Planned next steps (start here)
 
 1. **Do not repeat broad direct searches.** Use pretrained transfer ranking plus
    mechanism-specific obligations. The grid-step/hash speedup is already in the
    tree, but the current hard cases still fail because the heuristic prefers
    irreversible dead basins. Inspect diagnostics after every irreversible event.
-2. **Continue `release` from a new hypothesis, not the trigger-5/6 family.**
+2. **Continue `tinderrectangle` from the short parked-rat frontier.** The best
+   current branch is `<^^<vv<^<v<^^>^>.>>.>>>vvv<<<`, which reaches all-16 /
+   all-43 lower rat `(8,6)` at turn 29, and the staged right-safe child
+   `<^^<vv<^<v<^^>^>.>>.>>>vvv<<<^^<>vv>>^^^>>>v<v>v`. Do not rerun generic
+   win search from those states without a new predicate. The next target should
+   encode the final ignition phase: a lower rat chooses a detonating step while
+   the player is in `(14,7)`, `(15,7)`, `(14,8)`, or `(15,8)` and not on the
+   blast line.
+3. **Continue `release` from a new hypothesis, not post-release repair.**
    The known prefix `v<vv^^>>v` plus trigger 5 can reduce the board to a single
-   `(18,4)` rat, but that mechanism strands it behind `(18,5)`. Recent bounded
-   checks also failed to reach trigger 6 in a way that preserves reachable
-   trigger 2. The next useful attack must handle `(18,4)` before the top sweep
-   or open its web without spending the adjacent explosive chain.
-3. **Continue `tinderrectangle` from the early all-16 side loop.** The live
-   branch point is `<^^<<^>>>>v>` with the lower rat at `(2,3)` and the player
-   at `(10,4)`. The 27-turn continuation
-   `<^^<<^>>>>v>^<<<vv<v<^<<<^v` proves the rat can move to `(2,4)`, but it
-   leaves the player in contact at `(2,5)` and tested retreat predicates were
-   empty. Next probe should create a delayed retreat or side-loop before moving
-   the rat down; do not rerun the demoted `<^^^vvv<<<<<<` latch or the 65-turn
-   `(8,6)` lower-rat near-frontier without a new condition.
+   `(18,4)` rat, but that mechanism strands it behind `(18,5)`. Fresh sidecar
+   checks from both `v<vv^^>>v` and `v<vv^^>>vv<>>>^` found no repair via
+   `(18,5)`, trigger 6, or trigger 2. The next useful attack must handle
+   `(18,4)` before the first release/top sweep or change the first irreversible
+   event family entirely.
 4. **Continue `ai_takeover` before trigger 4/5 commits.** The best current
    non-stale lead is `v<vv^^^`: it reaches the 23-rat / 9-explosive /
    14-trigger phase earlier than `v<vv^^<vv`, but bounded checks still cannot
