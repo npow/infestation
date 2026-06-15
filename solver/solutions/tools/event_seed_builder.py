@@ -183,10 +183,19 @@ def run_events(
     return proc.stdout
 
 
-def run_snapshot(level: str, prefix: str, timeout_sec: float) -> dict[str, Any] | None:
+def run_snapshot(
+    level: str,
+    prefix: str,
+    timeout_sec: float,
+    *,
+    include_csv: bool = False,
+) -> dict[str, Any] | None:
+    cmd = [str(SOLVER), "trajectory-json", canonical_level(level), prefix]
+    if not include_csv:
+        cmd.append("--no-csv")
     try:
         proc = subprocess.run(
-            [str(SOLVER), "trajectory-json", canonical_level(level), prefix, "--no-csv"],
+            cmd,
             cwd=ROOT,
             text=True,
             stdout=subprocess.PIPE,
@@ -207,7 +216,13 @@ def run_snapshot(level: str, prefix: str, timeout_sec: float) -> dict[str, Any] 
     return last
 
 
-def parse_events(parent: Candidate, text: str, with_snapshots: bool, snapshot_timeout: float) -> list[EventSeed]:
+def parse_events(
+    parent: Candidate,
+    text: str,
+    with_snapshots: bool,
+    snapshot_timeout: float,
+    include_csv: bool,
+) -> list[EventSeed]:
     events: list[EventSeed] = []
     pending: dict[str, Any] | None = None
     for line in text.splitlines():
@@ -218,7 +233,11 @@ def parse_events(parent: Candidate, text: str, with_snapshots: bool, snapshot_ti
         if pending is not None and line.startswith("FULL_ASCII "):
             prefix = line.removeprefix("FULL_ASCII ").strip()
             level = canonical_level(parent.level)
-            snapshot = run_snapshot(level, prefix, snapshot_timeout) if with_snapshots else None
+            snapshot = (
+                run_snapshot(level, prefix, snapshot_timeout, include_csv=include_csv)
+                if with_snapshots
+                else None
+            )
             events.append(
                 EventSeed(
                     parent=parent,
@@ -350,9 +369,22 @@ def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[t
     pretrained_checkpoints = normalize_pretrained_checkpoints(
         args.pretrained_checkpoint or [DEFAULT_PRETRAINED_CHECKPOINT]
     )
-    solved = load_solved_examples(args.samples_per_solution, args.oracle_timeout_sec)
-    triage = load_triage_examples(args.triage, args.oracle_timeout_sec)
-    obligations = load_obligation_examples(args.obligation_labels, args.oracle_timeout_sec)
+    include_csv = args.encoder == "semantic-dense10"
+    solved = load_solved_examples(
+        args.samples_per_solution,
+        args.oracle_timeout_sec,
+        include_csv=include_csv,
+    )
+    triage = load_triage_examples(
+        args.triage,
+        args.oracle_timeout_sec,
+        include_csv=include_csv,
+    )
+    obligations = load_obligation_examples(
+        args.obligation_labels,
+        args.oracle_timeout_sec,
+        include_csv=include_csv,
+    )
     train_examples = solved + triage + obligations
     if len(train_examples) < 16:
         raise SystemExit("not enough oracle examples for transfer head training")
@@ -365,6 +397,7 @@ def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[t
         seed=args.seed,
         freeze_prior=not args.fine_tune_prior,
         head=args.head,
+        encoder=args.encoder,
     )
 
     candidate_examples: list[SnapshotExample] = []
@@ -399,7 +432,7 @@ def transfer_scores(args: argparse.Namespace, events: list[EventSeed]) -> dict[t
         scores[key] = (learned_score, rank_score)
     print(
         f"transfer_rank pretrained={pretrained_repo}/{' + '.join(pretrained_checkpoints)} "
-        f"head={args.head} frozen_prior={not args.fine_tune_prior} "
+        f"head={args.head} encoder={args.encoder} frozen_prior={not args.fine_tune_prior} "
         f"train={len(train_examples)} solved={len(solved)} triage={len(triage)} "
         f"obligations={len(obligations)} scored_events={len(scores)}",
         file=sys.stderr,
@@ -470,7 +503,17 @@ def parse_args() -> argparse.Namespace:
             "comma-separate values to ensemble checkpoints"
         ),
     )
-    parser.add_argument("--head", choices=("linear", "small-mlp"), default="linear")
+    parser.add_argument(
+        "--head",
+        choices=("linear", "small-mlp", "dense-linear", "dense-mlp"),
+        default="linear",
+    )
+    parser.add_argument(
+        "--encoder",
+        choices=("legacy", "semantic-dense10"),
+        default="legacy",
+        help="board encoder to pass through to transfer_ranker.py",
+    )
     parser.add_argument("--fine-tune-prior", action="store_true")
     parser.add_argument("--jsonl-out", type=pathlib.Path, required=True)
     return parser.parse_args()
@@ -480,6 +523,7 @@ def main() -> int:
     args = parse_args()
     if not SOLVER.exists():
         raise SystemExit(f"missing solver binary: {SOLVER}")
+    include_csv = args.encoder == "semantic-dense10"
 
     candidates = load_candidates(args)
     if not candidates:
@@ -511,6 +555,7 @@ def main() -> int:
                 text,
                 with_snapshots=not args.no_snapshots,
                 snapshot_timeout=args.snapshot_timeout_sec,
+                include_csv=include_csv,
             )
         )
 

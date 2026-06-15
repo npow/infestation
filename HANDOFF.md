@@ -8068,12 +8068,134 @@ Evidence:
   `--no-canonical`; branchdump also found no `reachable:18,4` or `ratgone:18,4`
   branch at depth 80. Treat this as a dead continuation, not a timeout problem.
 
+### Transfer-learning alignment - 2026-06-15
+
+The next solving work should stay transfer-first. Do not train an Infestation
+policy from scratch. The terminal win signal is too sparse, the hard levels have
+deceptive dead basins, and the existing exact oracle already supplies better
+supervision than a fresh RL run would get.
+
+Current transfer implementation:
+
+- `transfer_ranker.py` uses public pretrained Sokoban learned-planner
+  checkpoints as frozen board-planning priors. It can ensemble DRC11 and DRC33,
+  train only a small Infestation calibration head, and keep final correctness in
+  the Rust verifier.
+- `--encoder semantic-dense10` requests oracle CSV snapshots and maps them into
+  10 semantic channels: empty, wall, web, plank, black hole, explosive, trigger,
+  player, rat, and cyborg rat. A trainable 1x1 adapter feeds the frozen
+  pretrained conv/dense trunk.
+- `dense-linear` and `dense-mlp` heads use the frozen 256-dimensional dense
+  representation plus actor/critic outputs instead of only pooled convolutional
+  features.
+- `event_seed_builder.py --transfer-rank --encoder semantic-dense10` scores
+  structural event successors in the transfer loop. This is the preferred path:
+  the pretrained model ranks trigger/web/rat-release events, then exact search
+  proves or rejects the branch.
+
+Negative transfer evidence recorded this session:
+
+- Dense exact run: `/tmp/infestation-runs/20260615T020351Z_dense_event_exact`
+  produced no verified win.
+- Semantic plus human-label exact run:
+  `/tmp/infestation-runs/20260615T023032Z_semantic_plus_human_exact` produced
+  no verified win.
+- Structural predicate wave:
+  `/tmp/infestation-runs/20260615T030100Z_structural_predicates` mostly returned
+  empty predicates; the only branching release trigger-4-first family preserved
+  resources but left only one reachable rat.
+- Closed-loop semantic event exact run:
+  `/tmp/infestation-runs/20260615T030727Z_closedloop2_exact` finished with no
+  `.solution`, no `SOLVED`, and no `result=Won`. It produced
+  `/tmp/infestation-runs/archive_20260615T030727Z_closedloop2_exact.jsonl`,
+  `/tmp/infestation-runs/triage_20260615T030727Z_closedloop2_exact.jsonl`, and
+  `/tmp/infestation-runs/seeds_20260615T030727Z_closedloop2_exact.jsonl`.
+
+Practical transfer plan from here:
+
+1. Keep DRC11/DRC33 frozen and use them as a ranker/policy prior, not as a
+   replacement game engine.
+2. Investigate the full DRC recurrent cells and `steps_to_think` path as the
+   next transfer upgrade. The checkpoints include `cell_list_*` ConvLSTM
+   parameters, but the current code only uses conv/dense/actor/critic. Porting
+   or importing the recurrence is useful only if it can be validated by
+   snapshot-level smoke tests and kept read-only/frozen.
+3. Convert every exact failed basin into a negative obligation label before
+   reranking. This prevents the pretrained prior from repeatedly selecting
+   Sokoban-like but Infestation-dead geometries.
+4. Use human-style live obligations as subgoals. Current high-value obligations:
+   `tinderrectangle` P63 lower-shaft release with `(3,4)` as baffle;
+   `release` trigger-4-first/right-rat access before the top sweep;
+   `reload_v3` top trigger-6/bottom-left gate change before trigger 2 is spent;
+   `ai_takeover` rat-trigger-7 or bottom trigger-8 staging before trigger 4/5
+   commitment; `on_the_clock` lower-right release while the clock rat stays off
+   trigger 9; `handoff` rat enters/clears `(10,5)` while trigger 2 remains live;
+   `blocked_v2` remote trigger-2 detonation preserves the `(0,15)` rat and
+   opens the lower-left mouth.
+5. Spend exact search only on transfer-ranked candidates that satisfy one of
+   those live obligations. Reject states that merely reduce rat count while
+   preserving the same unreachable survivor topology.
+6. Keep exact runs bounded after the prior OOM: 4 solver workers, about
+   1.0-1.2 GB child memory caps, and explicit wall-clock caps. Use CPU
+   parallelism by launching more independent bounded waves only after the
+   previous wave is archived and labeled.
+
+### Hypothesis falsifier pass - 2026-06-15
+
+The strategic change in this pass was to test hypotheses by necessary
+conditions before running another broad exact portfolio. Artifacts live under
+`/tmp/infestation-runs/20260615T032348Z_hypothesis_falsifiers`.
+
+Results:
+
+- `tinderrectangle`: P63 lower-shaft release with `(3,4)` as baffle and player
+  staged in the side pocket returned no branches for either rat-at-`(2,4)` or
+  rat-at-`(2,5..6)` while preserving 16 rats, all rat reachability, zero trapped
+  rats, and all 43 explosives. This falsifies the current P63 side-pocket
+  formulation; do not search cleanup from it.
+- `release`: trigger-4-first/trigger-5 can produce partial branches such as
+  `v>vv^^vv<>>>^` with 24 rats and 35 explosives, but only one reachable rat.
+  The immediate follow-up requiring `(18,5)` to open while trigger 2 remains
+  reachable returned no branch. Treat this as a partial event, not a live lead.
+- `reload_v3`: bottom-station trigger-5 and trigger-6 gate-change obligations
+  returned no branch under 3-rat / 12-trigger / 4-explosive guards. The
+  bottom-station family still lacks a proof that it can repair the sealed
+  top-left or bottom-left rat before trigger 2 is spent.
+- `cyborg_rats/ai_takeover`: early-row5 rat-trigger-7, early-row5 bottom
+  trigger-8, and the top-pack shim trigger-7 staging all returned no branches
+  while preserving 23 rats, 22 reachable rats, 9 explosives, and 14 triggers.
+  Do not spend more direct trigger-7/8 staging search from these exact prefixes.
+- `cooperation/handoff`: the exact human obligation "rat at `(10,5)`, player
+  safe at `(8..9,7..8)`, trigger 2 still live at `(11,7)`" returned
+  `NO_SOLUTION` from the pre-T1 baton prefix.
+- `cooperation/blocked_v2`: the remote trigger-2 lower-mouth hypothesis returned
+  no solution/branch under 8-rat / 10-trigger / 18-explosive guards, including
+  the stricter `triggeronlycellnot:2,2,15,explosive` test.
+- `old_levels/on_the_clock`: all three tempo/blocker formulations before/at
+  P23 returned no branch under 8-rat / 17-trigger / 4-explosive guards.
+
+New negative labels were appended to
+`solver/solutions/tools/obligation_labels.jsonl` for these failed hypotheses so
+the transfer ranker can avoid promoting them again.
+
+How to continue efficiently:
+
+1. Treat every proposed next step as a falsifiable hypothesis: name the
+   required topology, resource, and timing conditions first.
+2. Run a cheap branchdump/lookup for the required condition. Use 30-55 second
+   caps, 1 GB memory, and 3-4 parallel workers.
+3. Only if a branch proves the condition should it get an exact continuation.
+   The release trigger-4-first case is the model example: it found a partial
+   branch, then the follow-up condition failed, so the branch was not promoted.
+4. If a test is empty, add a negative label before reranking. Do not relaunch a
+   broad `win` portfolio from that prefix.
+
 ## 4. Planned next steps (start here)
 
-1. **Do not repeat broad direct searches.** The grid-step/hash speedup is already
-   in the tree, but the current hard cases still fail because the heuristic
-   prefers irreversible dead basins. Use mechanism-specific goals and inspect
-   diagnostics after every irreversible event.
+1. **Do not repeat broad direct searches.** Use pretrained transfer ranking plus
+   mechanism-specific obligations. The grid-step/hash speedup is already in the
+   tree, but the current hard cases still fail because the heuristic prefers
+   irreversible dead basins. Inspect diagnostics after every irreversible event.
 2. **Continue `release` from a new hypothesis, not the trigger-5/6 family.**
    The known prefix `v<vv^^>>v` plus trigger 5 can reduce the board to a single
    `(18,4)` rat, but that mechanism strands it behind `(18,5)`. Recent bounded

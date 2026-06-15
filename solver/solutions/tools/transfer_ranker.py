@@ -52,6 +52,7 @@ class TrainedTransfer:
     model: "TransferRanker"
     mean: np.ndarray
     std: np.ndarray
+    encoder: str
 
 
 def move_tokens(moves: str, players: int) -> list[str]:
@@ -81,16 +82,24 @@ def level_path(level: str) -> pathlib.Path:
     return ROOT / "levels" / level
 
 
-def run_trajectory_snapshot(level: str, prefix: str, timeout_sec: float) -> dict[str, Any] | None:
+def run_trajectory_snapshot(
+    level: str,
+    prefix: str,
+    timeout_sec: float,
+    *,
+    include_csv: bool = False,
+) -> dict[str, Any] | None:
+    cmd = [
+        str(SOLVER),
+        "trajectory-json",
+        str(level_path(level)),
+        prefix,
+    ]
+    if not include_csv:
+        cmd.append("--no-csv")
     try:
         proc = subprocess.run(
-            [
-                str(SOLVER),
-                "trajectory-json",
-                str(level_path(level)),
-                prefix,
-                "--no-csv",
-            ],
+            cmd,
             cwd=ROOT,
             text=True,
             stdout=subprocess.PIPE,
@@ -113,7 +122,12 @@ def run_trajectory_snapshot(level: str, prefix: str, timeout_sec: float) -> dict
     return rows[-1]
 
 
-def load_solved_examples(samples_per_solution: int, timeout_sec: float) -> list[SnapshotExample]:
+def load_solved_examples(
+    samples_per_solution: int,
+    timeout_sec: float,
+    *,
+    include_csv: bool = False,
+) -> list[SnapshotExample]:
     data = json.loads(SOLUTIONS.read_text(encoding="utf-8"))
     examples = []
     for level, record in data.items():
@@ -138,7 +152,7 @@ def load_solved_examples(samples_per_solution: int, timeout_sec: float) -> list[
         denominator = max(1, len(tokens))
         for index in indices:
             prefix = join_tokens(tokens[:index], players)
-            snapshot = run_trajectory_snapshot(level, prefix, timeout_sec)
+            snapshot = run_trajectory_snapshot(level, prefix, timeout_sec, include_csv=include_csv)
             if snapshot is None or snapshot["play_state"] == "GameOver":
                 continue
             progress = index / denominator
@@ -264,7 +278,12 @@ def snapshot_badness(snapshot: dict[str, Any], level: str = "", prefix: str = ""
     return min(0.95, penalty)
 
 
-def load_triage_examples(paths: Iterable[pathlib.Path], timeout_sec: float) -> list[SnapshotExample]:
+def load_triage_examples(
+    paths: Iterable[pathlib.Path],
+    timeout_sec: float,
+    *,
+    include_csv: bool = False,
+) -> list[SnapshotExample]:
     examples = []
     seen: set[tuple[str, str]] = set()
     for path in paths:
@@ -283,7 +302,7 @@ def load_triage_examples(paths: Iterable[pathlib.Path], timeout_sec: float) -> l
             if key in seen:
                 continue
             seen.add(key)
-            snapshot = run_trajectory_snapshot(level, prefix, timeout_sec)
+            snapshot = run_trajectory_snapshot(level, prefix, timeout_sec, include_csv=include_csv)
             if snapshot is None:
                 continue
             flags = record.get("flags") or []
@@ -320,6 +339,8 @@ def target_from_obligation_label(record: dict[str, Any]) -> float:
 def load_obligation_examples(
     paths: Iterable[pathlib.Path],
     timeout_sec: float,
+    *,
+    include_csv: bool = False,
 ) -> list[SnapshotExample]:
     examples = []
     seen: set[tuple[str, str, str]] = set()
@@ -345,7 +366,7 @@ def load_obligation_examples(
             if key in seen:
                 continue
             seen.add(key)
-            snapshot = run_trajectory_snapshot(level, prefix, timeout_sec)
+            snapshot = run_trajectory_snapshot(level, prefix, timeout_sec, include_csv=include_csv)
             if snapshot is None or snapshot["play_state"] == "GameOver":
                 continue
             try:
@@ -455,12 +476,20 @@ def load_pretrained_params(repo: str, checkpoint: str) -> dict[str, np.ndarray]:
         ext_hook=unpack_flax_array,
     )
     params = raw["params"]["params"]["network_params"]
+    actor = raw["params"]["params"]["actor_params"]["Output"]
+    critic = raw["params"]["params"]["critic_params"]["Output"]
     return {
         "cfg_path": np.array(str(cfg_path)),
         "conv0_kernel": params["conv_list_0"]["kernel"][0],
         "conv0_bias": params["conv_list_0"]["bias"][0],
         "conv1_kernel": params["conv_list_1"]["kernel"][0],
         "conv1_bias": params["conv_list_1"]["bias"][0],
+        "dense_kernel": params["dense_list_0"]["kernel"][0],
+        "dense_bias": params["dense_list_0"]["bias"][0],
+        "actor_kernel": actor["kernel"][0],
+        "actor_bias": actor["bias"][0],
+        "critic_kernel": critic["kernel"][0],
+        "critic_bias": critic["bias"][0],
     }
 
 
@@ -471,17 +500,29 @@ class TransferRanker(nn.Module):
         pretrained: dict[str, np.ndarray],
         freeze_prior: bool,
         head: str,
+        encoder: str,
     ) -> None:
         super().__init__()
+        self.encoder = encoder
+        self.use_semantic_adapter = encoder == "semantic-dense10"
+        self.use_dense_prior = head.startswith("dense-") or self.use_semantic_adapter
+        if encoder not in {"legacy", "semantic-dense10"}:
+            raise ValueError(f"unknown encoder: {encoder}")
+        self.semantic_adapter = nn.Conv2d(10, 3, kernel_size=1)
         self.conv0 = nn.Conv2d(3, 32, kernel_size=4, padding="same")
         self.conv1 = nn.Conv2d(32, 32, kernel_size=4, padding="same")
+        self.dense_pool = nn.AdaptiveAvgPool2d((10, 10))
+        self.dense = nn.Linear(32 * 10 * 10, 256)
+        self.actor = nn.Linear(256, 4)
+        self.critic = nn.Linear(256, 1)
         self.activation = nn.ReLU()
         self.pool = nn.AdaptiveAvgPool2d((1, 1))
-        if head == "linear":
-            self.head = nn.Linear(32 + macro_dim, 1)
-        elif head == "small-mlp":
+        prior_dim = 261 if self.use_dense_prior else 32
+        if head in ("linear", "dense-linear"):
+            self.head = nn.Linear(prior_dim + macro_dim, 1)
+        elif head in ("small-mlp", "dense-mlp"):
             self.head = nn.Sequential(
-                nn.Linear(32 + macro_dim, 96),
+                nn.Linear(prior_dim + macro_dim, 96),
                 nn.ReLU(),
                 nn.Linear(96, 32),
                 nn.ReLU(),
@@ -489,25 +530,69 @@ class TransferRanker(nn.Module):
             )
         else:
             raise ValueError(f"unknown head: {head}")
+        self.initialize_semantic_adapter()
         self.load_spatial_prior(pretrained)
         if freeze_prior:
-            for parameter in list(self.conv0.parameters()) + list(self.conv1.parameters()):
+            prior_parameters = (
+                list(self.conv0.parameters())
+                + list(self.conv1.parameters())
+                + list(self.dense.parameters())
+                + list(self.actor.parameters())
+                + list(self.critic.parameters())
+            )
+            for parameter in prior_parameters:
                 parameter.requires_grad = False
+
+    def initialize_semantic_adapter(self) -> None:
+        with torch.no_grad():
+            self.semantic_adapter.weight.zero_()
+            self.semantic_adapter.bias.zero_()
+            # Semantic channels: empty, wall, web, plank, blackhole, explosive,
+            # trigger, player, rat, cyborg. Initialize to match the old
+            # three-channel collapse, while leaving the adapter trainable.
+            self.semantic_adapter.weight[0, 7, 0, 0] = 1.0
+            self.semantic_adapter.weight[1, 1, 0, 0] = 0.50
+            self.semantic_adapter.weight[1, 2, 0, 0] = 1.0
+            self.semantic_adapter.weight[1, 3, 0, 0] = 1.0
+            self.semantic_adapter.weight[1, 4, 0, 0] = 1.0
+            self.semantic_adapter.weight[2, 4, 0, 0] = 0.35
+            self.semantic_adapter.weight[2, 5, 0, 0] = 0.50
+            self.semantic_adapter.weight[2, 6, 0, 0] = 0.75
+            self.semantic_adapter.weight[2, 8, 0, 0] = 1.0
+            self.semantic_adapter.weight[2, 9, 0, 0] = 1.0
 
     def load_spatial_prior(self, pretrained: dict[str, np.ndarray]) -> None:
         conv0 = torch.tensor(pretrained["conv0_kernel"]).permute(3, 2, 0, 1)
         conv1 = torch.tensor(pretrained["conv1_kernel"]).permute(3, 2, 0, 1)
+        dense = torch.tensor(pretrained["dense_kernel"]).transpose(0, 1)
+        actor = torch.tensor(pretrained["actor_kernel"]).transpose(0, 1)
+        critic = torch.tensor(pretrained["critic_kernel"]).transpose(0, 1)
         with torch.no_grad():
             self.conv0.weight.copy_(conv0)
             self.conv0.bias.copy_(torch.tensor(pretrained["conv0_bias"]))
             self.conv1.weight.copy_(conv1)
             self.conv1.bias.copy_(torch.tensor(pretrained["conv1_bias"]))
+            self.dense.weight.copy_(dense)
+            self.dense.bias.copy_(torch.tensor(pretrained["dense_bias"]))
+            self.actor.weight.copy_(actor)
+            self.actor.bias.copy_(torch.tensor(pretrained["actor_bias"]))
+            self.critic.weight.copy_(critic)
+            self.critic.bias.copy_(torch.tensor(pretrained["critic_bias"]))
 
     def forward(self, board: torch.Tensor, macro: torch.Tensor) -> torch.Tensor:
+        if self.use_semantic_adapter:
+            board = self.semantic_adapter(board)
         spatial = self.activation(self.conv0(board))
         spatial = self.activation(self.conv1(spatial))
-        spatial = self.pool(spatial).flatten(1)
-        return self.head(torch.cat([spatial, macro], dim=1)).squeeze(1)
+        if self.use_dense_prior:
+            dense_input = self.dense_pool(spatial).flatten(1)
+            dense_features = self.activation(self.dense(dense_input))
+            actor_logits = self.actor(dense_features)
+            critic_value = self.critic(dense_features)
+            prior = torch.cat([dense_features, actor_logits, critic_value], dim=1)
+        else:
+            prior = self.pool(spatial).flatten(1)
+        return self.head(torch.cat([prior, macro], dim=1)).squeeze(1)
 
 
 def add_points(channel: np.ndarray, positions: list[dict[str, Any]], value: float = 1.0) -> None:
@@ -518,7 +603,67 @@ def add_points(channel: np.ndarray, positions: list[dict[str, Any]], value: floa
             channel[y, x] = value
 
 
-def board_tensor(snapshot: dict[str, Any], height: int, width: int) -> np.ndarray:
+def semantic_board_tensor(snapshot: dict[str, Any], height: int, width: int) -> np.ndarray:
+    board = np.zeros((10, height, width), dtype=np.float32)
+    csv_text = snapshot.get("csv")
+    if isinstance(csv_text, str):
+        for y, line in enumerate(csv_text.splitlines()):
+            if y >= height:
+                break
+            for x, raw_cell in enumerate(line.split(",")):
+                if x >= width:
+                    break
+                cell = raw_cell.strip()
+                channel = {
+                    ".": 0,
+                    "#": 1,
+                    "w": 2,
+                    "=": 3,
+                    "O": 4,
+                    "X": 5,
+                    "▲": 7,
+                    "▼": 7,
+                    "◄": 7,
+                    "►": 7,
+                    "△": 7,
+                    "▽": 7,
+                    "◁": 7,
+                    "▷": 7,
+                    "R": 8,
+                    "C": 9,
+                }.get(cell)
+                if channel is None and cell.isdigit():
+                    channel = 6
+                if channel is not None:
+                    board[channel, y, x] = 1.0
+    else:
+        board[0, :, :] = 1.0
+
+    positions = snapshot["positions"]
+    for channel_index, key in (
+        (2, "webs"),
+        (3, "planks"),
+        (4, "black_holes"),
+        (5, "explosives"),
+        (6, "triggers"),
+        (7, "players"),
+        (8, "rats"),
+        (9, "cyborg_rats"),
+    ):
+        add_points(board[channel_index], positions[key])
+    occupied = board[1:].max(axis=0)
+    board[0] = np.where(occupied > 0.0, 0.0, 1.0)
+    return board
+
+
+def board_tensor(
+    snapshot: dict[str, Any],
+    height: int,
+    width: int,
+    encoder: str = "legacy",
+) -> np.ndarray:
+    if encoder == "semantic-dense10":
+        return semantic_board_tensor(snapshot, height, width)
     board = np.zeros((3, height, width), dtype=np.float32)
     positions = snapshot["positions"]
     add_points(board[0], positions["players"])
@@ -569,12 +714,15 @@ def macro_features(level: str, prefix: str, snapshot: dict[str, Any]) -> np.ndar
 
 def tensors_for_examples(
     examples: list[SnapshotExample],
+    encoder: str,
     mean: np.ndarray | None = None,
     std: np.ndarray | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, np.ndarray, np.ndarray]:
     height = max(int(example.snapshot["height"]) for example in examples)
     width = max(int(example.snapshot["width"]) for example in examples)
-    boards = np.stack([board_tensor(example.snapshot, height, width) for example in examples])
+    boards = np.stack(
+        [board_tensor(example.snapshot, height, width, encoder=encoder) for example in examples]
+    )
     macros = np.stack(
         [macro_features(example.level, example.prefix, example.snapshot) for example in examples]
     )
@@ -600,10 +748,17 @@ def train_model(
     seed: int,
     freeze_prior: bool,
     head: str,
+    encoder: str,
 ) -> tuple[TransferRanker, np.ndarray, np.ndarray]:
     torch.manual_seed(seed)
-    boards, macros, targets, mean, std = tensors_for_examples(examples)
-    model = TransferRanker(macros.shape[1], pretrained, freeze_prior=freeze_prior, head=head)
+    boards, macros, targets, mean, std = tensors_for_examples(examples, encoder)
+    model = TransferRanker(
+        macros.shape[1],
+        pretrained,
+        freeze_prior=freeze_prior,
+        head=head,
+        encoder=encoder,
+    )
     optimizer = torch.optim.AdamW(
         [parameter for parameter in model.parameters() if parameter.requires_grad],
         lr=2e-3,
@@ -629,8 +784,11 @@ def learned_score_snapshot(
     example: SnapshotExample,
     height: int,
     width: int,
+    encoder: str,
 ) -> float:
-    board = torch.tensor(board_tensor(example.snapshot, height, width)[None, :, :, :])
+    board = torch.tensor(
+        board_tensor(example.snapshot, height, width, encoder=encoder)[None, :, :, :]
+    )
     macro = macro_features(example.level, example.prefix, example.snapshot)
     macro = torch.tensor(((macro - mean) / std)[None, :], dtype=torch.float32)
     with torch.no_grad():
@@ -645,8 +803,9 @@ def rank_score_snapshot(
     example: SnapshotExample,
     height: int,
     width: int,
+    encoder: str,
 ) -> float:
-    learned_score = learned_score_snapshot(model, mean, std, example, height, width)
+    learned_score = learned_score_snapshot(model, mean, std, example, height, width, encoder)
     return float(learned_score - snapshot_badness(example.snapshot, example.level, example.prefix))
 
 
@@ -657,8 +816,9 @@ def score_snapshot(
     example: SnapshotExample,
     height: int,
     width: int,
+    encoder: str,
 ) -> float:
-    return rank_score_snapshot(model, mean, std, example, height, width)
+    return rank_score_snapshot(model, mean, std, example, height, width, encoder)
 
 
 def normalize_pretrained_checkpoints(checkpoints: list[str] | None) -> list[str]:
@@ -681,6 +841,7 @@ def train_transfer_ensemble(
     seed: int,
     freeze_prior: bool,
     head: str,
+    encoder: str = "legacy",
 ) -> list[TrainedTransfer]:
     ensemble = []
     for index, checkpoint in enumerate(checkpoints):
@@ -692,6 +853,7 @@ def train_transfer_ensemble(
             seed=seed + index,
             freeze_prior=freeze_prior,
             head=head,
+            encoder=encoder,
         )
         ensemble.append(
             TrainedTransfer(
@@ -700,6 +862,7 @@ def train_transfer_ensemble(
                 model=model,
                 mean=mean,
                 std=std,
+                encoder=encoder,
             )
         )
     return ensemble
@@ -712,7 +875,15 @@ def score_ensemble_snapshot(
     width: int,
 ) -> tuple[float, float]:
     learned_scores = [
-        learned_score_snapshot(member.model, member.mean, member.std, example, height, width)
+        learned_score_snapshot(
+            member.model,
+            member.mean,
+            member.std,
+            example,
+            height,
+            width,
+            member.encoder,
+        )
         for member in ensemble
     ]
     learned_score = float(sum(learned_scores) / len(learned_scores))
@@ -726,6 +897,7 @@ def transfer_metadata(
     checkpoints: list[str],
     freeze_prior: bool,
     head: str,
+    encoder: str,
 ) -> dict[str, Any]:
     return {
         "repo": repo,
@@ -733,6 +905,7 @@ def transfer_metadata(
         "checkpoints": checkpoints,
         "frozen_prior": freeze_prior,
         "head": head,
+        "encoder": encoder,
         "learned_aggregation": "mean",
         "rank_aggregation": "max",
     }
@@ -761,7 +934,17 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--obligation-labels", action="append", type=pathlib.Path, default=[])
-    parser.add_argument("--head", choices=("linear", "small-mlp"), default="linear")
+    parser.add_argument(
+        "--head",
+        choices=("linear", "small-mlp", "dense-linear", "dense-mlp"),
+        default="linear",
+    )
+    parser.add_argument(
+        "--encoder",
+        choices=("legacy", "semantic-dense10"),
+        default="legacy",
+        help="board encoder; semantic-dense10 trains a 10-channel adapter into the frozen DRC dense trunk",
+    )
     parser.add_argument("--fine-tune-prior", action="store_true")
     parser.add_argument("--jsonl-out", type=pathlib.Path, required=True)
     return parser.parse_args()
@@ -772,9 +955,22 @@ def main() -> int:
     if not SOLVER.exists():
         raise SystemExit(f"missing solver binary: {SOLVER}")
 
-    solved = load_solved_examples(args.samples_per_solution, args.oracle_timeout_sec)
-    triage = load_triage_examples(args.triage, args.oracle_timeout_sec)
-    obligations = load_obligation_examples(args.obligation_labels, args.oracle_timeout_sec)
+    include_csv = args.encoder == "semantic-dense10"
+    solved = load_solved_examples(
+        args.samples_per_solution,
+        args.oracle_timeout_sec,
+        include_csv=include_csv,
+    )
+    triage = load_triage_examples(
+        args.triage,
+        args.oracle_timeout_sec,
+        include_csv=include_csv,
+    )
+    obligations = load_obligation_examples(
+        args.obligation_labels,
+        args.oracle_timeout_sec,
+        include_csv=include_csv,
+    )
     train_examples = solved + triage + obligations
     if len(train_examples) < 16:
         raise SystemExit("not enough oracle examples for transfer head training")
@@ -788,6 +984,7 @@ def main() -> int:
         seed=args.seed,
         freeze_prior=not args.fine_tune_prior,
         head=args.head,
+        encoder=args.encoder,
     )
 
     candidates = load_candidates(
@@ -806,7 +1003,12 @@ def main() -> int:
     candidate_examples: list[SnapshotExample] = []
     for candidate in candidates:
         level = canonical_level(candidate.level)
-        snapshot = run_trajectory_snapshot(level, candidate.prefix, args.oracle_timeout_sec)
+        snapshot = run_trajectory_snapshot(
+            level,
+            candidate.prefix,
+            args.oracle_timeout_sec,
+            include_csv=include_csv,
+        )
         if snapshot is None or snapshot["play_state"] == "GameOver":
             continue
         if level.endswith("tinderrectangle.csv") and int(snapshot["features"]["rats"]) < 16:
@@ -862,6 +1064,7 @@ def main() -> int:
                         checkpoints,
                         not args.fine_tune_prior,
                         args.head,
+                        args.encoder,
                     ),
                     "diag": {
                         "state": example.snapshot["play_state"],
@@ -879,7 +1082,7 @@ def main() -> int:
 
     print(
         f"pretrained={args.pretrained_repo}/{' + '.join(checkpoints)} "
-        f"head={args.head} frozen_prior={not args.fine_tune_prior} "
+        f"head={args.head} encoder={args.encoder} frozen_prior={not args.fine_tune_prior} "
         f"train={len(train_examples)} solved={len(solved)} triage={len(triage)} "
         f"obligations={len(obligations)} "
         f"candidates={len(candidates)} replayed={len(candidate_examples)} selected={len(selected)} "
