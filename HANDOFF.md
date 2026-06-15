@@ -9064,6 +9064,64 @@ rat-position or component falsifiers.
   hand-authored waypoint/predicate probes for that level instead of another
   broad transfer wave.
 
+### Retrospective checkpoint - 2026-06-15 cadence and latest cooperation probes
+
+- Status remains 38 verified rat-win solutions. Current inventory is still the
+  seven rat-bearing hard levels plus route-verified zero-rat `claude/gauntlet`.
+  At this checkpoint no solver, transfer, portfolio, or clingo process is
+  active.
+- Why this is taking long: too many cycles have treated "different prefix" as
+  progress when the state is structurally the same. The repeated pattern is a
+  branch that changes a trigger, web, or survivor set, but then has no next
+  cleanup handle: trigger 2 remains unreachable, a survivor remains sealed, or
+  all reachable rats/resources have been spent. That is a reasoning failure,
+  not a CPU failure.
+- Retrospective cadence going forward: after every exact wave, after three
+  no-branch predicates against the same level family, or after 30 minutes
+  without a fresh structural family, stop and write down: the hypothesis, the
+  necessary condition, the exact predicate tested, what was learned if false,
+  and what branch family is now demoted. Do not launch the next batch until that
+  note changes the next probe.
+- Promotion rule: a state is not a lead unless it proves both an irreversible
+  structural change and a next handle. Examples: `blocked_v2` must expose
+  trigger 2 or a lower-left repair while preserving cleanup reachability;
+  `handoff` must move/open the sealed `(10,6)` rat and leave a live trigger or
+  rat-drop handle; single-player levels must preserve enough reachable rats,
+  triggers, or explosive geometry to prove the first cleanup step.
+- `cooperation/blocked_v2`: the latest all-9 staging prefix
+  `vv v^ vv <^ <v <^ <v <^ ^^ ^^ ^^` is sharper than earlier broad searches
+  but still a trap. It has all 9 rats, useful explosives/webs/triggers, and
+  reachable trigger 3, but both trigger-2 cells `(5,11)` and `(3,14)` remain
+  unreachable. Follow-up predicates for trigger 3, trigger 2, and direct
+  reachability to `(5,11)` returned no branches even with relaxed rat and
+  reachability guards. Future `blocked_v2` work should look before or outside
+  this 5/1 branch for a trigger-2 access mechanism, not deepen it.
+- `cooperation/handoff`: the survivable trigger-1 branch
+  `v^ >^ >^ >^ >^ >^ ^^ .v .v .> .> .> v> v< <<` remains a no-handle basin.
+  It reaches 4 rats, 5 explosives, 4 webs, 2 triggers, and 2 reachable rats,
+  but trigger-2 follow-up, sealed-rat motion, and dropchain-style cleanup
+  checks returned no branch or collapsed to zero reachable rats. Future work
+  should target a different mechanism for the `(10,6)` rat instead of another
+  pre-trigger-1 doorway or 4-rat trigger-1 continuation.
+- Immediate post-retro probes were intentionally small: 3 jobs, each capped at
+  800 MB and 55-70 s. No solution was found.
+- `cooperation/blocked_v2`: strict trigger order `5,3,1,2` with all-9/mostly
+  reachable guards failed before trigger 3. It again selected trigger-5
+  branches with 9 rats, 21 explosives, 26 webs, and 11 triggers, then found no
+  reachable trigger-3 continuations. This closes the obvious sibling of the
+  demoted `5,1` branch.
+- `cooperation/handoff`: the first predicate
+  `ratrectplayerrect:9,5,11,7,8,4,12,8` was too weak; it only rediscovered the
+  known six-turn staging. The tightened follow-up from
+  `v^ >^ >^ >^ >^ >^` requiring `cellnot:10,5,web` while the `(10,6)` rat
+  remains in place and a player is staged nearby returned no branches under
+  5-rat/useful-trigger guards.
+- `reload_v3`: initial `reachablege:2` under all-3-rat and reachable-trigger
+  guards returned no branch. This means the early board still lacks a direct
+  two-rat handle; future reload work must first identify which trigger/fuse
+  event makes the second rat reachable, not just deepen central/bottom trigger
+  paths.
+
 ---
 
 ## 5. File map
