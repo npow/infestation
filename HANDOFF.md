@@ -9803,6 +9803,35 @@ rat-position or component falsifiers.
     `v<vv^^^` returned empty under 22-enemy / 21-reachable / zero-trapped /
     useful-resource guards. This does not close AI takeover globally, but it
     closes the simple "same board, use the web as a stance square" variant.
+- Transfer-ranked exact wave - 2026-06-15 post-sidecar: no verified wins. The
+  updated obligation-label set had 270 labels; `event_seed_builder.py` expanded
+  30 ranked/static parents into 119 event successors, then transfer-scored them
+  with the frozen DRC11/DRC33 priors. The exact wave ran 14 jobs with 3-way
+  concurrency and 700 MB per child under
+  `/tmp/infestation-runs/20260615T140920Z_go_explore/`; all processes exited.
+  - The top raw transfer scores still over-weighted old `tinderrectangle` P57
+    near-misses, so the portfolio was filtered to the seven rat-bearing missing
+    levels and interleaved by level rather than taking global top scores. This
+    avoided a pure tinder repeat, but did not solve any level.
+  - `release`: the selected `v<vv^^>>v` seed is still the known sealed-right-rat
+    basin. FESS and dropchain produced long right-rat cleanup families; direct
+    A* `lookup win` ran 80s / about 194k expansions and returned
+    `NO_SOLUTION`, with best state still showing `(18,4)` isolated behind
+    `(18,5)=web`.
+  - `reload_v3`: the selected bottom-station descendant again failed to convert
+    resources into a lower-left opening. Direct A* ran 80s / about 107k
+    expansions and returned `NO_SOLUTION`, with the `(0,21)` rat still sealed.
+  - `old_levels/on_the_clock`: the P18 pre-trigger-9 seed did not find a win in
+    FESS, dropchain, or direct A*. It repeats row-sweep cleanup basins rather
+    than escaping the forced trigger-9/trigger-5 family.
+  - `cyborg_rats/ai_takeover`: early-row5 seeds completed quickly with
+    `NO_SOLUTION` / no solved job and did not produce a strict trigger-7/8 or
+    right-side topology bypass.
+  - Next behavior change: before another transfer refresh, either add a hard
+    negative filter for the repeated P57 / standard-release / bottom-station
+    families or generate new parents from different invariants. Simply retraining
+    the same frozen-prior head on the current archive still points too much exact
+    runtime at stale basins.
 
 ---
 
