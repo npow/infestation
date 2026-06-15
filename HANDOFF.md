@@ -9379,6 +9379,41 @@ rat-position or component falsifiers.
   non-trigger families (`^< ^^ v^ ^^ v^ ^^ v^`, `v< v^ v^ <^ <^ << ^^`, etc.)
   instead of deepening this exact representative.
 
+### Retrospective checkpoint - 2026-06-15 sibling and sidecar wave
+
+- Status remains 38 verified rat-win solutions. No new candidate move string was
+  produced by this wave.
+- `cooperation/blocked_v2`: local sibling checks tested additional high-resource
+  non-trigger first events. The left-mid prefix
+  `v< v^ v^ << <v <^ ^v ^> ^v` has no canonical `triggeronly:2`,
+  `triggeronly:3`, or `triggeronly:5` continuation under 8-rat,
+  5-reachable-rat, max-1-trapped, 16-explosive, and 8-trigger guards. The
+  left-low prefix `v< v^ v^ <> <^ <^ << ^v ^v vv` has no canonical
+  `triggeronly:2` or `triggeronly:3` continuation under the same guards.
+- `cyborg_rats/ai_takeover`: sidecar tested a post-trigger-8 cleanup-handle
+  hypothesis that avoids the stale `(18,4)` survivor: route the normal rat from
+  the `(11,9)` pocket into escape lane `(12,8)..(14,11)` while the right cyborg
+  is already off `(18,4)` and trigger/explosive resources remain. Both the exact
+  right-column cyborg predicate and a broader `y >= 5` cyborg-corridor predicate
+  returned no branches under 2-rat, 2-reachable, useful-resource guards.
+- `release`: sidecar tested a different pre-commit bottom-right gate hypothesis
+  before the usual `v<` / `v>` choice. Staging the bottom rat in
+  `(17..19,17..18)` while the player remains in mid-board returned no branches
+  under all-24-rat, 30-explosive, 9-trigger, 2-reachable-trigger guards. A
+  looser `(17,17)` plank-opening predicate hit the memory cap, so it remains
+  inconclusive and is not evidence.
+- `reload_v3`: sidecar tested a new inverse final-handle idea: directly
+  displace/remove the original bottom-left singleton `(0,21)` while preserving
+  a reachable rat, reachable trigger, and useful resources. The broad
+  noncanonical run hit the 650 MB cap; the smaller canonical
+  `ratgone:0,21` check at depth 60 / 25 s / 120k nodes returned no branches.
+- Retrospective: `blocked_v2`'s high-resource non-trigger first-event family now
+  has several sibling representatives closed for direct trigger 2/3/5 handles.
+  The next `blocked_v2` move should either test a different second event
+  entirely, such as opening a cell/waypoint rather than firing a trigger, or
+  lower the rat/reachability guard deliberately and inspect what first viable
+  trigger branch appears.
+
 ---
 
 ## 5. File map
