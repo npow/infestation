@@ -8888,6 +8888,44 @@ rat-position or component falsifiers.
   unreachable, top-left sealed reload rat, sealed handoff rat, no-mechanism clock
   tail, and 15-rat tinder lower-sacrifice states respectively.
 
+### Retrospective cycle - 2026-06-15 stale-candidate cleanup
+
+- Status remains 38 verified rat-win solutions; no new `final_solutions.json`
+  entry was found in this cycle. No solver jobs should be left running after
+  this pass.
+- Main process failure: stale `candidate` obligation labels were still training
+  the transfer ranker toward states that later exact falsifiers had already
+  closed. Demoting labels alone also was not enough when the same stale prefixes
+  were still present as static/seed candidates. Future exact waves should filter
+  directly contradicted static seeds, not merely lower their training target.
+- Cleaned `solver/solutions/tools/obligation_labels.jsonl` so direct
+  contradictions are low-score negatives. After reranking, the top exact wave
+  shifted away from old `tinderrectangle`/`release` positives and toward
+  `blocked_v2`, `handoff`, and `ai_takeover`, but the 18-job capped wave
+  `/tmp/infestation-runs/20260615T085053Z_demoted_exact_small` still found no
+  solve. Archive/triage:
+  `/tmp/infestation-runs/archive_20260615T085053Z_demoted_exact_small.jsonl`
+  and
+  `/tmp/infestation-runs/triage_20260615T085053Z_demoted_exact_small.jsonl`.
+- Targeted sidecar falsifiers closed several fresh human hypotheses:
+  `tinderrectangle` two-rat baffle, `release` direct `(18,4)` removal,
+  `handoff` courier `(9,7)` door, `handoff` role-reversal top-left web,
+  `blocked_v2` b20 top trigger-4 bridge, `blocked_v2` b20 adjacent-bomb repair,
+  `on_the_clock` top-right component growth with at least one reachable rat, and
+  `ai_takeover` Q54 trigger-2 escape-square repair.
+- `reload_v3` yielded the only new concrete mechanism: prefix
+  `^>>>>>>>^^^^vvvv<<` makes central trigger 2 at `(17,13)` reachable with all
+  3 rats and 6 explosives. However, consuming trigger 2 requires killing the
+  only reachable rat, producing prefix `^>>>>>>>^^^^vvvv<<^^<` with 2 rats, 5
+  explosives, 12 triggers, and **zero reachable rats**. Trigger-7 follow-ups
+  and a 35 s exact win lookup from that state also stayed in zero-reachable-rat
+  basins. Treat this as a useful falsifier, not a live route, unless a future
+  plan can make another rat reachable before or immediately after trigger 2.
+- Retrospective rule for future cycles: each hypothesis should state what will
+  become newly reachable after the irreversible event. A trigger path that only
+  spends the sole reachable rat is not progress, even if it consumes a new
+  trigger and changes many cells.
+
 ---
 
 ## 5. File map
