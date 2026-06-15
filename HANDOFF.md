@@ -8190,6 +8190,56 @@ How to continue efficiently:
 4. If a test is empty, add a negative label before reranking. Do not relaunch a
    broad `win` portfolio from that prefix.
 
+### Strategic hypothesis pass - 2026-06-15 late UTC
+
+No new verified win in this pass. The useful change was tighter hypothesis
+accounting: each probe had an explicit necessary condition, and empty branches
+were treated as information rather than as reason to relaunch broader search.
+
+- `tinderrectangle`: a side-agent tested the genuinely different top-pack /
+  corner ignition hypothesis while allowing the lower rat to die. From the
+  clean 15-rat state `<^^^<<<<<`, `winready`, `ratat:0,0`, `ratat:16,0`, and
+  `events --families` produced no live branch under bounded exact checks. The
+  same corner/winready probes from P36 with `--min-rats 15` also returned empty.
+  This weakens the "sacrifice lower rat, solve with top pack" alternative; a
+  viable rectangle solution still needs a new mobility-changing event before
+  lower-rat sacrifice or a non-P36 lower-rat separation loop.
+- `tinderrectangle`: from P36
+  `<^^<v<^^>vvv<<^^^>>>>>>vvv>>^^^>>vvv`, exact latch predicates could not
+  open `(3,3)` or `(2,4)` while keeping the lower rat parked at `(2,3)` and the
+  player on the right safe side. The P36 frontier only finds right-side
+  web-shaving while preserving all 16 rats. Do not repeat a simple
+  "prepare right side, pop the lower latch remotely" search.
+- `release`: inverse checks from `v<vv^^>` for right-column detonation
+  (`cellnot:18,6,explosive`), left trigger-2 reachability
+  (`reachable:0,16`), strict trigger-2 with `(18,5)` opened, and a direct
+  `(18,5)` web-open while preserving the `(18,4)` rat all returned no branch.
+  This reinforces that the blocker is not just missing depth after the
+  trigger-3/4 opener.
+- `reload_v3`: trigger-6-first from the bottom station, initial
+  `triggeronly:6`, `triggeropen:6,250`, and bottom-left lane opening
+  (`cellnot:1,21,web`) all returned no branch under guarded 3-rat resources.
+  Continue treating trigger 6 as the necessary mechanism, but do not rerun the
+  current bottom-station or initial trigger-6 formulations without a new setup
+  event.
+- `old_levels/on_the_clock`: trigger-5-first returned no branch. A short FESS
+  wave from `>>>^^>>>` stopped after step 2 with only trap-heavy frontiers
+  (best: 8 rats, 2 reachable, 6 trapped) and no solution. This is the same
+  bottom-singleton family; it should be labeled, not extended.
+- `cyborg_rats/ai_takeover`: a Q54-derived branch remains the only fresh lead.
+  Prefix
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvv^vvv^^^`
+  can consume trigger 8 with `vvv<`, then waypoint to the left trigger-2 cell
+  with `<<<<<<<<<<<<<<<^^^<<<`. The full 89-turn prefix
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvv^vvv^^^vvv<<<<<<<<<<<<<<<<^^^<<<`
+  leaves 13 enemies, 2 explosives, 0 triggers, all 13 enemies reachable, and no
+  trapped rats. However, `lookup win`, `dropchain`, `fess`, `ratdrop`,
+  `cyborgsle:11`, and `ratsle:12` from that exact state all return no
+  continuation, and local frontier enumeration shows a forced contact/cycle
+  around the lower-left cyborg wave. The next useful `ai_takeover` hypothesis is
+  therefore **not** "mop after trigger 2"; it is "fire trigger 2 with a safer
+  phase offset / escape tempo."
+
 ## 4. Planned next steps (start here)
 
 1. **Do not repeat broad direct searches.** Use pretrained transfer ranking plus
