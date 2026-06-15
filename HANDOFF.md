@@ -8772,6 +8772,32 @@ rat-position or component falsifiers.
   demotes the "stage ring/fuse then kill the sealed component" story; future
   work should back up before P22 or require a topology-opening rat predicate.
 
+### Current-label transfer/event wave - 2026-06-15
+
+- Reran the frozen Sokoban transfer ranker with the current 150 obligation
+  labels:
+  `/tmp/infestation-runs/transfer_rank_20260615T075726Z_current_labels.jsonl`.
+  Then expanded 100 event successors:
+  `/tmp/infestation-runs/event_seeds_20260615T075726Z_current_labels.jsonl`.
+  The filtered exact run used 15 missing-level seeds, 3 jobs, 900 MB per child,
+  100 s timeout, and max 20 jobs:
+  `/tmp/infestation-runs/20260615T075726Z_current_labels_exact_small`.
+- No verified solution was found. Parsed archive:
+  `/tmp/infestation-runs/archive_20260615T075726Z_current_labels_exact_small.jsonl`;
+  triage:
+  `/tmp/infestation-runs/triage_20260615T075726Z_current_labels_exact_small.jsonl`.
+- `tinderrectangle`: top-ranked P57 near-miss child
+  `<<<^<<^>>>>^>>v>v<v>>v^>^^>>v>.vvvv<<>^^^^^<<vvv<<^^^<<<<>>>v>vv>>^^^>>v>^`
+  has all 16 rats reachable, all 43 explosives, and only 25 webs, but direct
+  lookup-win, `rectignite`, safe lower-rat separation, and top-corner `ratgeom`
+  checks all failed. The exact wave's best descendants drop to 15-rat states, so
+  this is another lower-rat sacrifice basin.
+- `release`, `reload_v3`, and `on_the_clock`: the transfer/event wave reproduced
+  the known blockers rather than a new mechanism. `release` still flags the
+  `(18,4)` right rat sealed and trigger 2 unreachable; `reload_v3` still flags
+  top-left rat sealed / trigger 2 unreachable; `on_the_clock` falls into trapped
+  no-mechanism tails.
+
 ---
 
 ## 5. File map
