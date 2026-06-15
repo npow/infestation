@@ -10043,6 +10043,73 @@ rat-position or component falsifiers.
     evidence, and next non-overlapping predicate. If no solver process is
     active at a status checkpoint, either start the next capped batch or record
     exactly why no safe batch is ready.
+- Retrospect checkpoint - 2026-06-15 process correction and sidecar-aided
+  predicate batch: no new verified wins. The immediate reason this is taking so
+  long is now clear enough to operationalize: the remaining levels are dominated
+  by high-resource false positives. A branch can preserve rats, explosives, and
+  triggers while silently sealing the one future cleanup handle, so broad FESS or
+  exact search repeatedly rediscovers stale basins unless each run names the
+  missing human condition up front. The process correction for this cycle was to
+  restart bounded work after finding no active solver children, duplicate-check
+  side-agent proposals before launch, cap every child with `timeout` plus
+  `ulimit -v 700000`, and use sidecars only for fresh predicate proposals while
+  local probes ran.
+  - `cyborg_rats/ai_takeover`: the fresh `v<v` right-middle collar proposal was
+    tested as a pre-Q54 topology change distinct from the already-closed
+    `(18,6)` stack opening. Branchdump for
+    `cellnotplayerrect:17,12,web,12,7,17,12` returned no branches under
+    22-enemy, 21-reachable-enemy, max-one-unreachable, zero-trapped,
+    8-explosive, 13-trigger, and two-reachable-trigger guards. This closes the
+    cheap `(17,12)` collar-opening variant from `v<v`; the next AI work should
+    change a different right-side cell or test a nonlocal actor route before the
+    Q54/trigger-8 corridor.
+  - `cooperation/blocked_v2`: the upstream non-trigger lead
+    `v< v^ v^ v^ <^ <^ <<` was tested for a paired human baton condition before
+    the known trigger-4 basin: player waypoints `4,11|13,4;5,11|13,4`. The
+    first waypoint pair was unreachable in 18.9s, so this specific upper-station
+    / lower-mouth choreography is not the missing proof from that lead. This is
+    different from the older failed same-waypoint pair from another prefix, but
+    it still supports moving away from direct `(5,11)` mouth access unless a
+    new first event changes the geometry.
+  - `release`: a sidecar-proposed pre-commit lower-left actor predicate from
+    prefix `v` was also tested after duplicate checks. The necessary condition
+    was a rat in `(2..4,16..19)`, player in `(10..15,12..16)`, left trigger 2
+    still live at `(0,16)`, and trigger 6 still reachable before the standard
+    right-pocket commitment. Branchdump
+    `ratrectplayerrectcellis:2,16,4,19,10,12,15,16,0,16,trigger2` returned no
+    branches under 23-rat, 20-reachable-rat, max-two-trapped, 30-explosive,
+    9-trigger, two-reachable-trigger, and reachable-trigger-6 guards. This
+    closes this early lower-left-actor/mid-player/live-trigger-6 version; the
+    next release predicate must change the actor rectangle, the pre-`v` first
+    event, or a right-pocket cell before spending more time on lower-left
+    staging.
+  - `old_levels/on_the_clock`: the trigger-6-first opener `vvvvv` was tested
+    for a different non-trigger topology handle instead of another immediate
+    trigger order. The sidecar hypothesis was to use a lower-right rat staged in
+    `(13..14,19)` while the player remains on the left clock route `(0..4,7..13)`
+    to open `(14,18)=web`, creating an escape/gate change before the known
+    row-14 cleanup collapse. Branchdump
+    `ratrectplayerrectcellnot:13,19,14,19,0,7,4,13,14,18,web` returned no
+    branches under all-8-rat, 9-explosive, 22-trigger, one-reachable-rat,
+    max-seven-trapped, and one-reachable-trigger guards. This closes the cheap
+    lower-right `(14,18)` gate version after `vvvvv`; future trigger-6-first
+    work needs a different pre-trigger-6 reshape or a different lower-right
+    cell, not immediate trigger sequencing.
+  - Weak context only, not JSONL labels: the prior local FESS batch under
+    `/tmp/infestation-runs/20260615T_candidate_fess/` produced no solution for
+    the `tinderrectangle` inner-baffle candidate, `reload_v3` strict-trigger-3
+    pre-state, or `on_the_clock` trigger-6-first opener. These were mostly
+    timeout/no-event/frontier-collapse observations, not clean falsifiers:
+    `tinderrectangle` again overran into pure right-corridor states with
+    `sep0/ign0`, `reload_v3` again collapsed to one reachable rat with two
+    trapped rats after local strict-trigger-3 timing, and `on_the_clock` again
+    stayed in the one-reachable/seven-trapped trigger-6-first basin. Treat them
+    as reminders to demand a new invariant before deeper search, not as proof.
+  - Current cadence rule: if no solver children are active at any status check,
+    start the next capped, non-overlapping batch immediately or write the exact
+    reason no safe predicate is ready. Retrospect every two or three probes by
+    recording the hypothesis, the necessary condition, the evidence, and what is
+    learned if it fails.
 
 ---
 
