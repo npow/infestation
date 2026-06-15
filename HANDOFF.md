@@ -9173,6 +9173,62 @@ rat-position or component falsifiers.
   predicate. If either is empty, document the branch as a timing trap before
   launching another broad search.
 
+### Retrospective checkpoint - 2026-06-15 bounded parallelism correction
+
+- Status remains 38 verified rat-win solutions. No new verified move string was
+  found in this checkpoint. The missing inventory is unchanged: `blocked_v2`,
+  `handoff`, `ai_takeover`, `on_the_clock`, `release`, `reload_v3`,
+  `tinderrectangle`, plus route-verified zero-rat `claude/gauntlet`.
+- Process correction: do not let all solver activity stop while reasoning.
+  Keep one to three capped probes active unless editing/validating artifacts.
+  Use `ulimit -v 650000` and short timeouts for local runs; spawn sidecars only
+  for independent levels or independent structural hypotheses. This keeps
+  parallelism useful without repeating the prior OOM failure.
+- Retrospective correction: a run must answer a structural question, not just
+  "does this nearby prefix solve?" Every promoted state must prove both an
+  irreversible change and a next cleanup handle. If it only changes a trigger,
+  web, or survivor set while leaving the next handle absent, demote the whole
+  family and back up.
+- `reload_v3`: early trigger 2 is a real first handle, but not yet a route.
+  `branchdump --goal triggeronly:2` found 19-move branches with all 3 rats and
+  one reachable rat; best representative:
+  `^>>>>>>>^^^vvv<<v<^`. From that state, `triggeronly:7`, `reachablege:2`,
+  and 3-rat structural events returned no branches. Direct 50 s lookup also
+  returned `NO_SOLUTION`. Treat early trigger 2 as a timing trap unless a prior
+  phase offset creates a second reachable rat or cleanup trigger.
+- `cooperation/blocked_v2`: sidecar tested the fresh short sacrificial line
+  `v< v^ v^ <^ <^ << ^v ^^`, which kills the `(0,7)` rat and relocates the
+  bottom rat to `(13,16)`. The state has 8 rats, 6 reachable rats, 21
+  explosives, and 16 triggers, but clean `triggeronly:4` and `triggeronly:4`
+  with reachable trigger 2 both returned no branches. This demotes the
+  relocated-bottom-rat trigger-4 repair under useful resource guards.
+- `cooperation/handoff`: sidecar tested the direct sealed-rat lure from
+  `(10,6)` onto trigger-2 cell `(11,7)`. `ratgeom` proved the synthetic
+  one-step geometry, but guarded `branchdump --goal ratat:11,7` found no
+  branch and guarded GBFS lookup ended `NO_SOLUTION`. The route still needs a
+  mechanism that changes the sealed rat before resource collapse.
+- `cooperation/handoff`: local paired probes tested the non-trigger-2
+  alternative from the initial board: direct `ratgone:10,6`, and one-rat
+  sacrifice plus `cellnot:10,5,web`, while preserving 4 rats, a reachable rat,
+  useful explosives/triggers, and a reachable trigger. Both returned no
+  branches. This closes the obvious direct-removal/sacrifice-open repair; the
+  next `handoff` hypothesis must use a different door or player-blocking
+  mechanism.
+- `release`: sidecar tested a fresh trigger-5-first fork, `v>>>v`, instead of
+  the already-demoted early trigger-2/right-pocket routes. From that prefix,
+  opening `(18,5)` while keeping the `(18,4)` rat alive
+  (`cellnotratat:18,5,web,18,4`) and direct `triggeronly:2` both returned no
+  branches under 23-rat, 20-reachable, low-trap, and useful-resource guards.
+  This demotes trigger-5-first as an early route to the right-pocket/trigger-2
+  cleanup handle.
+- `old_levels/on_the_clock`: sidecar tested an early trigger-1 phase offset for
+  the lower-right pocket. `triggeronlycellnot:1,16,18,web`,
+  `triggeronlycellnot:1,19,19,web`, and
+  `triggeronlycellis:1,17,17,trigger2` with `(17,17)` reachable all returned no
+  branches while preserving all 8 rats, 4 reachable rats, 4 explosives, 17
+  triggers, and 3 reachable triggers. This demotes the T1 lower-right offset as
+  a cleanup-preserving handle.
+
 ---
 
 ## 5. File map
