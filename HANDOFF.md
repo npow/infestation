@@ -8575,36 +8575,95 @@ on the terminal explosion proof itself.
   second reachable rat, open `(1,21)` while preserving `(0,21)`, or fire
   trigger 1 under useful guards.
 
+### Continuation evidence - 2026-06-15 rat-position/component pass
+
+No new verified win in this continuation. The useful change is that several
+stale "try the same trigger order longer" stories now have concrete
+rat-position or component falsifiers.
+
+- `tinderrectangle`: full `ignitions --limit 10000` shows the real one-step
+  winning rat targets are `(0,0)`, `(16,0)`, `(13,8)`, and lower row
+  `(2..6,6)`. A read-only sidecar demoted both parked-rat states
+  `<^^<vv<^<v<^^>^>.>>.>>>vvv<<<` and
+  `<^^<vv<^<v<^^>^>.>>.>>>vvv<<<^^<>vv>>^^^>>>v<v>v`: no `rectlower`,
+  `rectsep`, `rectignite`, top-corner, or intermediate lower-left safe staging
+  branch was found under all-16/all-43/no-trap guards. A full-target
+  `geomlure` over all ignition targets hit its node cap with best state
+  `<<<<^>>>^^<v<^<vv<v<>^>^^>>>>>>vvv>>^^^>>vvvvv<>>^^^^^<<<vvv<<^^<^<<<<<vv<<>>^^<`,
+  leaving all 16 rats and all 43 explosives, player `(3,3)`, and lure rat
+  `(2,3)`. One-step and synthetic geometry checks from that board show the rat
+  is pinned; marching east keeps it one square behind until the south turn kills
+  the player. Next `tinderrectangle` work should find the missing tempo before
+  this pin, not deepen P29/P48.
+- `release`: the blocker is now sharper than "post-release repair failed".
+  From `v<vv^^>>v`, `cellnotratat:18,5,web,18,4` returned no solution under a
+  3M-node cap, and `triglookup` order `6,2` from
+  `v<vv^^>>vv<>>>^` produced no reachable trigger-6 branch. Backing up to
+  `v<vv^^^`, strict trigger 5 and resource-preserving trigger 6 were empty;
+  unconstrained trigger 6 still strands only rat `(18,4)` with `(18,5)=web`.
+  The sibling `ai_takeover` has the same skeleton but `(18,5)` is open, so the
+  next `release` hypothesis should alter that exact web before or during the
+  release event.
+- `cyborg_rats/ai_takeover`: transfer from `release` remains useful only as a
+  diagnostic. The `v<vv^^^` skeleton has no trapped rats because the right
+  pocket is already open, but no verified continuation was found. Use it to
+  compare topology against `release`, not as proof of a solution skeleton.
+- `reload_v3`: U35/U39/U45 are demoted. Prefixes
+  `^>>>>>^>>^^^<<<<<<<<<<<<<^^<^^^^^^<`,
+  `^^^^^>>>>>>><<<<<<<<<<<<<^^<^^^^^^^^^^^<<<v<v`, and
+  `^^^^^<<<<<<^^<^^^^^vvvvvvvvvvvvvvvvvv>>` cannot make a second rat reachable,
+  open `(10,5)`, or fire trigger 6 into `(1,21)` under useful guards. The V29
+  sibling `vvv>>>>>>><<<<<<<<<<<<<vv<<<<` stages the player at `(3,21)` with
+  bottom rat `(0,21)` still sealed and top rat `(16,6)` reachable, but
+  `triggeronlycellnot:6,1,21,web` timed out with the best state still showing
+  `(1,21)=web`. Next reload work needs a different way to alter the bottom-left
+  fuse, not longer U35/U39/V29 runs.
+- `old_levels/on_the_clock`: trigger/reachability predicates are mostly
+  exhausted under useful guards. From P18 `>>>^^>>>vvv><vvvvv`, `reachablege:5`,
+  strict trigger 6, strict trigger 8, and `triggeronlycellnot:8,1,18,web` were
+  empty. Backing up to `>>>^^>>>`, guarded structural events were empty; without
+  the trap guard, events still had poor reachability and no useful trigger-6/8
+  follow-up. Next work should target rat movement into larger components before
+  trigger 5/9, not another trigger-order probe.
+- `cooperation/handoff`: resource-preserving checks found no branch opening
+  `(10,5)` while rat `(10,6)` remains live, and no branch reaching player
+  `(10,4)` while preserving 5 rats, at least 20 explosives, and at least 3
+  triggers. The obvious "open `(10,5)` before cleanup" story is not live under
+  these bounds; the level needs a different handoff geometry for the sealed
+  `(10,6)` rat.
+- `cooperation/blocked_v2`: broad all-9 resource-preserving probes for
+  `reachablege:7`, `(1,15)` mouth-open, and `(13,10)` bottom-boundary opening
+  hit the 650 MB per-process virtual-memory cap. Treat that as a cap failure,
+  not evidence. Rerun this level with canonical search or narrower `wp2`
+  waypoints before drawing conclusions.
+
 ## 4. Planned next steps (start here)
 
 1. **Do not repeat broad direct searches.** Use pretrained transfer ranking plus
    mechanism-specific obligations. The grid-step/hash speedup is already in the
    tree, but the current hard cases still fail because the heuristic prefers
    irreversible dead basins. Inspect diagnostics after every irreversible event.
-2. **Continue `tinderrectangle` from the short parked-rat frontier.** The best
-   current branch is `<^^<vv<^<v<^^>^>.>>.>>>vvv<<<`, which reaches all-16 /
-   all-43 lower rat `(8,6)` at turn 29, and the staged right-safe child
-   `<^^<vv<^<v<^^>^>.>>.>>>vvv<<<^^<>vv>>^^^>>>v<v>v`. Do not rerun generic
-   win search from those states without a new predicate. The next target should
-   encode the final ignition phase: a lower rat chooses a detonating step while
-   the player is in `(14,7)`, `(15,7)`, `(14,8)`, or `(15,8)` and not on the
-   blast line.
-3. **Continue `release` from a new hypothesis, not post-release repair.**
-   The known prefix `v<vv^^>>v` plus trigger 5 can reduce the board to a single
-   `(18,4)` rat, but that mechanism strands it behind `(18,5)`. Fresh sidecar
-   checks from both `v<vv^^>>v` and `v<vv^^>>vv<>>>^` found no repair via
-   `(18,5)`, trigger 6, or trigger 2. The next useful attack must handle
-   `(18,4)` before the first release/top sweep or change the first irreversible
-   event family entirely.
-4. **Continue `ai_takeover` before trigger 4/5 commits.** The best current
-   non-stale lead is `v<vv^^^`: it reaches the 23-rat / 9-explosive /
-   14-trigger phase earlier than `v<vv^^<vv`, but bounded checks still cannot
-   fire trigger 7 or reach `(18,4)`. Look for a topology change around the
-   right gate before accepting the high-release family.
-5. **For remaining two-player levels, work in `wp2` waypoint pairs.** Start
-   with structural access checks (`cellnot` / `playerat`) before trigger
-   choreography. `handoff` still needs a mechanism for the `(10,6)` sealed rat
-   before the P2 sweep.
+2. **Reframe `tinderrectangle` around tempo, not parked-rat staging.** P29/P48
+   are demoted as final staging states. The current best diagnostic state is
+   the all-16/all-43 lure-rat pin at `(2,3)` with player `(3,3)`. Find a route
+   that changes the timing before the pin, so the rat can enter one of the
+   verified ignition targets `(0,0)`, `(16,0)`, `(13,8)`, or `(2..6,6)` while
+   the player is on a safe cell.
+3. **Continue `release` by altering `(18,5)` before/during release.** The known
+   prefix `v<vv^^>>v` plus trigger 5 can reduce the board to a single `(18,4)`
+   rat, but that mechanism strands it behind `(18,5)=web`. The direct
+   comparison with `ai_takeover` says the right-pocket web is the literal
+   blocker. Search for pre-release paths or rat-trigger geometry that changes
+   `(18,5)` before the top sweep commits.
+4. **Use `ai_takeover` as the release topology control.** The best current
+   non-stale lead is still `v<vv^^^`, but its main value is proving that an open
+   right pocket changes the skeleton. Do not spend long runs here until
+   `release` has a plausible `(18,5)` mechanism to transfer back.
+5. **For remaining two-player levels, work in narrow `wp2` waypoint pairs.**
+   Start with structural access checks (`cellnot` / `playerat`) before trigger
+   choreography. `handoff` still needs a non-obvious mechanism for the `(10,6)`
+   sealed rat; `blocked_v2` needs canonical or waypoint-bounded probes because
+   raw all-9 branchdump hits the memory cap.
 6. **`blocked_v2`:** treat the all-9 `5 -> 1 -> 4` prefix as the best archive
    frontier, but not yet a live continuation. The next useful predicate should
    alter lower-left mouth / trigger-2 access before trigger 4, since P16
@@ -8634,9 +8693,9 @@ solver/solutions/
 
 ## 6. Session context
 - A session Stop-hook with goal **"solve all the puzzles"** may be active in
-  some environments. The current missing inventory is 8 CSVs: seven rat-bearing
-  hard levels (`blocked_v2`, `handoff`, `ai_takeover`, `on_the_clock`,
-  `release`, `reload_v3`, `tinderrectangle`) plus the zero-rat
-  `claude/gauntlet.csv` portal hub. Resume by working §4.
+  some environments. The current missing inventory is 7 rat-bearing hard
+  levels: `blocked_v2`, `handoff`, `ai_takeover`, `on_the_clock`, `release`,
+  `reload_v3`, and `tinderrectangle`. `claude/gauntlet.csv` is zero-rat and
+  portal-route verified separately. Resume by working §4.
 - Fork created with `gh repo fork`; push with `gh auth setup-git --hostname github.com` then
   `git push fork claude/new-puzzles`. No PR was opened to upstream (`davidspies/infestation`).
