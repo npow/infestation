@@ -9414,6 +9414,62 @@ rat-position or component falsifiers.
   lower the rat/reachability guard deliberately and inspect what first viable
   trigger branch appears.
 
+### Retrospective checkpoint - 2026-06-15 parallel handle audit
+
+- Status remains 38 verified rat-win solutions. No new candidate move string was
+  produced, and `final_solutions.json` remains unchanged.
+- `cooperation/blocked_v2`: local and sidecar probes moved from direct trigger
+  checks to necessary access handles. Prefix `v< v^ v^ << <^ <^ ^^` returned no
+  canonical branches to `reachable:5,11`, `reachable:3,14`, or
+  `cellnot:6,11,explosive` under 8-rat, 5-reachable-rat, max-1-trapped,
+  16-explosive, and 8-trigger guards. Kepler also checked all-9 near-miss
+  prefixes `^< ^^ v^ ^^ v^ ^v vv ^v` and `v< v^ v^ <^ <^ << ^v`; both failed
+  to open either trigger-2 mouth under useful guards, and event enumeration from
+  the bottom-side prefix returned `NO_EVENTS`.
+- `cooperation/handoff`: all-5-rat first-event search returned `NO_EVENTS`.
+  Relaxing to 4 rats only reproduced the known 7-turn branch
+  `v^ >^ >^ >^ >^ >^ ^^`; adding `v^` gives two reachable rats, but they are
+  the local `(8,5)` / `(8,6)` pair while hard rat `(10,6)` and the left rat
+  remain sealed. A bridge predicate that required the rat near `(9,5)` while
+  preserving `(10,5)=web` returned no branch.
+- `release`: sidecar probes from the initial board found no branch where first
+  trigger 3, 4, or 5 opens the right-pocket web `(18,5)` while preserving a
+  sane continuation, and no direct `cellnotratat:18,5,web,18,4` branch under
+  20-rat/useful-trigger guards. This demotes another early center-trigger
+  bypass; the right pocket still likely needs left trigger 2 or a different
+  lower-left actor choreography.
+- `reload_v3`: two staged-rat handles near triggers 1 and 4 were sacrifice
+  traps. Unguarded suffixes `>v` and `v<` consume the target trigger but kill
+  the only reachable rat, leaving 2 rats and `reachable_rats=0`; guarded
+  all-3-rat `triggeronly:1` / `triggeronly:4` and follow-up `reachablege:1`
+  returned no branches.
+- `old_levels/on_the_clock`: Averroes found a cleaner positive first event:
+  `vvvvv` fires trigger 6 while preserving all 8 rats. Immediate follow-ups
+  from `vvvvv` to `triggeronly:8` and `triggeronly:5` returned no branches.
+  Non-trigger handle `vvvvv^^^^` preserves all 8 rats and moves local material,
+  but follow-ups to `triggeronly:8` and `triggeronly:7` also returned no
+  branches under the checked guards.
+- `tinderrectangle`: the 29-turn safe-side partial
+  `<<<<<>^>>^>^>>v>vv>>^^^>>vvvv` is live with all 16 rats and all 43
+  explosives preserved, player `(14,7)`, and lower rat `(2,3)`. Top-corner
+  baffle checks for opening row-2 webs on either side returned no branches under
+  all-rat/all-explosive/zero-trapped guards, so this did not expose a corner
+  ignition bypass.
+- `cyborg_rats/ai_takeover`: from the known 3-rat late state, center-explosive
+  before trigger-2 checks for `(14,12)` and `(15,12)` returned no branches; the
+  event scan only found left trigger-2 approach web clearing, not useful
+  explosive use.
+- Retrospective: this wave was more efficient than the earlier long searches
+  because each probe tested a necessary human handle: access to trigger mouths,
+  sealed-rat bridge geometry, right-pocket opening, post-trigger reachability,
+  and separated ignition timing. The result is still no solution, but several
+  attractive families are now demoted by fast predicates rather than by broad
+  timeouts. Next work should prioritize genuinely different mechanisms: for
+  `on_the_clock`, exploit the new `vvvvv` trigger-6 first event with a
+  non-trigger second handle other than `^^^^`; for `release`, search for the
+  lower-left actor that survives until left trigger 2; for `tinderrectangle`,
+  test release-gate geometry rather than top-corner baffles.
+
 ---
 
 ## 5. File map
