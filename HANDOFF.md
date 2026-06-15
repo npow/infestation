@@ -9024,6 +9024,46 @@ rat-position or component falsifiers.
   or "change survivor set and prove first rat-drop". If a check only proves the
   first half, immediately run the handle check before promoting it.
 
+### Updated transfer/exact wave - 2026-06-15 necessary-handle labels
+
+- Reran the frozen-prior transfer ranker after adding the necessary-handle
+  negatives. Output:
+  `/tmp/infestation-runs/transfer_rank_20260615T095043Z_necessary_handle.jsonl`.
+  It trained with 578 examples, including 178 obligation labels, replayed 96
+  candidates, and selected 44 ranked prefixes.
+- Expanded one structural-event layer from the ranked prefixes:
+  `/tmp/infestation-runs/event_seeds_20260615T095043Z_necessary_handle.jsonl`.
+  The filtered missing-level file has 85 seeds:
+  `/tmp/infestation-runs/event_seeds_20260615T095043Z_necessary_handle_missing.jsonl`.
+  Counts were 25 `ai_takeover`, 27 `release`, 17 `reload_v3`, 15
+  `tinderrectangle`, and 1 `on_the_clock`; no `blocked_v2` or `handoff` event
+  seeds survived this event layer.
+- Ran a capped exact wave over the top filtered seeds: 18 jobs, concurrency 3,
+  900 MB per child, 90 s timeout:
+  `/tmp/infestation-runs/20260615T095043Z_necessary_handle_exact_small`.
+  Archive/triage:
+  `/tmp/infestation-runs/archive_20260615T095043Z_necessary_handle_exact_small.jsonl`
+  and
+  `/tmp/infestation-runs/triage_20260615T095043Z_necessary_handle_exact_small.jsonl`.
+  No verified solution was found.
+- `ai_takeover`: top event children from `v<vv^^^` keep the same shape: 21/22
+  or 20/21 enemies, all but `(18,4)` reachable, no trapped enemies, and no
+  cleanup. FESS/dropchain/lookup/novelty found no solution.
+- `release`: the wave repeated the sealed-right-rat basin. Triage best states
+  still carry `release-right-rat-sealed` and `release-trigger2-unreachable`,
+  often with the additional trapped `(13,5)` family.
+- `reload_v3`: exact children collapse back to one reachable or zero reachable
+  states with `reload-top-left-rat-sealed` and `reload-trigger2-unreachable`.
+- `old_levels/on_the_clock`: the only event seed was P18/P19. Exact children
+  reduce to one/two-rat no-mechanism tails with trapped survivors.
+- `tinderrectangle`: P57 event descendants again drop to 15/15 rats. This is
+  the same lower-rat sacrifice basin, not an all-16 finish path.
+- Retrospective rule: reranking after labels is only useful if the event layer
+  produces fresh structural families. If filtered event seeds omit a level
+  (`blocked_v2`, `handoff` here) or reproduce already labeled basins, switch to
+  hand-authored waypoint/predicate probes for that level instead of another
+  broad transfer wave.
+
 ---
 
 ## 5. File map
