@@ -7854,6 +7854,74 @@ and archived/triaged them to
   exact follow-up for `reachable:18,4`, `trigger:7`, and direct win returned
   no branch.
 
+### Continuation evidence - 2026-06-14 Codex transfer-linear macro wave
+
+No new verified win. This pass used the existing frozen-prior transfer path
+instead of raw broad search:
+
+- Mechanism-audit agents supplied fresh, bounded predicates for `release`,
+  `reload_v3`, `ai_takeover`, `on_the_clock`, `handoff`, `blocked_v2`, and
+  `tinderrectangle`.
+- Local exact predicate wave:
+  `/tmp/infestation-runs/20260614T233959Z_transfer_obligation_wave/`.
+  It ran 21 jobs with 4 workers and 1 GB per-child virtual-memory caps.
+  There were no `SOLVED` or `result=Won` markers.
+- The wave archive/triage wrote:
+  `/tmp/infestation-runs/archive_20260614T233959Z_transfer_obligation_wave.jsonl`,
+  `/tmp/infestation-runs/triage_20260614T233959Z_transfer_obligation_wave.jsonl`,
+  and `/tmp/infestation-runs/seeds_20260614T233959Z_transfer_obligation_wave.jsonl`.
+- Frozen-prior transfer ranker wrote
+  `/tmp/infestation-runs/transfer_rank_20260614T233959Z_wave_linear.jsonl`.
+  It trained the linear Infestation head on 455 oracle examples:
+  352 solved-trajectory snapshots, 44 triage records, and 59 obligation labels.
+- Transfer-scored event expansion wrote
+  `/tmp/infestation-runs/event_seeds_20260614T233959Z_wave_linear.jsonl`
+  with 188 scored event successors.
+- Exact Go-Explore portfolio ran under
+  `/tmp/infestation-runs/20260614T233959Z_wave_linear_go_explore/`.
+  It selected 19 hard-level candidates, launched 48 interleaved jobs with
+  4 workers, 1 GB caps, and 180 second job caps, then reported
+  `no solved job in this go-explore portfolio`.
+- The portfolio archive/triage wrote
+  `/tmp/infestation-runs/archive_20260614T233959Z_wave_linear_go_explore.jsonl`,
+  `/tmp/infestation-runs/triage_20260614T233959Z_wave_linear_go_explore.jsonl`,
+  and `/tmp/infestation-runs/seeds_20260614T233959Z_wave_linear_go_explore.jsonl`.
+
+Per-level notes from this pass:
+
+- `cyborg_rats/ai_takeover`: `cyborgkillreadyratlive` from `v<vv^^^` produced
+  eight 23-rat branches, including the previously demoted
+  `v<vv^^^vvvv>>^>v<<<^^^^v` family and sibling cyborg-ready states. Transfer
+  event expansion ranked several 21/22 reachable descendants, but FESS,
+  dropchain, lookup-win, and novelty on the top three all returned quickly
+  with no solution. Treat "cyborg ready" as a diagnostic only unless a new
+  predicate proves trigger-7/right-gate topology changes.
+- `reload_v3`: the alternate rat-fired upper trigger-2 predicate again reached
+  `^>>>>>>>^^^vvv<<v<`-style branches, but all had 3 rats and 0 reachable rats.
+  Top-explosive helper and bottom-rat-displacement predicates returned no
+  branch. Transfer-ranked bottom-station event descendants ended in the same
+  sealed top-left/bottom-left family; best triage descendants have one rat,
+  zero reachable rats, and trigger 2 still not useful.
+- `release`: top-pack fuse, lower-left actor staging with trigger 2 live, and
+  strict `2,6,4,5` trigger-order probes did not find a live branch. The
+  transfer portfolio from `v<vv^^>>v`, `v<vv^^><vv>`, and P37-return events
+  ended in the same sealed `(18,4)` / trigger-2-unreachable basin.
+- `tinderrectangle`: T106 row-3 latch/notch probes and row-3 lure returned no
+  branch. Transfer-ranked T106 descendants were high-scoring under the frozen
+  prior, but exact FESS/dropchain/lookup descended to 15-rat states or
+  `NO_SOLUTION`. Do not rerank the current T106 event suffixes as live without
+  a different pre-latch timing mechanism.
+- `blocked_v2`: two transfer-ranked pre-T5 event children were tested. FESS
+  and dropchain timed out or collapsed to states with 3 rats, 0 reachable rats,
+  and one trapped survivor. Direct A* win lookup hit the 1 GB memory cap after
+  about 500k expansions; this is a resource-capped negative, not a proof of
+  impossibility.
+- `handoff`: pre-T1 WP2 baton waypoints and the `(10,6)` rat-gate lookup all
+  returned `NO_SOLUTION`.
+- `old_levels/on_the_clock`: the rat-fired trigger-5 check from `>>>^^>>>`
+  returned no branch. Transfer event descendants from P18/P19 again converge to
+  one/two-rat no-mechanism basins; direct A* win lookup hit the 1 GB memory cap.
+
 ---
 
 ## 4. Planned next steps (start here)
