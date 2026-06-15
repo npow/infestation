@@ -9122,6 +9122,55 @@ rat-position or component falsifiers.
   event makes the second rat reachable, not just deepen central/bottom trigger
   paths.
 
+### Retrospective checkpoint - 2026-06-15 P57 timing and sidecar closures
+
+- Status remains 38 verified rat-win solutions. No new entry was added to
+  `solver/solutions/final_solutions.json`; no solver, transfer, portfolio, or
+  clingo process is active after this checkpoint.
+- Retrospective: the old `tinderrectangle` `Won` lines were not a
+  reconstructable route. They came from `ignitions`, which mutates a candidate
+  board and proves a one-step geometry. That evidence is still useful, but it
+  only says "if the rat/player are already there, the next action wins." Future
+  work must prove the real route reaches the geometry before treating it as a
+  lead.
+- `tinderrectangle`: the current best P57 timing board is
+  `<<<^<<^>>>>^>>v>v<v>>v^>^^>>v>.vvvv<<>^^^^^<<vvv<<^^^<<<<`.
+  Diagnostics: player `(6,3)`, lower rat `(6,6)`, all 16 rats alive, all 43
+  explosives intact. `ratdeathgeom` confirms that if the player were at
+  `(14,7)` or `(14,8)` while the rat stayed at `(6,6)`, the next action wins.
+- `tinderrectangle`: the natural return
+  `>>>>vvv>>^^^>>vvvv` reaches player `(14,7)`, but the lower rat has overrun
+  to `(8,6)`. From that P75 state, all-rat `lookup --goal winready` returned
+  `NO_SOLUTION` immediately, and unguarded `lookup --goal win` also returned
+  `NO_SOLUTION` after 40.6 s. Treat the natural return as a closed cleanup
+  basin, not a nearly solved state.
+- `tinderrectangle`: exact P57 timing predicates for
+  `ratplayer:6,6,14,7` and `ratplayer:6,6,14,8` returned no branch with all
+  16 rats/all explosives. Relaxing to 15 rats first hit the 650 MB memory cap
+  under non-canonical search; smaller canonical reruns to depth 90 / 220k nodes
+  also returned no branch. This demotes the direct "hold `(6,6)` while the
+  player escapes" story under current caps. The next hypothesis must change the
+  row-6 lane or timing before P57/P75, not deepen the post-return basin.
+- `release`: sidecar checked lower-carrier top-4 child
+  `v<vv^^>><<vv>v<<<>^>>^>><^`. The intended handle was trigger 6 clearing
+  `(1,16)` while keeping trigger 2 reachable, then using trigger 2 to open
+  `(18,5)`. Both
+  `triggeronlycellnot:6,1,16,explosive` with trigger-2 reachability and a looser
+  `triggeronly:6` check returned no branches. This closes that post-top-4
+  trigger-6 continuation; back up before this lower-carrier child for any new
+  `release` attempt.
+- `old_levels/on_the_clock`: sidecar tested early trigger 2 as a useful
+  right-bottom opener:
+  `triggeronlycellnot:2,16,18,web` with all 8 rats, at least 4 reachable rats,
+  trigger 5 reachable, and useful resources. The larger run hit the 650 MB cap;
+  the smaller depth 60 / 150k-node rerun returned no branches. This demotes
+  early trigger 2 as a live opener unless a prior setup changes the reachable
+  rat count or next handle.
+- Process rule reinforced: after any synthetic-geometry positive, immediately
+  test the route-to-geometry predicate and the post-natural-return cleanup
+  predicate. If either is empty, document the branch as a timing trap before
+  launching another broad search.
+
 ---
 
 ## 5. File map
