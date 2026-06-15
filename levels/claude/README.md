@@ -33,6 +33,23 @@ Replay any of these with the bundled solver:
 | Remote Detonator | `^<<<<v` | 6 |
 | Web Lair | `^^vvvv` | 6 |
 
+## Verified hub route
+
+`gauntlet.csv` is a zero-rat portal hub, so direct `solver verify` remains
+`Playing`. The stack route is verified separately by:
+
+```bash
+python3 solver/solutions/tools/verify_gauntlet_route.py
+```
+
+| Step | Hub moves | Portal | Child solution |
+|---|---|---|---|
+| 1 | `^^` | `claude/roach_motel.csv` | `^^` |
+| 2 | `<<` | `claude/sacrifice.csv` | `<>` |
+| 3 | `vvvv` | `claude/remote_detonator.csv` | `^<<<<v` |
+| 4 | `>>>>` | `claude/web_lair.csv` | `^^vvvv` |
+| 5 | `^^^^` | `claude/stampede.csv` | `^^^` |
+
 ## How they were verified
 
 The `solver/` crate links the game's actual logic (`infestation::testing`) and exposes:

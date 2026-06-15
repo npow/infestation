@@ -78,20 +78,21 @@ Browser auto-player: `solver/solutions/autoplay.js`. New puzzles: `levels/claude
 
 Older notes in this file mention `chase`, `world`, and `order_of_operations`
 as active work, but those are now in `final_solutions.json` and verify against
-the current oracle. As of 2026-06-14, the unsolved inventory is the 8-level set
-below. `levels/claude/gauntlet.csv` has zero rats; under the solver it remains
-`Playing` because hub/portal completion is app `LevelStack` state, not a rat
-win.
+the current oracle. `levels/claude/gauntlet.csv` has zero rats; direct
+`solver verify` remains `Playing` because hub/portal completion is app
+`LevelStack` state, not a rat win. The portal-stack route is now recorded in
+`solver/solutions/gauntlet_route.json` and verified by
+`solver/solutions/tools/verify_gauntlet_route.py`.
 
 ### UNSOLVED - primary hard set
 
-As of the 2026-06-14 transfer-guided pass, `chase.csv`, `world.csv`, the
-Claude child levels, `old_levels/overstep.csv`, and
-`cooperation/tug_of_war.csv` are solved and still verify. The active hard set is:
+As of the 2026-06-15 portal-stack pass, `chase.csv`, `world.csv`, the Claude
+child levels, the `claude/gauntlet.csv` portal hub, `old_levels/overstep.csv`,
+and `cooperation/tug_of_war.csv` are solved / route-verified and still verify.
+The active rat-bearing hard set is:
 `tinderrectangle.csv`, `release.csv`, `reload_v3.csv`,
 `cyborg_rats/ai_takeover.csv`, `cooperation/handoff.csv`,
-`cooperation/blocked_v2.csv`, `old_levels/on_the_clock.csv`, and the
-`claude/gauntlet.csv` portal hub.
+`cooperation/blocked_v2.csv`, and `old_levels/on_the_clock.csv`.
 
 | # | Level | Players | Name-hint / trick | Best lead / recommended attack |
 |---|---|---|---|---|
@@ -102,7 +103,7 @@ Claude child levels, `old_levels/overstep.csv`, and
 | 5 | `cooperation/handoff` | 2 | baton pass | Small enough to hand-reason. P1 cannot simply reach trigger 1 first. P1 can reach trigger 2 first, but then trigger 1 is no longer useful/reachable; likely P1 opens the handoff and P2 finishes on the remote side. |
 | 6 | `cooperation/blocked_v2` | 2 | one player blocked | Keep the previous warning: one rat may be permanently unreachable behind effectively indestructible structure. Before spending human-solving time, prove or disprove winnability with targeted reachability/exhaustive checks. |
 | 7 | `old_levels/on_the_clock` | 1 | clocked trigger/resource order | P19 setup `>>>^^>>>vvv><vvvvvv` keeps 8 rats, 3 explosives, and 13 triggers. Avoid the P24 sibling unless a branch proves bottom-cage access improves; it spends too much mechanism too early. |
-| 8 | `claude/gauntlet` | 1 | portal hub | Has zero rats and no `verify` win condition in the solver. Treat separately from rat-bearing CSVs unless hub/portal semantics are added to the oracle/artifacts. |
+| - | `claude/gauntlet` | 1 | portal hub | Route-verified separately: hub moves `^^`, `<<`, `vvvv`, `>>>>`, `^^^^` visit all five child portals, and each child solution passes `solver verify`. |
 
 ### Newly solved - 2026-06-14
 

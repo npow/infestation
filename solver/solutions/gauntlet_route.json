@@ -1,0 +1,31 @@
+{
+  "level": "claude/gauntlet.csv",
+  "verification": "solver/solutions/tools/verify_gauntlet_route.py",
+  "route": [
+    {
+      "hub_moves": "^^",
+      "portal": "claude/roach_motel",
+      "child_solution": "^^"
+    },
+    {
+      "hub_moves": "<<",
+      "portal": "claude/sacrifice",
+      "child_solution": "<>"
+    },
+    {
+      "hub_moves": "vvvv",
+      "portal": "claude/remote_detonator",
+      "child_solution": "^<<<<v"
+    },
+    {
+      "hub_moves": ">>>>",
+      "portal": "claude/web_lair",
+      "child_solution": "^^vvvv"
+    },
+    {
+      "hub_moves": "^^^^",
+      "portal": "claude/stampede",
+      "child_solution": "^^^"
+    }
+  ]
+}

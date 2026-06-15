@@ -53,10 +53,25 @@ Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-s
 | `claude/remote_detonator.csv` | twin-trigger remote chain | 6 | `^<<<<v` |
 | `claude/web_lair.csv` | web-shield + sword-facing | 6 | `^^vvvv` |
 
+## Portal Hub Route
+
+`claude/gauntlet.csv` has zero rats, so `solver verify` correctly remains `Playing`; completion is app-level portal stack state. The route below is verified by `solver/solutions/tools/verify_gauntlet_route.py`, which checks hub movement against `gauntlet.json` and verifies each child level with `solver verify`.
+
+Total movement: 16 hub moves + 19 child moves (plus one confirm after each child win).
+
+| Step | Hub Moves | Portal | Child Solution |
+|---|---|---|---|
+| 1 | `^^` | `claude/roach_motel.csv` | `^^` |
+| 2 | `<<` | `claude/sacrifice.csv` | `<>` |
+| 3 | `vvvv` | `claude/remote_detonator.csv` | `^<<<<v` |
+| 4 | `>>>>` | `claude/web_lair.csv` | `^^vvvv` |
+| 5 | `^^^^` | `claude/stampede.csv` | `^^^` |
+
 ## Reproduce
 
 ```
 solver verify levels/<level>.csv "<solution>"   # prints result=Won
+python3 solver/solutions/tools/verify_gauntlet_route.py
 ```
 
 Or play in the browser: load `autoplay.js` in the dev console at https://davidspies.github.io/infestation/ , navigate to a level, then `infestation.play("rats")` etc.

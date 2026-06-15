@@ -11,6 +11,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 SOLUTIONS_DIR = ROOT / "solver" / "solutions"
 FINAL_SOLUTIONS = SOLUTIONS_DIR / "final_solutions.json"
 AUTOPLAY_DATA = SOLUTIONS_DIR / "results" / "autoplay_data.json"
+GAUNTLET_ROUTE = SOLUTIONS_DIR / "gauntlet_route.json"
 
 CLAUDE_TRICKS = {
     "claude/sacrifice.csv": "explosive-lure",
@@ -54,11 +55,36 @@ def write_solutions_markdown(final: dict[str, dict[str, object]]) -> None:
             f"| `{level}` | {CLAUDE_TRICKS[level]} | {record['moves']} | `{record['sol']}` |"
         )
 
+    if GAUNTLET_ROUTE.exists():
+        route = json.loads(GAUNTLET_ROUTE.read_text(encoding="utf-8"))
+        total_hub_moves = sum(len(step["hub_moves"]) for step in route["route"])
+        total_child_moves = sum(len(step["child_solution"]) for step in route["route"])
+        lines.extend(
+            [
+                "\n## Portal Hub Route\n",
+                "`claude/gauntlet.csv` has zero rats, so `solver verify` correctly remains "
+                "`Playing`; completion is app-level portal stack state. The route below is "
+                "verified by `solver/solutions/tools/verify_gauntlet_route.py`, which checks "
+                "hub movement against `gauntlet.json` and verifies each child level with "
+                "`solver verify`.\n",
+                f"Total movement: {total_hub_moves} hub moves + {total_child_moves} child moves "
+                "(plus one confirm after each child win).\n",
+                "| Step | Hub Moves | Portal | Child Solution |",
+                "|---|---|---|---|",
+            ]
+        )
+        for index, step in enumerate(route["route"], start=1):
+            lines.append(
+                f"| {index} | `{step['hub_moves']}` | `{step['portal']}.csv` | "
+                f"`{step['child_solution']}` |"
+            )
+
     lines.extend(
         [
             "\n## Reproduce\n",
             "```",
             'solver verify levels/<level>.csv "<solution>"   # prints result=Won',
+            "python3 solver/solutions/tools/verify_gauntlet_route.py",
             "```\n",
             "Or play in the browser: load `autoplay.js` in the dev console at "
             "https://davidspies.github.io/infestation/ , navigate to a level, then "
