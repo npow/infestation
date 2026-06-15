@@ -8797,6 +8797,14 @@ rat-position or component falsifiers.
   `(18,4)` right rat sealed and trigger 2 unreachable; `reload_v3` still flags
   top-left rat sealed / trigger 2 unreachable; `on_the_clock` falls into trapped
   no-mechanism tails.
+- `cyborg_rats/ai_takeover`: after the transfer wave, a local ratgeom check from
+  early row-5 staging `v<vv^^^` showed the desired right-cyborg lure would be
+  `(18,4)->(18,5)` with the player staged around `(15..17,5..6)`. Exact
+  branchdump from `v<vv^^^` returned no such branch under 23-rat/21-reachable
+  useful guards. The fresh trigger-5 child
+  `v<vv^^^^^^^^^v^vvvvvvv>>>>v` also failed that lure predicate and
+  `cyborgkillready`. Treat trigger-5-first as a local burn, not the right-cyborg
+  mechanism.
 
 ---
 
