@@ -10162,6 +10162,50 @@ rat-position or component falsifiers.
     `(2,4)` while the lower rat remains controlled" handle from the inner-baffle
     candidate. Future tinder work needs a different baffle or earlier prefix,
     not more local `(2,4)` mouth opening from this candidate.
+- Retrospect checkpoint - 2026-06-15 parallel candidate/closure batch: no new
+  verified wins, and no solver child was left running. This cycle changed the
+  behavior that caused previous stalls: sidecar proposals were duplicate-grepped
+  before launch, stale `on_the_clock` P19/P28 trigger-order work was rejected,
+  active solver children were capped at three with `timeout` and
+  `ulimit -v 700000`, and positive predicates were immediately followed by a
+  next-handle test instead of being treated as solution leads.
+  - `reload_v3`: the R41 helper-station spacing hypothesis returned empty. From
+    `^>>>>>>>^^vvvvvv<<<^^<<^^<<<<^<<<<<<<<v<v`, branchdump for
+    `ratrectplayerrectcellis:5,18,8,20,3,17,5,19,4,18,trigger1` found no
+    branches under all-3-rat, 6-explosive, 14-trigger, and one-reachable-rat
+    guards. This closes the local "move the helper farther east while trigger 1
+    stays live" repair from R41.
+  - `reload_v3`: a different remote-trigger-5 actor condition is real. From the
+    initial board, branchdump for `ratcell:11,4,9,5,trigger5` produced 35-move
+    branches such as `vvv<<<<<<vvv><^^^^^^^^^^^^^<^^^^^^^`, preserving all
+    3 rats, 6 explosives, 14 triggers, and one reachable rat. However, the
+    immediate next-handle test from that prefix,
+    `triggeronlycellnot:5,10,5,web`, returned no branches under the same useful
+    guards. So the remote-5 actor can be staged, but it does not yet convert
+    into the top cage mouth `(10,5)` handle; future reload work needs an
+    additional pre-trigger condition, not direct trigger-5 deepening.
+  - `tinderrectangle`: the P83 safe-side branch has a new real local topology
+    change. From
+    `<<>^^^>>v>vv>>^^^>>vvv^>^^<<<vvv<<^^^<<<<v<^vvv<<^>^^vvv<<^>>>>^^>>>v>vv>>^^^>>vv>v`,
+    branchdump for
+    `cellnotratrectplayerrect:4,5,web,2,3,2,3,13,6,15,8` found immediate
+    branches, including suffix `v`, preserving all 16 rats, all 43 explosives,
+    all rats reachable, and zero trapped rats. The next-handle test from the
+    `...vv>vv` child to `rectsep` returned no branches under the same guards.
+    This is a useful baffle mutation but not yet the missing separation route.
+  - `release`: the sidecar's roof-bypass idea was cleanly closed. From the
+    initial board, branchdump for `cellnotratat:18,3,wall,18,4` returned no
+    branches while preserving at least 23 rats, 19 reachable rats, max two
+    trapped rats, 12 explosives, 7 triggers, and two reachable triggers. The
+    sealed `(18,4)` rat is not repaired by opening the roof wall `(18,3)` under
+    useful resources; do not transfer this roof idea to more right-pocket runs
+    without a different actor/topology invariant.
+  - Sidecar result triage: one cooperation sidecar was closed after it exceeded
+    the checkpoint without returning a result. This is intentional run control,
+    not a puzzle conclusion. The next batch should use the remaining non-stale
+    sidecar suggestions only after duplicate checks: AI roof comparison or
+    bottom-normal/right-cyborg role split, and release external roof carrier if
+    it is not a duplicate of the roof-bypass closure above.
 
 ---
 
