@@ -258,6 +258,63 @@ No new verified win in this continuation.
   `--min-rats 9 --min-reachable-rats 6 --min-explosives 15`.
   This means the frontier is a good archive state but not a live continuation
   unless an earlier route changes trigger-2 / lower-left-mouth access.
+
+### Continuation evidence - 2026-06-15 strategic falsification pass
+
+No new verified win in this continuation. The useful result was pruning several
+plausible human stories into concrete dead branches:
+
+- `release.csv`: the stale high-release family `v<vv^^>>v` and follow-up
+  `v<vv^^>>vv<>>>^` can clean down to a one-rat trap, but `(18,4)` remains
+  isolated behind `(18,5)=web`. Even after the one-rat trap, trigger 6 is
+  reachable but does not make trigger 2 or `(18,5)` reachable. Earlier
+  lower-first guarded orders `4 -> 5 -> 2`, `5 -> 4 -> 2`, and `4 -> 5 -> 6`
+  can preserve all 35 explosives through the lower pair, but cannot reach
+  trigger 2/6 under the tested guards. Next `release` work should back up
+  before the high release and look for a different right-gate mutation, not
+  deeper cleanup after the one-rat basin.
+- `old_levels/on_the_clock.csv`: P34
+  `vvvvv^^^^>>^>^vv>^^^^<^<^^^^^vvvvv` is a forced trigger-9 clock tick; after
+  that, direct trigger-4 and left-web opening predicates are empty, and the
+  next event collapses reachable rats to zero. Backing up to P20
+  `>>>^^>>>vvv><vvvvvv^`, immediate trigger 5 is reachable while preserving
+  four reachable rats, but the resulting P24 `>>>^^>>>vvv><vvvvvv^^>>>` cannot
+  reach trigger 6 or 8 even after allowing local kills. Future work should back
+  up before P20 or seek a route that changes trigger-6/8 access before trigger 5.
+- `tinderrectangle.csv`: the real one-step win geometry is rat at `(0,0)` with
+  player staged on row 3 (confirmed by `solver ignitions`). Generic
+  `rectsep`/`rectignite` lower-rectangle predicates are not the right target
+  here. Direct corner staging `ratat:0,0` / `ratat:16,0` and compound
+  rat/player corner predicates were empty under all-rat/all-explosive and
+  slightly relaxed explosive guards. `tinderbeam` can open most webs while
+  preserving all rats/explosives but still leaves the lower rat at `(2,3)`.
+  Next work should target how to force that rat upward-left into `(0,0)`, not
+  just open more corridor.
+- `reload_v3.csv`: the bottom-station family `vvv<<<<<<vv<<<<` is not live.
+  Its only promising all-3-rat detour
+  `vvv<<<<<<vv<<<<^>>^>>>>>>>>>>>>>>>^^^^^^vv<<<` terminates without trigger 2,
+  trigger 6, or a bottom-left fuse mutation. Back up before the station and
+  require the first structural event to alter the trigger-6 cage or
+  `(1,21)/(2,21)` bottom-left fuse.
+- `cyborg_rats/ai_takeover.csv`: the exact P64 frontier
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvv^vvv^^^` cannot be
+  rescued by opening `(16,8)` or the right explosive gate `(18,6..8)` before
+  trigger 8 / left trigger 2. Back up earlier than P64; extending the P89
+  cleanup remains stale.
+- `cooperation/handoff.csv`: the weak lower-row baton state at
+  `v^ >^ >^ >^ >^ >^ ^^ .v .v .> .> .> v> << ^< <<` is not a win continuation.
+  Tactical lookup/dropchain kills two rats immediately but strands the remaining
+  two-rat basin. The clean lower-row handoff shape with player to the east/right
+  was also empty in bounded searches. Future probes need a different handoff
+  geometry rather than deeper cleanup from this P16.
+- `cooperation/blocked_v2.csv`: the pre-trigger-4 P15/P16 family is not live
+  under the tested lower-mouth/trigger-2 access obligations. Strict `(1,15)`
+  mouth-open and direct trigger-2 reachability are empty; the broad relaxed
+  mouth predicate is memory-shaped and should be replaced by narrower
+  waypoint-pair or trigger-specific predicates.
+
+Operational note: all probes were run with serialized or low parallelism,
+`timeout`, and `ulimit -v 900000`; no solver processes were left running.
 - `cooperation/handoff` p24 frontier
   `v^ >^ >^ >^ >^ >^ ^^ .v .> v> v> ^^ .v .v .< .< .< .v .v .> .> .v .> v>`
   leaves 3 rats, 5 explosives, 2 triggers, and only one reachable rat. Guarded
