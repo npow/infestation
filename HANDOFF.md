@@ -8694,6 +8694,30 @@ rat-position or component falsifiers.
   continuation predicate. Do not bank "clean" branches as progress unless they
   change the exact rat/topology obligation that blocked the previous branch.
 
+### Continuation evidence - 2026-06-15 Q54 trigger-8 / sidecar pass
+
+- `cyborg_rats/ai_takeover`: backed up before the Q54 trigger-8 corridor and
+  found a stronger trigger-8 phase:
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvv^vvv^^^vvv^^^vvv^^^vvv<`.
+  From there, strict trigger 2 can be reached with only 3 enemies left:
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvv^vvv^^^vvv^^^vvv^^^vvv<<<<<<<<<>>>>>>><<<<<<<<<<<<<<^^^<<<`.
+  This is a real improvement over the older 13-/10-enemy Q54 trigger-2 traps,
+  but it is still not a solution. The one-move-before-trigger state is forced:
+  only stepping onto left trigger 2 survives. Post-trigger `lookup win`,
+  `ratsle:2`, `swordready`, and first-safe-move follow-ups returned no branch;
+  pre-trigger `ratsle:2` while preserving trigger 2 and explosives was also
+  empty. Right trigger 2 `(19,7)` remained unreachable.
+- `cooperation/blocked_v2`: sidecar falsified the clean pre-trigger-4 staging
+  prefix `vv v^ vv <^ <v <^ <. ^< ^^ ^^ ^^` as a direct trigger-2 access route.
+  It keeps all 9 rats and resources, but both trigger-2 cells are unreachable,
+  and bounded `triggeronly:2` plus `playerat:3,14` checks returned no branches.
+  Back up before that station or alter the lower-left mouth earlier.
+- `cooperation/handoff`: sidecar falsified the lower-right doorway story from
+  `v^ >^ >^ >^ >^ >^`. No branch opened `(10,5)` with the `(10,6)` rat alive
+  and player at `(10,4)`, no branch opened/spent `(12,7)` with the rat alive
+  and player staged on `(11,7)/(12,7)`, and the archived courier prefix could
+  not open `(10,8)` while preserving the sealed rat.
+
 ---
 
 ## 5. File map
