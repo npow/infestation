@@ -8751,6 +8751,10 @@ rat-position or component falsifiers.
   for `cellnot:18,5,web` and `reachable:18,4` also timed out with best states
   still sealed. A solution must alter the central topology before the familiar
   release commitment, not just visit trigger 2 or 6 first.
+- The adjacent explosive repair is also demoted: all-24/high-resource checks
+  for spending `(18,6)`, `(18,7)`, or `(18,8)` returned no branch. The right
+  pocket does not look like a trigger-first or explosive-first problem from the
+  initial state; back up to central topology/trigger ordering instead.
 
 ---
 
