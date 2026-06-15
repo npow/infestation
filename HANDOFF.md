@@ -9535,6 +9535,54 @@ rat-position or component falsifiers.
   trigger 8 was already consumed; and the stricter
   `cellnotcellis:17,19,web,18,19,trigger8` returned no branch. This folds back
   into the known post-trigger-8 family, not a new pre-trigger-8 route.
+- Retrospect checkpoint - 2026-06-15: no verified wins in the latest
+  `cooperation/handoff` exact wave. Two bounded initial-state lookup-win probes
+  (`astar` depth 120 and `gbfs` depth 160, 100 s each) both returned
+  `NO_SOLUTION`. A capped initial FESS probe reached only two steps before the
+  outer timeout, and both steps collapsed into the known sealed-right basin:
+  first best bucket had unreachable/trapped rats at `(9,4)`, `(10,6)`, and
+  `(1,7)` behind webs including `(10,5)`; second best bucket still had
+  `(10,6)` and `(1,7)` trapped. Treat this as weak duplicated evidence, not a
+  proof of unwinnability. The process miss is that broad bounded solvers are
+  still rediscovering demoted basins. Next waves must start with a named
+  mechanism hypothesis, a cheap falsifier, and a grep check against
+  `obligation_labels.jsonl` before launch.
+- `old_levels/on_the_clock`: the trigger-6-first opener `vvvvv` is now more
+  constrained. At that state the board has 8 rats, 10 explosives, 24 triggers,
+  31 planks, only 1 reachable rat, and 7 trapped/unreachable rats. Bounded
+  all-8-rat/useful-resource `branchdump` probes for immediate second triggers
+  `1`, `2`, `3`, `4`, `5`, and `7` all returned zero branches. Unguarded
+  trigger-1 branches exist, but every printed branch strands all rats
+  (`reachable_rats=0`). An event enumeration with only 1 reachable rat required
+  produced only local rat/plank motion (`dx0`, `dw0`, `dt0`, `dp1`) and no real
+  trigger/resource delta. Do not pursue immediate second-trigger ordering after
+  `vvvvv`; the next hypothesis should either reshape before firing trigger 6 or
+  find a non-trigger setup that improves reachability without spending the
+  reachable rat.
+- Parallel handle wave - 2026-06-15: no verified wins. Logs are under
+  `/tmp/infestation-runs/20260615T_parallel_handles/` and
+  `/tmp/infestation-runs/20260615T_release_ai/`.
+  - `old_levels/on_the_clock`: a pre-trigger-6 bottom-rat-shift prefix
+    `^>>vv>vvv<` exists, but follow-up `triggeronly:6` still returned no branch
+    under all-8-rat, 2-reachable-rat, max-6-trapped, useful-resource guards.
+    This weakens the idea that trigger 6 first is only missing a healthier
+    pre-shift; it still needs a different invariant.
+  - `tinderrectangle`: two pre-pin alternatives from the subagent were tested.
+    From `<<<<<>^`, lookup for lower rat held in `(1..4,5..6)` while the player
+    reaches the southeast safe side returned `NO_SOLUTION` after the 320k-node
+    cap. From `<<<<<>^>>^`, exact pre-pin lower-mouth gate predicate opening
+    `(2,4)` with the rat in `(1..3,4..6)` and player in `(6..10,3..5)` returned
+    no branches. These are not global proofs, but they rule out the two cheapest
+    ways to avoid the p29 `(2,3)` pin.
+  - `cyborg_rats/ai_takeover`: from the safe trigger-7 prefix
+    `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>^>^^`, both subagent handles
+    returned no branch under strict live-resource guards: staging a rat/cyborg in
+    the right trigger-2 blast column `(18,5..7)`, and staging a normal rat in
+    the left trigger-8 lane `(0..3,18..19)`.
+  - `release`: the proposed rat-fired top-switch handle returned no branch from
+    the initial board. There was no state with a rat in `(11..13,7..9)`, player
+    in `(6..9,10..13)`, left trigger 2 still present at `(0,16)`, trigger 6
+    reachable, and the 23-rat/20-reachable useful-resource guards satisfied.
 
 ---
 
