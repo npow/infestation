@@ -9469,6 +9469,39 @@ rat-position or component falsifiers.
   non-trigger second handle other than `^^^^`; for `release`, search for the
   lower-left actor that survives until left trigger 2; for `tinderrectangle`,
   test release-gate geometry rather than top-corner baffles.
+- Retrospective checkpoint - 2026-06-15: the previous loop was too easy to let
+  idle after a capped run ended. Process checks showed no active solver process
+  even though `solver/src/main.rs` had a useful local FESS bucketing patch. The
+  correction is to run bounded waves with a written hypothesis and a written
+  decision after each wave: (1) what human handle is being tested, (2) what
+  predicate would falsify it cheaply, (3) whether the output produced a new
+  prefix or only rediscovered a known basin, and (4) the next narrower handle.
+  Do not count a timeout as evidence unless it names a concrete blocker,
+  survivor, or structurally different best prefix.
+- `tinderrectangle`: added rectangle-specific fields to `feature_bucket_key`
+  for 17x9 boards so FESS buckets keep player position, lower-rat position,
+  lower-rat distance, safe-side distance, separation, and ignition readiness.
+  This fixed the one-bucket collapse from the 29-turn safe-side prefix:
+  `/tmp/infestation-runs/20260615T_retro_wave1/tinder_rect_bucket_fess.log`
+  reached `frontier=19 buckets=13` at step 1 and `frontier=128 buckets=18` at
+  step 2. It did not solve the level; the best buckets were still `sep0:ign0`
+  with the lower rat at `(2,3)`. Keep the patch as useful infrastructure, but
+  stop spending broad FESS time on this exact prefix unless a new release-gate
+  predicate changes the lower-rat geometry first.
+- `old_levels/on_the_clock`: event enumeration after the positive first event
+  `vvvvv` produced only local player/rat-motion variants with no resource or
+  trigger delta (`dx0`, `dw0`, `dt0`) and the same 1-reachable/7-trapped shape.
+  Log: `/tmp/infestation-runs/20260615T_retro_wave1/on_clock_vvvvv_events.log`.
+  Next test should target a concrete post-trigger-6 obligation such as access
+  to the row-14 cleanup ring or a named later trigger, not raw local tempo.
+- `release`: the pre-commit bottom-right staging probe from prefix `v` was a
+  duplicated check of an already demoted obligation
+  (`release.precommit_bottom_right_rat_gate_empty`). It returned no branch again
+  under all-24-rat, 20-reachable-rat, 30-explosive, and 9-trigger guards. Log:
+  `/tmp/infestation-runs/20260615T_retro_wave1/release_precommit_gate_branchdump.log`.
+  Treat this as a process miss, not new evidence: before launching another wave,
+  grep `solver/solutions/tools/obligation_labels.jsonl` and `HANDOFF.md` for
+  the target predicate/prefix.
 
 ---
 

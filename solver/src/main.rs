@@ -5025,7 +5025,7 @@ fn feature_bucket_key(grid: &Grid) -> String {
     let web_positions = limited_positions_key(grid, web_cell, 16);
     let unreachable_positions = unreachable_rat_positions_key(grid, false, 6);
     let trapped_positions = unreachable_rat_positions_key(grid, true, 6);
-    format!(
+    let mut key = format!(
         "r{}:rr{}:ur{}:tr{}:x{}:w{}:t{}:rt{}:p{}:cells{}:cy{}:tp[{}]:urpos[{}]:trap[{}]:wpos[{}]",
         features.rats,
         reachable_rats,
@@ -5042,7 +5042,57 @@ fn feature_bucket_key(grid: &Grid) -> String {
         unreachable_positions,
         trapped_positions,
         web_positions
-    )
+    );
+    if let Some(rectangle_key) = rectangle_fess_bucket_key(grid) {
+        key.push_str(":");
+        key.push_str(&rectangle_key);
+    }
+    key
+}
+
+fn rectangle_fess_bucket_key(grid: &Grid) -> Option<String> {
+    if grid.width() != 17 || grid.height() != 9 {
+        return None;
+    }
+
+    let players = positions_matching(grid, |cell| cell == CellKind::Player);
+    let lower_rats: Vec<_> = positions_matching(grid, |cell| {
+        matches!(cell, CellKind::Rat | CellKind::CyborgRat)
+    })
+    .into_iter()
+    .filter(|&(_, y)| y >= 3)
+    .collect();
+
+    let rat_targets = rectangle_lower_rat_targets();
+    let safe_targets = rectangle_lower_safe_targets();
+    let lower_distance = lower_rats
+        .iter()
+        .flat_map(|&rat| rat_targets.iter().map(move |&target| manhattan(rat, target)))
+        .min()
+        .unwrap_or(99)
+        .min(20);
+    let safe_distance = players
+        .iter()
+        .flat_map(|&player| safe_targets.iter().map(move |&target| manhattan(player, target)))
+        .min()
+        .unwrap_or(99)
+        .min(20);
+    let lower_positions = lower_rats
+        .iter()
+        .take(4)
+        .map(|(x, y)| format!("{x},{y}"))
+        .collect::<Vec<_>>()
+        .join(";");
+
+    Some(format!(
+        "rect:p[{}]:lower[{}]:ld{}:sd{}:sep{}:ign{}",
+        positions_key(grid, player_cell),
+        lower_positions,
+        lower_distance,
+        safe_distance,
+        rectangle_lower_separated(grid) as u8,
+        rectangle_lower_ignition_ready(grid) as u8
+    ))
 }
 
 fn limited_positions_key(grid: &Grid, predicate: fn(CellKind) -> bool, limit: usize) -> String {
