@@ -8967,6 +8967,63 @@ rat-position or component falsifiers.
   also leaves a next cleanup handle. "All survivors reachable" is not enough
   when exact `ratdrop` from that state is empty.
 
+### Retrospective cycle - 2026-06-15 necessary-handle pass
+
+- Status remains 38 verified rat-win solutions; no new `final_solutions.json`
+  entry was found in this pass. No solver/portfolio/clingo processes are left
+  running after the pass.
+- Why this is still taking long: the remaining hard levels now mostly fail at
+  the "necessary handle" layer, not at ordinary pathfinding. Short exact
+  predicates can prove a branch makes one structural change, but the same
+  branch often spends the only cleanup handle: zero reachable rats, no triggers,
+  no usable explosive/sword geometry, or the same sealed survivor. The fix is
+  to require the next handle in the predicate immediately, not to deepen the
+  same branch.
+- `release`: the initial right-pocket component-growth check returned no
+  branch. `ratcomponentge:18,4,2` under all-24/high-resource guards and at
+  least two reachable triggers was empty, matching the earlier `cellnot:18,5`
+  and direct right-rat removal falsifiers. Continue only from a branch that
+  changes central topology before the familiar release commitment.
+- `reload_v3`: initial bottom-row component growth did produce branches such as
+  `^>>>>>>>^^vvvvvv<<<^^<<^^<<<<<^vvv<<<vvv>`, with all 3 rats, 6 explosives,
+  and 14 triggers. Diagnostics show only one reachable rat and two trapped
+  unreachable rats. Immediate follow-ups for `reachablege:2` and strict
+  `triggeronly:2` from that branch both returned no branch, so this is another
+  one-handle bottom-station family, not a live route.
+- `old_levels/on_the_clock`: broad bottom-component growth found only branches
+  with zero reachable rats; rerunning the same component obligation with
+  `min-reachable-rats=4` returned no branch. Treat bottom-component growth as
+  weak unless the same predicate also preserves a reachable cleanup handle.
+- `cooperation/blocked_v2`: initial access to trigger-2 cell `(5,11)` returned
+  no branch under all-9-rat, 6-reachable-rat, zero-trapped guards. This supports
+  the existing advice to use narrower waypoint or trigger-order formulations
+  before drawing conclusions from raw all-9 branchdump attempts.
+- `cooperation/handoff`: the initial live-rat/open-web predicate
+  `cellnotratrectplayerrect:10,5,web,10,6,10,6,9,4,12,8` returned no branch
+  under 5-rat, 20-explosive, 3-trigger guards. The level still needs a
+  different geometry for the sealed `(10,6)` rat, not another pre-trigger-1
+  doorway rerun.
+- `cyborg_rats/ai_takeover`: Q54 can change which right-pocket enemy survives.
+  From the Q54 prefix, `ratgone:18,4` produced 8-/9-rat states with all rats
+  reachable, 2 explosives, and no triggers. Direct `lookup win` and `dropchain`
+  from the 8-rat state returned immediately negative: no first rat-drop branch.
+  This is useful evidence, but it is not a live finish because it lacks a
+  cleanup handle.
+- `cyborg_rats/ai_takeover`: the sidecar Q54 alternatives also closed. No
+  branch made right trigger-2 cell `(19,7)` reachable, and no branch staged the
+  player in `(15..18,4..7)` with the `(18,4)` enemy alive while left trigger 2
+  at `(0,16)` remained live. Q54 remains a timing clue, not a finish route.
+- `tinderrectangle`: three low-cost tempo predicates returned empty: row-3
+  escort before the `(2,3)` pin, side ignition at `(13,8)` with player in the
+  row-3 corridor, and upper-corridor escape from `<^^` while `(2,4)` remains a
+  web baffle. The next useful branch point must be earlier or structurally
+  different from the lower-rat pin/contact family.
+- Retrospective rule for future cycles: a predicate should encode both the
+  structural change and the next cleanup handle. Examples: "open the pocket and
+  keep a reachable trigger", "grow the component and keep two reachable rats",
+  or "change survivor set and prove first rat-drop". If a check only proves the
+  first half, immediately run the handle check before promoting it.
+
 ---
 
 ## 5. File map
