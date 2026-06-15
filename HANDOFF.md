@@ -8462,6 +8462,57 @@ Important frontier shapes:
   9-explosive / 10-trigger guards, so this clean-looking frontier is demoted
   too.
 
+### Retrospective checkpoint and early-branch audit - 2026-06-15
+
+No new verified win. The retrospective is that previous runs were too willing
+to ask "can search finish from this plausible prefix?" when the stronger
+question was "what must become true next, and can this prefix ever make it
+true?" Going forward, each wave should name the necessary condition before the
+run, record empty predicate output as evidence, and stop deepening a family
+after the necessary condition fails.
+
+- `old_levels/on_the_clock`: a fresh trigger-6-first family was found and then
+  demoted. The clean initial event is `vvvvv`: all 8 rats, 10 explosives, 24
+  triggers, and one reachable rat. From `vvvvv`, bounded `triggeronly:1` and
+  `reachablege:2` were empty; `triggeronly:7` was easy but every branch had
+  `reachable_rats=0`. Two longer trigger-6 staging siblings,
+  `^^>>>v<vvvvv<<v` and `^>>vv>>vvv<<<<v`, showed the same failure pattern.
+  A top-web-shave variant `>>^>^` is more interesting because it can fire
+  trigger 6 while still keeping one rat reachable
+  (`>>^>^v<vv>>^vvvv<<<<v`), but from that post-trigger-6 state
+  `reachablege:2` and `triggeronly:1` were empty, and `triggeronly:7` again
+  sealed every rat. Initial `triggeronly:1` also only produced
+  zero-reachable-rat states. Treat trigger-6-first and top-shave-plus-trigger-6
+  as closed unless a new predicate opens another rat pocket before trigger 7.
+- `reload_v3`: the previous `triggeronlycellnot:6,1,21,web` high-level idea is
+  now resolved as empty under a 900 MB cap. Companion initial probes for
+  opening `(1,21)`, changing `(2,21)`, or opening `(10,5)` while keeping
+  trigger 2 live also returned no branch. Initial trigger-6/bottom-left gate
+  repair should be demoted, not rerun with longer timeouts.
+- `release` and `cyborg_rats/ai_takeover`: initial sidecar audits found only
+  shallow trigger 3/4/5 first-event families with zero reachable rats.
+  `release` had no early trigger 2 or `(18,5)` opening; `ai_takeover` had no
+  early trigger 7/8, `(16,8)` opening, or `cyborgkillready` branch under
+  high-resource guards.
+- `cooperation/handoff` and `cooperation/blocked_v2`: sidecar audits did not
+  find the suspected early structural openings. `handoff` still lacks actual
+  `(10,6)` rat motion or `(10,5)` opening before the known sweep. `blocked_v2`
+  still lacks lower-left mouth opening or early player access to `(3,14)`
+  before the trigger-4/pre-trigger-5 family.
+- `tinderrectangle`: the broad "only lower sacrifice/top-pack happens early"
+  claim was too strong. A real all-16 side-loop branch exists:
+  `<^^<<^>>>>v>` leaves all 16 rats alive, 43 explosives, no trapped rats, the
+  lower rat at `(2,3)`, and the player at `(10,4)`. From that prefix, the lower
+  rat can be moved to `(2,4)` while preserving all rats, e.g.
+  `<^^<<^>>>>v>^<<<vv<v<^<<<^v`, but the player is then in contact at `(2,5)`.
+  Bounded retreat predicates from that 27-turn contact state found no way to
+  stage the player in the right safe zone while keeping the rat in the lower
+  lane, and a direct 500k-node lookup did not find ignition. A 65-turn
+  `geomlure` near-frontier with the lower rat at `(8,6)` also had no structural
+  events and no short win continuation. Promote `<^^<<^>>>>v>` as the live
+  branch point; the next useful hypothesis is a delayed retreat/side-loop
+  before moving the rat down, not another lower-rat contact race.
+
 ## 4. Planned next steps (start here)
 
 1. **Do not repeat broad direct searches.** Use pretrained transfer ranking plus
@@ -8474,12 +8525,14 @@ Important frontier shapes:
    checks also failed to reach trigger 6 in a way that preserves reachable
    trigger 2. The next useful attack must handle `(18,4)` before the top sweep
    or open its web without spending the adjacent explosive chain.
-3. **Solve `tinderrectangle` as a separation problem, not an ignition problem.**
-   The ignition geometry is proven; use `--goal rectignite` for strict finish
-   checks and treat `rectsep` only as a loose staging diagnostic. The next useful
-   hypothesis must create a side loop or delayed release before `(2,4)` opens,
-   because opening `(2,4)` starts the lower rat immediately and the current
-   row-6 route loses the timing race.
+3. **Continue `tinderrectangle` from the early all-16 side loop.** The live
+   branch point is `<^^<<^>>>>v>` with the lower rat at `(2,3)` and the player
+   at `(10,4)`. The 27-turn continuation
+   `<^^<<^>>>>v>^<<<vv<v<^<<<^v` proves the rat can move to `(2,4)`, but it
+   leaves the player in contact at `(2,5)` and tested retreat predicates were
+   empty. Next probe should create a delayed retreat or side-loop before moving
+   the rat down; do not rerun the demoted `<^^^vvv<<<<<<` latch or the 65-turn
+   `(8,6)` lower-rat near-frontier without a new condition.
 4. **Continue `ai_takeover` before trigger 4/5 commits.** The best current
    non-stale lead is `v<vv^^^`: it reaches the 23-rat / 9-explosive /
    14-trigger phase earlier than `v<vv^^<vv`, but bounded checks still cannot
