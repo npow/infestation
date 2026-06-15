@@ -8723,6 +8723,35 @@ rat-position or component falsifiers.
   `ratsle:7`, `swordready`, and `reachablege:5` checks all returned no branch.
   Any useful continuation must spend a mechanism or back up before P19.
 
+### Retrospective cycle - 2026-06-15 local inverse checks
+
+- Why this is taking long: the remaining levels are not failing because the
+  solver cannot walk to nearby objects; they are failing because one sealed rat
+  or one contact-timed component survives after otherwise clean-looking
+  prefixes. The mistake to avoid is treating a clean prefix as progress before
+  it passes a necessary continuation predicate.
+- Behavior change for the next cycles: each candidate prefix must get a named
+  falsifier immediately: "what cell/rat/trigger must change next for this story
+  to remain human-plausible?" If that exact predicate is empty under a short
+  cap, demote the branch and back up.
+- `tinderrectangle`: early all-16 side-loop P12 `<^^<<^>>>>v>` is demoted. It
+  keeps all 16 rats, all 43 explosives, and no trapped rats, but exact
+  all-reachable checks for `ratat:0,0`, `ratat:16,0`, lower-lane/southeast
+  staging, and `rectignite` returned no branches. Do not spend more time trying
+  direct ignition from this local basin.
+- A sidecar backed up to `<^^<<^` and found the missing distinction: lower-lane
+  motion can reach rat `(7,6)`, but only with the player in contact at `(8,6)`.
+  Requiring player separation on the right, alternate `(13,8)` ignition staging,
+  or a non-web mobility event returned no branch. For this level, "rat moved"
+  is not progress unless the same branch also proves a safe retreat geometry.
+- `release`: the right-pocket rat at `(18,4)` is sealed by web `(18,5)`.
+  Synthetic `ratgeom` could not move that rat into `(18,5)` or `(17,4)`.
+  Exact high-resource probes for `triggeronlycellnot:2,18,5,web` and
+  `triggeronlycellnot:6,18,5,web` returned no branches; direct inverse lookups
+  for `cellnot:18,5,web` and `reachable:18,4` also timed out with best states
+  still sealed. A solution must alter the central topology before the familiar
+  release commitment, not just visit trigger 2 or 6 first.
+
 ---
 
 ## 5. File map
