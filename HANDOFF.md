@@ -9669,6 +9669,22 @@ rat-position or component falsifiers.
     `(10,6)` rat remains sealed behind `(10,5)`. Next work should test an exact
     pre-seven-turn two-rat blocker shape that keeps `(14,7)` alive and stages
     material around `(9,5)..(10,6)` while trigger 2 remains live.
+  - `cooperation/handoff`: the post-trigger-1 branch was relaxed once to check
+    whether the prior all-4-rat guard was hiding the intended route. From
+    `v^ >^ >^ >^ >^ >^ ^^ .v .v .> .> .> v> v< <<`, trigger 2 is reachable
+    if the guard allows 2 remaining rats and zero reachable rats, but every
+    printed branch spends all explosives and all triggers. The best branches
+    leave 2 rats, zero reachable rats, zero explosives, and zero triggers; a
+    35s / 66k-expansion direct `lookup win` from the same post-trigger-1 prefix
+    returned `NO_SOLUTION`. This is a stronger closure of the
+    post-trigger-1 -> trigger-2 route, not a cleanup handle.
+  - `tinderrectangle`: a short capped FESS portfolio from the initial board
+    promoted early all-16/all-43 frontiers such as `<^<v`, where the lower rat
+    is still mobile at `(1,6)` and the player is at `(6,6)`. This was checked
+    directly: `rectignite`, lower-rat plus southeast-safe player
+    `(13..15,6..8)`, and lower-rat plus upper/right-safe player
+    `(11..15,3..5)` all returned no branches under all-16/all-43/zero-trapped
+    guards. Treat `<^<v` as local web shaving, not a new separation handle.
   - `old_levels/on_the_clock`: the `vvvv^` top-pulse before trigger 6 returned
     no branch for a healthy strict trigger-6-first state with all 8 rats,
     `reachable_rats >= 2`, `trapped <= 6`, and a reachable trigger. Next work
