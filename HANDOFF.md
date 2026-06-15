@@ -9324,6 +9324,35 @@ rat-position or component falsifiers.
   inverse predicates that require the missing handle and the next resource in
   the same goal.
 
+### Retrospective checkpoint - 2026-06-15 handle-aware trigger wave
+
+- Status remains 38 verified rat-win solutions. No new candidate move string was
+  produced, so nothing was added to `final_solutions.json`.
+- `cooperation/blocked_v2`: handle-aware `triganylookup` from the initial board
+  with 8-rat, 5-reachable-rat, max-1-trapped, 16-explosive, and 8-trigger
+  guards returned `trigger-any lookup step 1: no reachable branches` and
+  `NO_SOLUTION` after 60.1 s. This says no first trigger event satisfies those
+  high-resource/low-trap guards; the next test should relax exactly one of
+  rat count, reachability, or trap bound to see which assumption blocks every
+  first event.
+- `old_levels/on_the_clock`: handle-aware `triganylookup` from the initial board
+  requiring cleanup cell `(10,14)` to be reachable, while preserving at least
+  7 rats, 3 reachable rats, a reachable trigger, 2 explosives, 4 triggers, and
+  at most 4 trapped rats, also returned no first accepted branch. This is likely
+  too strong as a first-event condition, but it cleanly shows the row-14 cleanup
+  handle does not appear immediately with useful resources.
+- `tinderrectangle`: `RECTLOWER_H=1` rectangle-lower beam from the initial board
+  with width 5000 / depth 190 / seed 17 / jitter 500 timed out at depth 187 with
+  best prefix `<<^^vv>` and no solution. This is weak heuristic evidence, not a
+  proof; it did not find the earlier release-gate separation mechanism suggested
+  by the inverse sidecar.
+- Retrospective: the next wave should be differential, not broader. For
+  `blocked_v2` and `on_the_clock`, rerun paired predicates where only one guard
+  is removed, then inspect the first branch that appears. That reveals which
+  human assumption is overconstraining the route. For `tinderrectangle`, move
+  away from generic rectangle-lower beam and test concrete release-gate
+  separation predicates.
+
 ---
 
 ## 5. File map
