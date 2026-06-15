@@ -9583,6 +9583,17 @@ rat-position or component falsifiers.
     the initial board. There was no state with a rat in `(11..13,7..9)`, player
     in `(6..9,10..13)`, left trigger 2 still present at `(0,16)`, trigger 6
     reachable, and the 23-rat/20-reachable useful-resource guards satisfied.
+- `cooperation/blocked_v2`: a sibling of the demoted trigger-5/1 branch was
+  inspected from `vv v^ vv <^ <v <^ <v <^`. It preserves all 9 rats, has 4
+  reachable rats and only 1 trapped rat after opening the top web `(19,4)` with
+  suffix `^^ ^^ <^`, but it is still not a live handle. Direct `triggeronly:2`
+  returned no branch before the web opening and again after the web opening
+  under all-9/useful guards. Relaxed event enumeration after the web opening
+  returned `NO_EVENTS`, and a short dropchain from the web-open state timed out
+  in high-penalty basins rather than finding cleanup. The earlier trigger-1/3
+  checks hit the memory cap and are not counted. Treat this as a closed sibling
+  of `blocked_v2.post_t5_t1_all9_no_t2_or_t3_handle`: opening the top web does
+  not repair left trigger-2 access.
 
 ---
 
