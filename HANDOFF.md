@@ -8755,6 +8755,22 @@ rat-position or component falsifiers.
   for spending `(18,6)`, `(18,7)`, or `(18,8)` returned no branch. The right
   pocket does not look like a trigger-first or explosive-first problem from the
   initial state; back up to central topology/trigger ordering instead.
+- `reload_v3`: sidecar built the inverse fuse map. Trigger 6 opens the
+  bottom-left fuse around `(1,21)`; trigger 5 opens the top cage mouth at
+  `(10,5)`; triggers 1-4 mostly open the bottom lane and do not directly repair
+  those two cells. Fresh bounded checks found no branch for opening `(10,5)`
+  while top trigger 6 remains live, no branch for `(1,21)` open plus `(10,5)`
+  empty with all 3 rats and 2 reachable rats, and no branch for putting a rat in
+  `(10,5)` while trigger 6 remains live. This demotes the obvious "T5 before
+  T6 then connect both fuses" story; look for a different way to change
+  reachability before those fuse commitments.
+- `old_levels/on_the_clock`: sidecar tested a fresh P22/P31 component story
+  rather than another trigger-order variant. From P22
+  `v>>><^^v>><^^>>>vvv>>^`, safe row-14/15 trigger-3 ring staging and bottom
+  fuse staging returned no branch under useful guards. From the P31 child, the
+  sealed component rat `(13,14)` had no one-step synthetic death geometry. This
+  demotes the "stage ring/fuse then kill the sealed component" story; future
+  work should back up before P22 or require a topology-opening rat predicate.
 
 ---
 
