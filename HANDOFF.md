@@ -10206,6 +10206,30 @@ rat-position or component falsifiers.
     sidecar suggestions only after duplicate checks: AI roof comparison or
     bottom-normal/right-cyborg role split, and release external roof carrier if
     it is not a duplicate of the roof-bypass closure above.
+- Retrospect checkpoint - 2026-06-15 AI comparison and reload diagnostic: no
+  new verified wins, and all capped children exited. This batch used the
+  remaining non-stale sidecar suggestions after duplicate checks, plus one
+  local diagnostic from the new `reload_v3` remote-trigger-5 actor candidate.
+  - `reload_v3`: frontier from
+    `vvv<<<<<<vvv><^^^^^^^^^^^^^<^^^^^^^` printed only local rat shifts and one
+    trigger-consuming branch. The candidate starts with rats at `(19,2)`,
+    `(11,4)`, and `(0,21)`, one reachable rat, two trapped rats, 6 explosives,
+    14 triggers, and two reachable triggers. Within depth 12, the only
+    mechanism change was suffix `vvvvvv>`, dropping triggers from 14 to 12 and
+    reachable triggers to 0 while still leaving only one reachable rat. Treat
+    the remote-trigger-5 actor as a staging clue without a next handle.
+  - `cyborg_rats/ai_takeover`: the roof-control comparison from `v<vv^^^`
+    returned no branches. Branchdump for `cellnotratat:18,3,wall,18,4` under
+    22-enemy, 21-reachable-enemy, max-one-unreachable, zero-trapped,
+    8-explosive, 12-trigger, and two-reachable-trigger guards closes the cheap
+    AI version of the roof-bypass idea.
+  - `cyborg_rats/ai_takeover`: the bottom-normal plus right-cyborg role split
+    from `v<vv^^^` also returned no branches. Branchdump for
+    `normalratrectcyborgrectplayerrect:16,17,18,19,18,4,18,6,10,10,16,14`
+    under the same useful guards found no coordinated state with a bottom
+    normal rat, high right cyborg, and mid-board player. Do not pursue
+    bottom-trigger-6/8 role-split stories from this skeleton without changing
+    the earlier actor route.
 
 ---
 
