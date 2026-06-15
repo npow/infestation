@@ -8240,6 +8240,75 @@ were treated as information rather than as reason to relaunch broader search.
   therefore **not** "mop after trigger 2"; it is "fire trigger 2 with a safer
   phase offset / escape tempo."
 
+### Strategic on-the-clock event-order pass - 2026-06-15
+
+No new verified win. The useful result was a sharper `old_levels/on_the_clock`
+event-order map and a stronger-but-now-falsified branch family.
+
+- `old_levels/on_the_clock`: a new order beats the prior
+  `6 -> 1 -> 9 -> 7` line. From post-trigger-1
+  `vvvvv^^^^>>^>`, exact guarded branchdump found trigger 7 reachable while
+  preserving all 8 rats:
+  `vvvvv^^^^>>^>^vv>^` (`6 -> 1 -> 7`). From there trigger 8 is also reachable:
+  `vvvvv^^^^>>^>^vv>^^^^<^<` (`6 -> 1 -> 7 -> 8`).
+- Continuing that branch, trigger 2 opens the right-bottom singleton web while
+  leaving 13 triggers:
+  `vvvvv^^^^>>^>^vv>^^^^<^<^^^^` has all 8 rats, 4 explosives, 28 webs,
+  13 triggers, and `(16,18)` opened. This is strictly better than the older
+  `6 -> 1 -> 9 -> 7 -> 8 -> 2` P28 family, which reached the same structural
+  opening with only 8 triggers left.
+- From that P28, trigger 5 is the only productive next event under useful
+  guards. The best branch is
+  `vvvvv^^^^>>^>^vv>^^^^<^<^^^^^vvvvv`, leaving all 8 rats alive, 3
+  explosives, 11 triggers, 192 reachable player cells, and 3 reachable rats.
+  This is the strongest `on_the_clock` frontier found in the current turn.
+- The frontier is still a contact trap as currently phased. From the 34-turn
+  best branch, exact checks for `swordready`, `ratsle:7`, and `reachablege:4`
+  returned empty under resource/reachability guards. Letting trigger 9 fire with
+  `^` gives
+  `vvvvv^^^^>>^>^vv>^^^^<^<^^^^^vvvvv^`, but that P35 state also returned empty
+  for `swordready`, `ratsle:7`, `triggeronly:3`, and `triggeronly:4` under
+  useful guards.
+- Delaying trigger 9 one turn with
+  `vvvvv^^^^>>^>^vv>^^^^<^<^^^^^vvvvvv` preserves the 3-reachable-rat state for
+  one move, but every next legal move fires trigger 9. The delayed phase also
+  returned empty for `swordready`, `ratsle:7`, and `reachablege:4`.
+- The alternate top trigger-5 landing
+  `vvvvv^^^^>>^>^vv>^^^^<^<^^^^^^^^^^` keeps 10 reachable triggers and avoids
+  immediate trigger 9, but only has 2 reachable rats. Guarded `swordready`,
+  `triggeronly:3`, `triggeronly:4`, and `triggeronly:9` all returned empty.
+- The sibling order `6 -> 1 -> 7 -> 9` is also weaker. Prefix
+  `vvvvv^^^^>>^>^vv>^^vvv^` can fire trigger 8 immediately, but trigger 2,
+  trigger 5, and `reachablege:1` are empty under useful guards before that.
+  After `7 -> 9 -> 8`, trigger 2 simply folds back into the older 8-trigger /
+  0-reachable-rat P28 class, so it is dominated by `7 -> 8 -> 2`.
+- Earlier alternatives were also closed: from `6 -> 1 -> 9 -> 7`, trigger 8 is
+  reachable and opens useful topology, but post-trigger-5 cleanup collapses to
+  the same contact trap; from post-trigger-1, guarded trigger 4, trigger 5, and
+  trigger 8 were empty, while trigger 7 was the only productive branch.
+- A sidecar audit separately checked the older P24/P28 timing family
+  (`vvvvv^^^^>>^>vvv^^^^vv>^` and
+  `vvvvv^^^^>>^>vvv^^^^vv>^^<^<`). Direct trigger-5 rephase from P24 was
+  empty; trigger 3/4 before trigger 5 was empty from both P24 and P28; P28
+  `reachablege:3`, `swordready`, and `ratsle:7` were empty; and all alternate
+  trigger-5 timings reduced to the known 8-rat / 3-explosive / 6-trigger /
+  2-reachable-rat class. Gateway positives such as opening `(16,18)` or
+  changing `(1,10)` were only the known trigger-2/rat-occupancy effects, not
+  actual reachable-cell openings. Do not promote this older branch.
+
+Practical next `on_the_clock` move: back up before the P34 trigger-5 landing and
+look for a phase that makes one of the three reachable rats actually killable,
+or a phase that opens a fourth reachable rat before trigger 9. Do not rerun
+cleanup from the exact P34/P35 branches above unless the predicate is genuinely
+new.
+
+- `cyborg_rats/ai_takeover`: sidecar probe falsified the exact Q54 phase-offset
+  idea. After Q64 trigger 8, bounded `playerat:1,16` and strict
+  `triggeronly:2` checks only reproduce the known P88/P89 left-trigger-2
+  contact trap or a worse `.<<<` variant with an extra cyborg at `(3,16)`.
+  Next useful `ai_takeover` work should back up before the trigger-8 corridor
+  and test a right-gate topology change before the left trigger-2 cut.
+
 ## 4. Planned next steps (start here)
 
 1. **Do not repeat broad direct searches.** Use pretrained transfer ranking plus
