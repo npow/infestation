@@ -7982,6 +7982,41 @@ Results from this pass:
 
 No new verified win strings were found in this pass.
 
+### Transfer-ranked event portfolio - 2026-06-15
+
+After adding the topology negatives above, reran the frozen-prior transfer
+ranker and event expansion:
+
+- `/tmp/infestation-runs/transfer_rank_20260615_after_component_labels.jsonl`
+  trained the linear frozen-prior head on 500 examples: 352 solved snapshots,
+  76 triage records, and 72 obligation labels.
+- `/tmp/infestation-runs/event_seeds_20260615_after_component_labels.jsonl`
+  expanded 23 selected parents into 89 transfer-scored event successors.
+- `/tmp/infestation-runs/20260615T003000Z_event_seed_component_go_explore`
+  launched a trimmed exact portfolio: 9 event candidates, 32 interleaved jobs,
+  4 workers, 1.2 GB child caps, 140 second caps.
+- Archive/triage outputs:
+  `/tmp/infestation-runs/archive_20260615T003000Z_event_seed_component_go_explore.jsonl`,
+  `/tmp/infestation-runs/triage_20260615T003000Z_event_seed_component_go_explore.jsonl`,
+  and `/tmp/infestation-runs/seeds_20260615T003000Z_event_seed_component_go_explore.jsonl`.
+
+The exact portfolio reported `no solved job in this go-explore portfolio`.
+Triage confirms the ranked event seeds are not live continuations:
+
+- `blocked_v2`: both pre-T5 trigger-4 event seeds collapse to 3-rat states with
+  zero reachable rats and one trapped survivor.
+- `release`: both early trigger-2/web event seeds still converge to the sealed
+  `(18,4)` one-rat basin with trigger 2 unreachable.
+- `reload_v3`: bottom-station event seeds converge to the sealed top-left /
+  trigger-2-unreachable one-rat basin.
+- `old_levels/on_the_clock`: P18 event seeds converge to one/two-rat states with
+  no remaining mechanism and a trapped survivor.
+- `tinderrectangle`: both T106 event seeds converge to 15-rat states; all rats
+  remain reachable, but the required all-16 separation/ignition condition is
+  already lost.
+
+No new verified win strings were found in this pass.
+
 ## 4. Planned next steps (start here)
 
 1. **Do not repeat broad direct searches.** The grid-step/hash speedup is already
