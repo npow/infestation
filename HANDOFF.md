@@ -9634,6 +9634,32 @@ rat-position or component falsifiers.
     `reachable_rats >= 2`, `trapped <= 6`, and a reachable trigger. Next work
     should target a bottom-right topology reshape before trigger 6, not local
     top tempo.
+- Retrospect checkpoint - 2026-06-15 tinderrectangle inner-baffle pass:
+  `tinderrectangle` has a new real candidate prefix, but its first follow-ups
+  are now constrained. A sidecar found `<^<<<<^>^>v`, preserving all 16 rats,
+  all 43 explosives, all rats reachable, and zero trapped rats. The lower rat
+  is at `(3,4)`, the player is at `(5,4)`, and `(2,4)=web` remains intact. This
+  is a genuine pre-pin geometry change before the old turn-12 `(2,3)` trap and
+  should be the live tinder handle, not p29 deepening.
+  - Event enumeration from the candidate shows the only safe structural event is
+    `>`, opening a web and moving the lower rat to `(4,4)`. From there, the next
+    safe events are `^` or `>`, then the matching right/up web-shaving branch.
+    Bounded FESS from `<^<<<<^>^>v>` preserved all 16/43 but stopped after four
+    steps with best suffixes `^>>` / `>^>`, player around `(8,3)`, lower rat
+    overrun to `(7,3)`, `sep0`, `ign0`, and no further event candidates. Treat
+    the pure right-corridor family as overrun, not a lower ignition setup.
+  - Direct target probes from the candidate and from `<^<<<<^>^>v>` for
+    lower-rat row-6 plus southeast-safe player returned no branches under
+    all-16/all-43 guards, even with reachability relaxed. The looser `rectlower`
+    branchdump also returned no branch. The rectangle `lookup` goals returned
+    immediately and should not be treated as evidence for this pass.
+  - Down-first `<^<<<<^>^>vv` puts the lower rat at `(4,5)`, but all-16/all-43
+    event enumeration returned `NO_EVENTS`, and the row-6/safe-side branchdump
+    returned no branch. Do not deepen down-first without a new predicate.
+  - `blocked_v2` sidecar result in the same wave is inconclusive only:
+    `cellnotratrect:2,15,explosive,0,15,4,15` from
+    `v< v^ v^ << <^ <^ ^^` hit the 600 MB cap. It is not a negative; rerun with
+    a smaller intermediate predicate before labeling.
 
 ---
 
