@@ -8926,6 +8926,47 @@ rat-position or component falsifiers.
   spends the sole reachable rat is not progress, even if it consumes a new
   trigger and changes many cells.
 
+### Retrospective cycle - 2026-06-15 candidate closure and Q54 milestone
+
+- Status remains 38 verified rat-win solutions; no new `final_solutions.json`
+  entry was found in this cycle. All solver diagnostics were bounded, and no
+  solver process should remain running after this pass.
+- `blocked_v2`: the last lower-left gate `candidate` label is demoted. Exact
+  win lookup from
+  `v. v. v. <. <. <. <v <^ ^^ ^^ ^^ v^ <^ <^ <^ <^ <^ <^ <^ ^v ^v ^v ^v ^v ^^ ^v`
+  timed out in the same unreachable-rat basin; `reachable:0,15` and
+  `triggeronly:2` branchdumps returned no branches under useful
+  3-rat/2-reachable guards.
+- `handoff`: the trigger-1 branch
+  `v^ >^ >^ >^ >^ >^ ^^ .v .v .> .> .> v> v< <<`
+  has 4 rats, 5 explosives, 2 triggers, and 2 reachable rats, but exact checks
+  for `ratgone:10,6`, `cellnot:10,5,web`, and
+  `ratrectplayerrect:11,7,11,7,9,6,12,8` returned no branches even after a
+  relaxed 2-rat sanity check. The role-reversal candidate
+  `vv >^ >^ >^ >^ >^ ^^ v^ v^ ^< v^ ^< vv <v v^ v^` is also demoted:
+  delayed trigger 2 spends all explosives/triggers and still leaves 2 rats with
+  only 1 reachable; direct `ratgone:10,6` returned no branch.
+- `cyborg_rats/ai_takeover`: the Q54 trigger-8 prefix
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvv^vvv^^^vvv<`
+  produced the only meaningful new mechanism. Its trigger-2 timing can reduce
+  to 8, then 4, then 3 all-reachable rats while preserving 2 explosives. The
+  strongest 3-rat frontier is
+  `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvv^vvv^^^vvv<<<<<<<<<<<<<>>>>>>>>>>><<<<<<<<<<<<<<^^^<<<`
+  with rats `(18,4)`, `(11,9)`, and `(2,16)`, all reachable.
+- The Q54 mechanism still does not finish. Exact `ratsle:2` from the Q54 prefix
+  returned no branch, and exact `ratdrop` from the 3-rat frontier returned no
+  branch to depth 140. Treat Q54 as evidence that lower-left pack timing can
+  clear many cyborgs during trigger 2, but not as a live finish candidate unless
+  a future branch changes which three rats survive the trigger event.
+- Sidecar results: `on_the_clock` P28 trigger-5 timing cannot produce the needed
+  4-reachable-rat phase; relaxing to 3 reachable rats only recovers the known
+  P34 class. `tinderrectangle` opening the `(2,4)` notch under the parked
+  `(2,3)` lower rat is a contact trap; next work must change timing before the
+  rat parks at `(2,3)`, not deepen that notch family.
+- Retrospective rule for future cycles: a milestone branch is only live if it
+  also leaves a next cleanup handle. "All survivors reachable" is not enough
+  when exact `ratdrop` from that state is empty.
+
 ---
 
 ## 5. File map
