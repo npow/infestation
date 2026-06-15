@@ -9858,6 +9858,119 @@ rat-position or component falsifiers.
     or add hard filters for the repeated tinder P57, release trigger-2,
     reload bottom-station, and clock P18/P20 families before running anything
     exact.
+- Retrospect checkpoint - 2026-06-15T14:55Z upstream-partial probe block: no new
+  verified wins. All local solver children were capped and exited; one
+  `reload_v3` strict-trigger branchdump hit its own 700 MB virtual-memory cap
+  and is recorded as inconclusive, not as puzzle evidence. The useful process
+  change was decoding `upstream/ai-solutions` partials into exact move prefixes
+  before testing adjacent predicates.
+  - `cooperation/blocked_v2`: upstream partial
+    `v< v^ v^ v^ <^ <^ <<` is a real non-trigger lead with 8 rats, 6 reachable
+    rats, 21 explosives, 16 triggers, and no trapped rats. Event enumeration
+    found exactly one useful successor, `<^ >v`, producing a trigger-4 event
+    with 8 rats, 6 reachable, 15 explosives, 14 triggers, and no trapped rats.
+    Follow-up event enumeration from the full prefix
+    `v< v^ v^ v^ <^ <^ << <^ >v` returned `NO_EVENTS` under the same
+    high-reachability/high-resource style guard. Treat this as another
+    trigger-4 basin, not a live route.
+  - `cooperation/blocked_v2`: Aquinas' lower black-hole station hypothesis was
+    tested from `v< v^ v^ << <^ <^ ^^`. Branchdump for the `(0,15)` rat still
+    live while a player reaches `(13..14,16)` returned no branches under
+    9-rat, 5-reachable-rat, max-one-trapped, 15-explosive, 8-trigger guards.
+    Do not deepen that station predicate from this prefix without first
+    changing the station-access invariant.
+  - `cooperation/handoff`: two early left-staging variants,
+    `vv >^ >^ >^ >^ >^` and `v^ >v >^ >^ >^ >^`, returned no branch for the
+    necessary state "hard rat still at `(10,6)`, right trigger 2 still live at
+    `(11,7)`, and a player staged at `(1..3,1..2)`" while preserving all 5
+    rats, 20 explosives, 4 triggers, and max three trapped rats. Initial
+    all-5/high-resource event enumeration also returned `NO_EVENTS`. The next
+    `handoff` hypothesis must either allow an early irreversible spend with a
+    proved recovery handle or use a different left/right baton invariant.
+  - `reload_v3`: the pre-trigger-3 prefix
+    `^>>>>>>>^^^vvvvvvv<<<<<^^<<<<<<^^^^<<<<<<` has several short healthy
+    staging branches into the sidecar's rat/player/trigger-3 geometry,
+    including `^^`, `^<`, and `^>`, all preserving 3 rats and 6 explosives.
+    However, event enumeration from the `^^` staging state only found one-step
+    rat/player tempo changes with no trigger change, and the direct
+    `triggeronly:3` branchdump from that cutpoint exceeded the per-child memory
+    cap. This family remains a clue, but the next test needs a smaller
+    predicate such as one specific plank/fuse mutation plus the next handle,
+    not a broad strict-trigger branchdump.
+  - `cyborg_rats/ai_takeover`: Q54 cleanup-handle probe from
+    `^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>^^>>><<>vvv>vvv^vvv^^^vvv^^^vvv^^^vvv<`
+    returned no branch for `ratsleplayerfacing:3,2,16,north` under
+    3-reachable-rat and zero-trapped guards. This closes the direct
+    "post-Q54 survivor set already has a first cleanup handle" condition; the
+    live AI hypothesis must change the pre-trigger-2 phase or right-side
+    topology before Q54, not mop after it.
+- Retrospect checkpoint - 2026-06-15T15:00Z run-control audit: still no new
+  verified wins; `final_solutions.json` remains at 38 oracle-verified rat-win
+  entries, with 7 rat-bearing hard levels plus the route-verified gauntlet hub
+  outside that count. A status check found no active solver children, only the
+  tmux server. That is a process miss: after a no-win probe block, the work
+  should have either started the next bounded hypothesis batch or explicitly
+  stopped with the next predicate written down.
+  - Why this is taking long: the hard set is now dominated by "one missing
+    handle" failures. Many branches satisfy the first human-looking story
+    (open a web, fire a trigger, move the key rat) but immediately fail the next
+    necessary cleanup condition: reachable survivor count, trigger reachability,
+    sealed component growth, or safe player/rat separation. Broad exact search
+    then rediscovers these stale basins because they look high-resource until
+    the final trapped survivor is inspected.
+  - Retrospective correction: do not launch another exact or transfer-ranked
+    wave from a familiar prefix unless the launch note names three things:
+    hypothesis, necessary predicate, and what will be learned if the predicate
+    is empty. Before launching, grep `obligation_labels.jsonl` for that level
+    and topology so closed families are not retested under a new filename.
+  - Cadence to follow from here: after every two bounded probes, any no-win
+    exact wave, or 30 minutes of wall-clock work, append a checkpoint here with
+    closed family, command-level evidence, and the next non-overlapping
+    hypothesis. If no solver children are active at a status checkpoint, either
+    start the next capped batch immediately or record why no safe batch is
+    ready.
+  - Immediate next work should be a small, parallel batch with at most three
+    capped children and no broad `triggeronly` from the known stale cutpoints:
+    one nonlocal `reload_v3` pre-trigger-3 topology predicate, one pre-trigger-5
+    `on_the_clock` reachability/topology predicate, and one cooperation-level
+    baton invariant that changes the sealed-rat geometry instead of deepening
+    the existing trigger-1/trigger-4 basins.
+- Retrospect checkpoint - 2026-06-15T15:00Z bounded predicate batch: no new
+  verified wins. This batch did correct the previous idle/stale-search behavior:
+  three read-only side agents proposed non-overlapping predicates, local grep
+  checks rejected duplicates before launch, and all solver children used
+  external `timeout` plus `ulimit -v 700000`. No solver/clingo/cargo child is
+  left running after the batch.
+  - `release`: the prior bottom-right plank-opening note was inconclusive
+    because a loose run hit memory. The split predicate from prefix `v`,
+    `cellnot:16,17,plank`, returned no branches under all-24-rat,
+    30-explosive, 9-trigger, and 2-reachable-trigger guards. This closes the
+    shallow high-resource `(16,17)` plank-opening version of the precommit
+    bottom-right gate hypothesis.
+  - `cooperation/handoff`: the pre-trigger-1 bridge shape proposed by the
+    sidecar returned no branches. From `v^ >^ >^ >^ >^ >^`, there was no branch
+    with a rat at `(9,5)`, a player in `(7..9,5..8)`, and the `(14,7)` rat
+    still alive while preserving all 5 rats, 20 explosives, 4 triggers, one
+    reachable rat, and one reachable trigger. Do not pursue this as the missing
+    pre-seven-turn body-pressure setup.
+  - `reload_v3`: the smaller pre-trigger-3 reload-handle predicate returned no
+    branches. From
+    `^>>>>>>>^^^vvvvvvv<<<<<^^<<<<<<^^^^<<<<<<^^`, there was no strict trigger-3
+    branch that also cleared `(15,22)=explosive` and left trigger 4 reachable
+    while preserving all 3 rats, at least one reachable rat, 5 explosives, and
+    12 triggers.
+  - `old_levels/on_the_clock`: the P28 gate hypothesis was split after the
+    first command hit the 700 MB child cap. The smaller bounded rerun found no
+    shallow branch that opens `(10,13)=web` while trigger 5 at `(10,7)` remains
+    live/reachable, preserving all 8 rats, 4 reachable rats, 3 explosives,
+    8 triggers, and max three trapped rats. Treat this as a bounded shallow
+    negative only; the larger formulation remains inconclusive, not evidence.
+  - Next non-overlapping work: avoid another `release` right-pocket repair or
+    `handoff` pre-trigger-1 bridge unless a new predicate changes a different
+    cell/actor. Better candidates are `tinderrectangle` pre-pin lower-row
+    ignition geometry, `ai_takeover` pre-trigger-2/topology phase before Q54,
+    or `blocked_v2` access predicates that are not direct trigger 2/3/5
+    continuations from the already-closed high-resource non-trigger family.
 
 ---
 
