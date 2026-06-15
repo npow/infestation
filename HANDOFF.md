@@ -9353,6 +9353,28 @@ rat-position or component falsifiers.
   away from generic rectangle-lower beam and test concrete release-gate
   separation predicates.
 
+### Retrospective checkpoint - 2026-06-15 guard differential follow-up
+
+- Status remains 38 verified rat-win solutions. No new candidate move string was
+  produced.
+- `old_levels/on_the_clock`: removing the `(10,14)` cleanup-cell requirement
+  still produced `NO_EVENTS` under 7-rat, 3-reachable-rat, reachable-trigger,
+  useful explosive/trigger, and max-4-trapped guards. The previous no-branch was
+  not merely the row-14 handle being too strict; useful first events are absent
+  under those resource assumptions.
+- `cooperation/blocked_v2`: relaxing the trigger-first assumption exposed
+  non-trigger first events. Representative prefix
+  `v< v^ v^ <^ <^ << <^` has 8 rats, 6 reachable rats, no trapped rats, 21
+  explosives, and 16 triggers. However, canonical follow-ups from that prefix to
+  `triggeronly:2` and `triggeronly:3` returned no branches under 8-rat,
+  5-reachable-rat, max-1-trapped, useful-resource guards. Noncanonical reruns
+  hit the 650 MB cap and are not evidence.
+- Retrospective: the useful discovery is that `blocked_v2` does have high-resource
+  non-trigger first events, but the representative bottom event still lacks a
+  trigger-2/3 handle. Next `blocked_v2` work should compare the other first
+  non-trigger families (`^< ^^ v^ ^^ v^ ^^ v^`, `v< v^ v^ <^ <^ << ^^`, etc.)
+  instead of deepening this exact representative.
+
 ---
 
 ## 5. File map
