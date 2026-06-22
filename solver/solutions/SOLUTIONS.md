@@ -5,7 +5,7 @@ All move-strings below were **verified against the real game engine** (`solver v
 Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-separated `P1P2` pairs.
 
 
-## Original levels (34 solved)
+## Original levels (35 solved)
 
 | Level | Players | Moves | Solution |
 |---|---|---|---|
@@ -24,6 +24,7 @@ Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-s
 | `gimmicks/platform.csv` | 1 | 29 | `vvv>vvv..^^.^^^^^^^^^<>>>>vvv` |
 | `gimmicks/robotic_cheese.csv` | 2 | 7 | `>> ^> ^. ^. <. <^ ^^` |
 | `guidance.csv` | 1 | 126 | `←←←←←←←←←←←↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓→→→→→→→→→←↑→→→→→←←←←←←←←←←←←←←↑↑↑↑↑↑←↓←↓→↑↑↑↑↑↑↑↑↑↑↑→→→→→↑↑↑↑↑↓↓←←←←←↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓→→→→→→→↑↑→→→→→→` |
+| `intro.csv` | 1 | 54 | `↑↑↑→→→→↓↓↓←→↑↑↑←←←←↑↑↑↑↑↑←←↓↓↓↓↓←↓←↓↓↓↑↑↑→↑↑↑↑↑↑→→→↑→→` |
 | `limited2.csv` | 1 | 149 | `→→→→→→→→→→→→→→←←←←←←←←←←←←←...←→.→→→→→→→→→→→→→←←←←←←←←←←←←←...←→....→→→→→→→→→→→→→←←←←←←←←←←←←←...←→→→→→→→←←←←←←←←←←←↑↑↑↑↑↑↑↑↑↑↑↑→→→→→→→→↑↑↑↑↑↑↑↑↑→→→→` |
 | `lock_in.csv` | 1 | 69 | `↑↑→↓↓↓←↓↓←←↓←↓↓→↓←↑↑↑↑↑↓↓↓↓↓↓↑↑→→↑→→→→→↑↑↑↑↑↑↑↑↑↑↑↓←↓→←←←↑↑←←←←←←←←←←` |
 | `more_rats.csv` | 1 | 29 | `↓←←→←→←→←→←→→↑↑↑↑↑↑←←→←→←→←←←` |
