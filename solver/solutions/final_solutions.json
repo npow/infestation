@@ -39,6 +39,11 @@
     "players": 2,
     "moves": 28
   },
+  "cooperation/blocked_v2.csv": {
+    "sol": "vv v^ vv <^ <v <^ <. ^< ^^ ^^ ^^ ^< >v ^> >> >. >^ v> v> vv vv ^< ^^ ^^ ^^ ^^ ^^ <^ <^ <^ <^ <^ <^ <^ v^ v^ <^ <^ v^ v^ v^ v^ v^ <^ v^ v^ <^ <^ <v v^ vv v> ^> ^> ^> ^v ^v ^> ^v ^v ^v ^< ^< ^< ^< ^< >< >^ >v v. v. >. v. v^ vv <v <. <^ <. <v v> >> v> v^ v^ v^ <^ <^ v^",
+    "players": 2,
+    "moves": 89
+  },
   "cooperation/handoff.csv": {
     "sol": "vv >^ >^ >^ >^ >^ ^^ .v .v .> .> .> v> v< << ^< ^< ^> ^^ ^^ ^^ ^< ^< ^> <> >> .> v> >v >> >> >^ .^ >< ^< ^^ ^v >< ^^ ^^ ^^ ^v ^v ^> >> vv vv <v <> <^ v^ <^ v^ v^ v^ ^< ^< ^. >^ ^> >^ >> v< v. v> <v v< v. v^ <> <^ <> <v ^^ << <v <> << << ^< ^< << << ^> ^<",
     "players": 2,
