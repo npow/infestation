@@ -4,6 +4,11 @@
     "players": 1,
     "moves": 77
   },
+  "chase.csv": {
+    "sol": "^>>>v^^^>^^>>>>>v>>vvvvv^^^^^^<<<<v<<<v^<^<^<<>>>>v>>>>>vvvv^^^^<<<^<^<<^^^^^^^^<<<<<^^vvvvvvvvvvvvv>>>>>>>>vv^^<<vvvvv<>>>>>>>>>>>>>>^^v<>^^^^^^^^^^^^^^^^^^<<<<>>vvvv<vvvvvvvvvvvv<vvv<<<<<<<<<<<<<<<",
+    "players": 1,
+    "moves": 199
+  },
   "claude/remote_detonator.csv": {
     "sol": "^<<<<v",
     "players": 1,
@@ -70,7 +75,7 @@
     "moves": 47
   },
   "cyborg_rats/unguided.csv": {
-    "sol": "↓←←←←←←←←←←←←↓↓↓↓↓↓↓↓↓↓↓↓↓↓→↓↓→→↑←←↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑→→→→→→→→→→→→→→→↑↓↓↓↓↓↓↓↓↓↓↓↓↓↓→→↓↓↓↓←←←←↑↑←←←←←←↑↑→→→→→→",
+    "sol": "v<<<<<<<<<<<<vvvvvvvvvvvvvv>vv>><^<^^^^^^^^^^^^^^^>>>>>>>>>>>>>>>^vvvvvvvvvvvvvv>>vvvv<<<<^^<<<<<<^^>>>>>>",
     "players": 1,
     "moves": 106
   },

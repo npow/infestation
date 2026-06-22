@@ -5,11 +5,12 @@ All move-strings below were **verified against the real game engine** (`solver v
 Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-separated `P1P2` pairs.
 
 
-## Original levels (36 solved)
+## Original levels (37 solved)
 
 | Level | Players | Moves | Solution |
 |---|---|---|---|
 | `blackhole_v2.csv` | 1 | 77 | `↓↓↓→→→→→→←←←←←←↑↑↑↑↑↑↑↑↓↓↓↓↓↓↓↓→→→→→→→←←←←←←←↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑→→→→←←↓↓→→→→↓↓→` |
+| `chase.csv` | 1 | 199 | `^>>>v^^^>^^>>>>>v>>vvvvv^^^^^^<<<<v<<<v^<^<^<<>>>>v>>>>>vvvv^^^^<<<^<^<<^^^^^^^^<<<<<^^vvvvvvvvvvvvv>>>>>>>>vv^^<<vvvvv<>>>>>>>>>>>>>>^^v<>^^^^^^^^^^^^^^^^^^<<<<>>vvvv<vvvvvvvvvvvv<vvv<<<<<<<<<<<<<<<` |
 | `cooperation/coop_world_v3.csv` | 2 | 26 | `↑↑ ↑→ ↑↑ ↑↑ ↑↑ ↑↑ ↑↑ ↑→ ↑↑ ↓→ ←→ ↑→ ↑→ ↑→ ↑→ ↑→ ↑→ →↓ ←. ↑↓ →← ↓← .→ .↑ ↑↑ ↑↑` |
 | `cooperation/cooperation.csv` | 2 | 28 | `↑↑ ↑→ ↑↑ ↑↑ ↑← ←↑ ↑→ ↑→ ↑→ ←→ ←↓ ←→ ←→ ←→ ←→ ↑→ →→ →→ ←→ ←← .← ←↓ ↓↓ ↓↓ ↓← ↓← ↓↓ ↓↓` |
 | `cooperation/blocked_v2.csv` | 2 | 89 | `vv v^ vv <^ <v <^ <. ^< ^^ ^^ ^^ ^< >v ^> >> >. >^ v> v> vv vv ^< ^^ ^^ ^^ ^^ ^^ <^ <^ <^ <^ <^ <^ <^ v^ v^ <^ <^ v^ v^ v^ v^ v^ <^ v^ v^ <^ <^ <v v^ vv v> ^> ^> ^> ^v ^v ^> ^v ^v ^v ^< ^< ^< ^< ^< >< >^ >v v. v. >. v. v^ vv <v <. <^ <. <v v> >> v> v^ v^ v^ <^ <^ v^` |
@@ -18,7 +19,7 @@ Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-s
 | `cyborg_rats/cyborg_rats.csv` | 1 | 32 | `↑→→↑↑←←←→→→↑↑←←←→→→↑↑←←←→→→↑↑←←←` |
 | `cyborg_rats/fakeout.csv` | 1 | 78 | `↑↑↓......→→←↓←↓................←←←→←←←←←→←→→←→↑→↑→↓←←↓↓↓↓↓↓↓↓↓↓→↑→↑↑→→→→→→→→→→` |
 | `cyborg_rats/stalemate.csv` | 1 | 47 | `↑→→↑→↑→→↓↓←↓↓→←↑↑→↑↑→→→..............→←←←←←←←←←` |
-| `cyborg_rats/unguided.csv` | 1 | 106 | `↓←←←←←←←←←←←←↓↓↓↓↓↓↓↓↓↓↓↓↓↓→↓↓→→↑←←↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑→→→→→→→→→→→→→→→↑↓↓↓↓↓↓↓↓↓↓↓↓↓↓→→↓↓↓↓←←←←↑↑←←←←←←↑↑→→→→→→` |
+| `cyborg_rats/unguided.csv` | 1 | 106 | `v<<<<<<<<<<<<vvvvvvvvvvvvvv>vv>><^<^^^^^^^^^^^^^^^>>>>>>>>>>>>>>>^vvvvvvvvvvvvvv>>vvvv<<<<^^<<<<<<^^>>>>>>` |
 | `explosives.csv` | 1 | 54 | `↓↓↓←←↑↑↑↑←←↓↓↓↓↓↓→→→→↓↓←←←←←→→→→→↑↑←←←←↑↑↑↑↑↑↑↑→→→→→→→` |
 | `explosives2.csv` | 1 | 53 | `↑←↓↓↓↓↓↓→→→→→←←←←←↑↑↑↑↑↑↑↑↓↓↓↓↓↓↓↓→←↑↓↑↑↑↑↑↑↑↑→→→→→→→` |
 | `gimmicks/crushkill.csv` | 2 | 10 | `<> <> <> <> >^ ^v ^v ^< ^< ^<` |
