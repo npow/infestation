@@ -84,6 +84,11 @@
     "players": 1,
     "moves": 53
   },
+  "gimmicks/crushkill.csv": {
+    "sol": "<> <> <> <> >^ ^v ^v ^< ^< ^<",
+    "players": 2,
+    "moves": 10
+  },
   "gimmicks/platform.csv": {
     "sol": "vvv>vvv..^^.^^^^^^^^^<>>>>vvv",
     "players": 1,

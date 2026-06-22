@@ -5,7 +5,7 @@ All move-strings below were **verified against the real game engine** (`solver v
 Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-separated `P1P2` pairs.
 
 
-## Original levels (36 solved)
+## Original levels (37 solved)
 
 | Level | Players | Moves | Solution |
 |---|---|---|---|
@@ -21,6 +21,7 @@ Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-s
 | `cyborg_rats/unguided.csv` | 1 | 106 | `↓←←←←←←←←←←←←↓↓↓↓↓↓↓↓↓↓↓↓↓↓→↓↓→→↑←←↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑→→→→→→→→→→→→→→→↑↓↓↓↓↓↓↓↓↓↓↓↓↓↓→→↓↓↓↓←←←←↑↑←←←←←←↑↑→→→→→→` |
 | `explosives.csv` | 1 | 54 | `↓↓↓←←↑↑↑↑←←↓↓↓↓↓↓→→→→↓↓←←←←←→→→→→↑↑←←←←↑↑↑↑↑↑↑↑→→→→→→→` |
 | `explosives2.csv` | 1 | 53 | `↑←↓↓↓↓↓↓→→→→→←←←←←↑↑↑↑↑↑↑↑↓↓↓↓↓↓↓↓→←↑↓↑↑↑↑↑↑↑↑→→→→→→→` |
+| `gimmicks/crushkill.csv` | 2 | 10 | `<> <> <> <> >^ ^v ^v ^< ^< ^<` |
 | `gimmicks/platform.csv` | 1 | 29 | `vvv>vvv..^^.^^^^^^^^^<>>>>vvv` |
 | `gimmicks/robotic_cheese.csv` | 2 | 7 | `>> ^> ^. ^. <. <^ ^^` |
 | `guidance.csv` | 1 | 126 | `←←←←←←←←←←←↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓→→→→→→→→→←↑→→→→→←←←←←←←←←←←←←←↑↑↑↑↑↑←↓←↓→↑↑↑↑↑↑↑↑↑↑↑→→→→→↑↑↑↑↑↓↓←←←←←↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓→→→→→→→↑↑→→→→→→` |
