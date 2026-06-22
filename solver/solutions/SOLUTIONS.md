@@ -5,7 +5,7 @@ All move-strings below were **verified against the real game engine** (`solver v
 Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-separated `P1P2` pairs.
 
 
-## Original levels (35 solved)
+## Original levels (36 solved)
 
 | Level | Players | Moves | Solution |
 |---|---|---|---|
@@ -36,6 +36,7 @@ Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-s
 | `planks.csv` | 1 | 100 | `→→→→←←←←←←←←←←↑↑↑↑↑↑←↓↓↓↓↓↓→→→→→→→→→→→→↑↑↑↑→↑↑↑↓↓↓←↓↓↓↓←←←←←←←←←←←←↑↑↑↑↑↑↑→→→↓→↓↓↓↓→→→→→→↑↑←↑↑↑←←←↓↓` |
 | `rats.csv` | 1 | 13 | `↓←←↑↑↑→→→→←→↑` |
 | `synchronicity.csv` | 1 | 50 | `→→↑↓→→↓↓↓←←↓↑↑↑↑←↓↑↓↑↓↑↑↑↓↓→↓↓↓→↓↓→→←←↑↑→→→→→→↑↑↑↑` |
+| `tinderbox.csv` | 1 | 85 | `^>^^^^^<<<vv<<>.<>>>>^>v<<>>>v<v.><^v>><^^v<>^^<..v.^v^<v.>.vv^v<v..v^<^<<<<.vv^<^v>>` |
 | `tinderbox_v2.csv` | 1 | 85 | `↑→↑↑↑↑↑←←←↓↓←←→.←→→→→↑→↓←←→→→↓←↓.→←↑↓→→←↑↑↓←→↑↑←..↓.↑↓↑←↓.→.↓↓↑↓←↓..↓↑←↑←←←←.↓↓↑←↑↓→→` |
 | `trapped_rat.csv` | 1 | 75 | `↓↓↓↑↓.→→←→→→→↑↑↑↑↑↑←↓↓↓↓↓↓←←→→↑↑↑↑↑↑←↓↓↓↓↓↓←←→→↑↑↑↑↑↑←↓↓↓↓↓↓←←→→↑↑↑↑↑↑↑↑↑↑←` |
 | `trapped_rat2_v2.csv` | 1 | 78 | `←↑↑↑↓→←↑↓→←↑↓→←↑↑←←←↓↓↓↓↓↓←↑↑↑↑↑↑→←→←↓↓↓↓↓↓←↑↑↑↑↑↑→←→←↓↓↓↓↓↓←↑↑↑↑↑↑→←→←↑↑↑↑↑↑→` |
