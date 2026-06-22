@@ -122,6 +122,22 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             // Place entity (overwrites whatever was there)
             *grid.at_mut(m.to) = m.cell;
         }
+        if let Some(pos) = self.contested_cell.take() {
+            match grid.at(pos) {
+                Cell::Explosive => {
+                    if !self.pending_explosions.contains(&pos) {
+                        self.pending_explosions.push(pos);
+                    }
+                }
+                Cell::Trigger(n) => {
+                    if !self.triggered_numbers.contains(&n) {
+                        self.triggered_numbers.push(n);
+                    }
+                }
+                _ => {}
+            }
+            *grid.at_mut(pos) = Cell::Empty;
+        }
     }
 }
 

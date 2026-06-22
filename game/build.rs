@@ -15,6 +15,10 @@ const MINIQUAD_JS_FILES: &[(&str, &str)] = &[
         "../js/sapp_jsutils.js",
         "https://raw.githubusercontent.com/not-fl3/sapp-jsutils/master/js/sapp_jsutils.js",
     ),
+    (
+        "../js/quad-url.js",
+        "https://raw.githubusercontent.com/optozorax/quad-url/master/js/quad-url.js",
+    ),
 ];
 
 fn main() {

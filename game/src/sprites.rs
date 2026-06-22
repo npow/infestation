@@ -3,22 +3,56 @@ use enum_map::{EnumMap, enum_map};
 use crate::direction::{Dir4, Dir8};
 use macroquad::prelude::*;
 
+/// An enum map of direction → texture loaded from `assets/<folder>/<dir>.png`.
+macro_rules! dir_sprite {
+    ($folder:literal, $file:literal) => {{
+        let bytes: &[u8] = include_bytes!(concat!("../../assets/", $folder, "/", $file, ".png"));
+        load_png(bytes)
+    }};
+}
+
+macro_rules! dir4_sprites {
+    ($folder:literal) => {
+        enum_map! {
+            Dir4::North => dir_sprite!($folder, "north"),
+            Dir4::South => dir_sprite!($folder, "south"),
+            Dir4::East => dir_sprite!($folder, "east"),
+            Dir4::West => dir_sprite!($folder, "west"),
+        }
+    };
+}
+
+macro_rules! dir8_sprites {
+    ($folder:literal) => {
+        enum_map! {
+            Dir8::North => dir_sprite!($folder, "north"),
+            Dir8::South => dir_sprite!($folder, "south"),
+            Dir8::East => dir_sprite!($folder, "east"),
+            Dir8::West => dir_sprite!($folder, "west"),
+            Dir8::Northeast => dir_sprite!($folder, "northeast"),
+            Dir8::Northwest => dir_sprite!($folder, "northwest"),
+            Dir8::Southeast => dir_sprite!($folder, "southeast"),
+            Dir8::Southwest => dir_sprite!($folder, "southwest"),
+        }
+    };
+}
+
 #[derive(Clone)]
 pub struct Sprites {
-    player: EnumMap<Dir4, Texture2D>,
-    player2: EnumMap<Dir4, Texture2D>,
-    rat: EnumMap<Dir8, Texture2D>,
-    cyborg_rat: EnumMap<Dir8, Texture2D>,
-    wall: Texture2D,
+    pub(crate) player: EnumMap<Dir4, Texture2D>,
+    pub(crate) player2: EnumMap<Dir4, Texture2D>,
+    pub(crate) rat: EnumMap<Dir8, Texture2D>,
+    pub(crate) cyborg_rat: EnumMap<Dir8, Texture2D>,
+    pub(crate) wall: Texture2D,
     portal_unvisited: Texture2D,
     portal_visited: Texture2D,
-    note: Texture2D,
-    planks: Texture2D,
-    spiderweb: Texture2D,
-    blackhole: Texture2D,
-    explosive: Texture2D,
-    explosion: Texture2D,
-    zap: Texture2D,
+    pub(crate) note: Texture2D,
+    pub(crate) planks: Texture2D,
+    pub(crate) spiderweb: Texture2D,
+    pub(crate) blackhole: Texture2D,
+    pub(crate) explosive: Texture2D,
+    pub(crate) explosion: Texture2D,
+    pub(crate) zap: Texture2D,
     font: Font,
 }
 
@@ -36,38 +70,10 @@ async fn load_font() -> Font {
 impl Sprites {
     pub async fn load() -> Self {
         Self {
-            player: enum_map! {
-                Dir4::North => load_png(include_bytes!("../../assets/player/north.png")),
-                Dir4::South => load_png(include_bytes!("../../assets/player/south.png")),
-                Dir4::East => load_png(include_bytes!("../../assets/player/east.png")),
-                Dir4::West => load_png(include_bytes!("../../assets/player/west.png")),
-            },
-            player2: enum_map! {
-                Dir4::North => load_png(include_bytes!("../../assets/player2/north.png")),
-                Dir4::South => load_png(include_bytes!("../../assets/player2/south.png")),
-                Dir4::East => load_png(include_bytes!("../../assets/player2/east.png")),
-                Dir4::West => load_png(include_bytes!("../../assets/player2/west.png")),
-            },
-            rat: enum_map! {
-                Dir8::North => load_png(include_bytes!("../../assets/rat/north.png")),
-                Dir8::South => load_png(include_bytes!("../../assets/rat/south.png")),
-                Dir8::East => load_png(include_bytes!("../../assets/rat/east.png")),
-                Dir8::West => load_png(include_bytes!("../../assets/rat/west.png")),
-                Dir8::Northeast => load_png(include_bytes!("../../assets/rat/northeast.png")),
-                Dir8::Northwest => load_png(include_bytes!("../../assets/rat/northwest.png")),
-                Dir8::Southeast => load_png(include_bytes!("../../assets/rat/southeast.png")),
-                Dir8::Southwest => load_png(include_bytes!("../../assets/rat/southwest.png")),
-            },
-            cyborg_rat: enum_map! {
-                Dir8::North => load_png(include_bytes!("../../assets/cyborgrat/north.png")),
-                Dir8::South => load_png(include_bytes!("../../assets/cyborgrat/south.png")),
-                Dir8::East => load_png(include_bytes!("../../assets/cyborgrat/east.png")),
-                Dir8::West => load_png(include_bytes!("../../assets/cyborgrat/west.png")),
-                Dir8::Northeast => load_png(include_bytes!("../../assets/cyborgrat/northeast.png")),
-                Dir8::Northwest => load_png(include_bytes!("../../assets/cyborgrat/northwest.png")),
-                Dir8::Southeast => load_png(include_bytes!("../../assets/cyborgrat/southeast.png")),
-                Dir8::Southwest => load_png(include_bytes!("../../assets/cyborgrat/southwest.png")),
-            },
+            player: dir4_sprites!("player"),
+            player2: dir4_sprites!("player2"),
+            rat: dir8_sprites!("rat"),
+            cyborg_rat: dir8_sprites!("cyborgrat"),
             wall: load_png(include_bytes!("../../assets/wall.png")),
             portal_unvisited: load_png(include_bytes!("../../assets/portal/unvisited.png")),
             portal_visited: load_png(include_bytes!("../../assets/portal/visited.png")),
@@ -82,60 +88,12 @@ impl Sprites {
         }
     }
 
-    pub(crate) fn player(&self, dir: Dir4) -> &Texture2D {
-        &self.player[dir]
-    }
-
-    pub(crate) fn player2(&self, dir: Dir4) -> &Texture2D {
-        &self.player2[dir]
-    }
-
-    pub(crate) fn rat(&self, dir: Dir8) -> &Texture2D {
-        &self.rat[dir]
-    }
-
-    pub(crate) fn cyborg_rat(&self, dir: Dir8) -> &Texture2D {
-        &self.cyborg_rat[dir]
-    }
-
-    pub(crate) fn wall(&self) -> &Texture2D {
-        &self.wall
-    }
-
     pub(crate) fn portal(&self, visited: bool) -> &Texture2D {
         if visited {
             &self.portal_visited
         } else {
             &self.portal_unvisited
         }
-    }
-
-    pub(crate) fn note(&self) -> &Texture2D {
-        &self.note
-    }
-
-    pub(crate) fn planks(&self) -> &Texture2D {
-        &self.planks
-    }
-
-    pub(crate) fn spiderweb(&self) -> &Texture2D {
-        &self.spiderweb
-    }
-
-    pub(crate) fn blackhole(&self) -> &Texture2D {
-        &self.blackhole
-    }
-
-    pub(crate) fn explosive(&self) -> &Texture2D {
-        &self.explosive
-    }
-
-    pub(crate) fn explosion(&self) -> &Texture2D {
-        &self.explosion
-    }
-
-    pub(crate) fn zap(&self) -> &Texture2D {
-        &self.zap
     }
 
     pub(crate) fn font(&self) -> &Font {

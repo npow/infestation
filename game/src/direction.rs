@@ -13,6 +13,10 @@ pub enum Dir4 {
 }
 
 impl Dir4 {
+    pub(crate) fn all() -> [Self; 4] {
+        [Dir4::North, Dir4::South, Dir4::East, Dir4::West]
+    }
+
     pub(crate) fn delta(self) -> PositionDelta {
         match self {
             Dir4::North => PositionDelta::new(0, -1),
@@ -22,22 +26,28 @@ impl Dir4 {
         }
     }
 
-    pub(crate) fn opposite(self) -> Dir4 {
+    /// The direction of a single-cell step, if the delta is one.
+    pub(crate) fn from_delta(delta: PositionDelta) -> Option<Dir4> {
+        Dir4::all().into_iter().find(|dir| dir.delta() == delta)
+    }
+
+    pub(crate) fn opposite(self) -> Dir8 {
         match self {
-            Dir4::North => Dir4::South,
-            Dir4::South => Dir4::North,
-            Dir4::East => Dir4::West,
-            Dir4::West => Dir4::East,
+            Dir4::North => Dir8::South,
+            Dir4::South => Dir8::North,
+            Dir4::East => Dir8::West,
+            Dir4::West => Dir8::East,
         }
     }
 
-    pub(crate) fn into_dir8(self) -> Dir8 {
-        match self {
-            Dir4::North => Dir8::North,
-            Dir4::South => Dir8::South,
-            Dir4::East => Dir8::East,
-            Dir4::West => Dir8::West,
-        }
+    pub(crate) fn is_opposite(self, other: Dir4) -> bool {
+        matches!(
+            (self, other),
+            (Dir4::North, Dir4::South)
+                | (Dir4::South, Dir4::North)
+                | (Dir4::East, Dir4::West)
+                | (Dir4::West, Dir4::East)
+        )
     }
 
     pub(crate) fn rotate_cw(self) -> Dir4 {
@@ -90,6 +100,19 @@ impl Dir8 {
             Self::Northeast | Self::Northwest | Self::Southeast | Self::Southwest => true,
             Self::North | Self::South | Self::East | Self::West => false,
         }
+    }
+
+    pub(crate) fn all() -> [Self; 8] {
+        [
+            Self::Northwest,
+            Self::North,
+            Self::Northeast,
+            Self::West,
+            Self::East,
+            Self::Southwest,
+            Self::South,
+            Self::Southeast,
+        ]
     }
 
     /// Convert delta values to a Dir8.

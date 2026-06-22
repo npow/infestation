@@ -16,7 +16,7 @@ pub(crate) enum ProgressAction {
     Import,
 }
 
-pub(crate) fn button_rects(font: &Font) -> [(f32, f32, f32, f32, ProgressAction); 2] {
+fn button_rects(font: &Font) -> [(Rect, ProgressAction); 2] {
     let export_w = measure_text_f(EXPORT_LABEL, font, FONT_SIZE).width + 20.0;
     let import_w = measure_text_f(IMPORT_LABEL, font, FONT_SIZE).width + 20.0;
     let btn_w = export_w.max(import_w);
@@ -25,12 +25,17 @@ pub(crate) fn button_rects(font: &Font) -> [(f32, f32, f32, f32, ProgressAction)
     let y_start = bar_y + (BUTTON_BAR_HEIGHT - 2.0 * BUTTON_HEIGHT - BUTTON_SPACING) / 2.0;
 
     [
-        (x, y_start, btn_w, BUTTON_HEIGHT, ProgressAction::Export),
         (
-            x,
-            y_start + BUTTON_HEIGHT + BUTTON_SPACING,
-            btn_w,
-            BUTTON_HEIGHT,
+            Rect::new(x, y_start, btn_w, BUTTON_HEIGHT),
+            ProgressAction::Export,
+        ),
+        (
+            Rect::new(
+                x,
+                y_start + BUTTON_HEIGHT + BUTTON_SPACING,
+                btn_w,
+                BUTTON_HEIGHT,
+            ),
             ProgressAction::Import,
         ),
     ]
@@ -41,23 +46,30 @@ pub(crate) fn draw(font: &Font) {
     let border = Color::from_rgba(70, 70, 85, 255);
     let text_color = Color::from_rgba(180, 180, 200, 255);
 
-    for (x, y, w, h, action) in button_rects(font) {
+    for (rect, action) in button_rects(font) {
         let label = match action {
             ProgressAction::Export => EXPORT_LABEL,
             ProgressAction::Import => IMPORT_LABEL,
         };
-        draw_rectangle(x, y, w, h, bg);
-        draw_rectangle_lines(x, y, w, h, 1.0, border);
+        draw_rectangle(rect.x, rect.y, rect.w, rect.h, bg);
+        draw_rectangle_lines(rect.x, rect.y, rect.w, rect.h, 1.0, border);
         let dims = measure_text_f(label, font, FONT_SIZE);
         draw_text_f(
             label,
-            x + (w - dims.width) / 2.0,
-            y + (h + dims.height) / 2.0 - 2.0,
+            rect.x + (rect.w - dims.width) / 2.0,
+            rect.y + (rect.h + dims.height) / 2.0 - 2.0,
             font,
             FONT_SIZE,
             text_color,
         );
     }
+}
+
+pub(crate) fn hit(pos: Vec2, font: &Font) -> Option<ProgressAction> {
+    button_rects(font)
+        .into_iter()
+        .find(|(rect, _)| rect.contains(pos))
+        .map(|(_, action)| action)
 }
 
 // === Export Overlay ===
@@ -101,12 +113,14 @@ fn wrap_chars(text: &str, font: &Font, font_size: u16, max_width: f32) -> Vec<St
     lines
 }
 
-fn overlay_layout(
-    encoded: &str,
-    font: &Font,
-) -> (f32, f32, f32, f32, Vec<String>, f32, f32, f32, f32, f32) {
-    // Returns: box_x, box_y, box_w, box_h, wrapped_lines, line_h,
-    //          btn_x, btn_y, btn_w, btn_h
+struct OverlayLayout {
+    box_rect: Rect,
+    wrapped: Vec<String>,
+    line_h: f32,
+    button: Rect,
+}
+
+fn overlay_layout(encoded: &str, font: &Font) -> OverlayLayout {
     let box_w = (screen_width() - 40.0).min(OVL_MAX_WIDTH);
     let inner_w = box_w - OVL_PADDING * 2.0;
     let text_inner_w = inner_w - OVL_TEXT_PAD * 2.0;
@@ -127,14 +141,16 @@ fn overlay_layout(
     let btn_x = box_x + (box_w - btn_w) / 2.0;
     let btn_y = box_y + box_h - OVL_PADDING - btn_h;
 
-    (
-        box_x, box_y, box_w, box_h, wrapped, line_h, btn_x, btn_y, btn_w, btn_h,
-    )
+    OverlayLayout {
+        box_rect: Rect::new(box_x, box_y, box_w, box_h),
+        wrapped,
+        line_h,
+        button: Rect::new(btn_x, btn_y, btn_w, btn_h),
+    }
 }
 
-pub(crate) fn overlay_copy_rect(encoded: &str, font: &Font) -> (f32, f32, f32, f32) {
-    let (_, _, _, _, _, _, btn_x, btn_y, btn_w, btn_h) = overlay_layout(encoded, font);
-    (btn_x, btn_y, btn_w, btn_h)
+pub(crate) fn overlay_copy_hit(pos: Vec2, encoded: &str, font: &Font) -> bool {
+    overlay_layout(encoded, font).button.contains(pos)
 }
 
 pub(crate) fn draw_overlay(overlay: &ExportOverlay, font: &Font) {
@@ -153,31 +169,36 @@ pub(crate) fn draw_overlay(overlay: &ExportOverlay, font: &Font) {
         Color::from_rgba(0, 0, 0, 200),
     );
 
-    let (box_x, box_y, box_w, box_h, wrapped, line_h, btn_x, btn_y, btn_w, btn_h) =
-        overlay_layout(encoded, font);
-    let inner_w = box_w - OVL_PADDING * 2.0;
+    let layout = overlay_layout(encoded, font);
+    let OverlayLayout {
+        box_rect,
+        wrapped,
+        line_h,
+        button,
+    } = &layout;
+    let inner_w = box_rect.w - OVL_PADDING * 2.0;
     let text_area_h = wrapped.len() as f32 * line_h + OVL_TEXT_PAD * 2.0;
 
     // Box background
     draw_rectangle(
-        box_x,
-        box_y,
-        box_w,
-        box_h,
+        box_rect.x,
+        box_rect.y,
+        box_rect.w,
+        box_rect.h,
         Color::from_rgba(30, 30, 45, 255),
     );
     draw_rectangle_lines(
-        box_x,
-        box_y,
-        box_w,
-        box_h,
+        box_rect.x,
+        box_rect.y,
+        box_rect.w,
+        box_rect.h,
         2.0,
         Color::from_rgba(80, 80, 100, 255),
     );
 
     // Text area with "selected" background
-    let text_area_x = box_x + OVL_PADDING;
-    let text_area_y = box_y + OVL_PADDING;
+    let text_area_x = box_rect.x + OVL_PADDING;
+    let text_area_y = box_rect.y + OVL_PADDING;
     draw_rectangle(
         text_area_x,
         text_area_y,
@@ -188,7 +209,7 @@ pub(crate) fn draw_overlay(overlay: &ExportOverlay, font: &Font) {
 
     let text_color = Color::from_rgba(190, 200, 220, 255);
     let mut y = text_area_y + OVL_TEXT_PAD + OVL_CODE_FONT as f32;
-    for line in &wrapped {
+    for line in wrapped {
         draw_text_f(
             line,
             text_area_x + OVL_TEXT_PAD,
@@ -212,12 +233,12 @@ pub(crate) fn draw_overlay(overlay: &ExportOverlay, font: &Font) {
             Color::from_rgba(200, 200, 220, 255),
         )
     };
-    draw_rectangle(btn_x, btn_y, btn_w, btn_h, btn_bg);
+    draw_rectangle(button.x, button.y, button.w, button.h, btn_bg);
     draw_rectangle_lines(
-        btn_x,
-        btn_y,
-        btn_w,
-        btn_h,
+        button.x,
+        button.y,
+        button.w,
+        button.h,
         1.0,
         Color::from_rgba(80, 80, 100, 255),
     );
@@ -226,8 +247,8 @@ pub(crate) fn draw_overlay(overlay: &ExportOverlay, font: &Font) {
     let label_dims = measure_text_f(label, font, OVL_BTN_FONT);
     draw_text_f(
         label,
-        btn_x + (btn_w - label_dims.width) / 2.0,
-        btn_y + (btn_h + label_dims.height) / 2.0 - 2.0,
+        button.x + (button.w - label_dims.width) / 2.0,
+        button.y + (button.h + label_dims.height) / 2.0 - 2.0,
         font,
         OVL_BTN_FONT,
         label_color,

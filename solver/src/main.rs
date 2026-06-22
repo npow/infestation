@@ -1132,6 +1132,7 @@ enum LookupGoal {
     CellReachable(i32, i32),
     PlayerAt(i32, i32),
     PlayerFacing(i32, i32, Dir4),
+    RatStepReady(i32, i32),
     RatAt(i32, i32),
     RatComponentAtLeast(i32, i32, usize),
     RatRectComponentAtLeast(i32, i32, i32, i32, usize),
@@ -1177,6 +1178,7 @@ enum LookupGoal {
     RatsAtMostWithPlayerFacing(usize, i32, i32, Dir4),
     TriggerNumberOnlyWithCellIs(u8, i32, i32, CellKind),
     TriggerNumberOnlyWithCellNot(u8, i32, i32, CellKind),
+    TriggerNumberOnlyWithCellNotAndCellIs(u8, i32, i32, CellKind, i32, i32, CellKind),
 }
 
 impl LookupGoal {
@@ -1534,6 +1536,10 @@ impl LookupGoal {
                     .expect("player direction");
                 assert!(parts.next().is_none(), "expected playerx,playery,dir");
                 Self::PlayerFacing(x, y, dir)
+            }
+            "ratstepready" | "rat-step-ready" | "ratsteptargetready" => {
+                let (x, y) = parse_required_point(arg);
+                Self::RatStepReady(x, y)
             }
             "ratat" => {
                 let (x, y) = parse_required_point(arg);
@@ -1925,6 +1931,56 @@ impl LookupGoal {
                 assert!(parts.next().is_none(), "expected trigger,cellx,celly,kind");
                 Self::TriggerNumberOnlyWithCellNot(number, x, y, kind)
             }
+            "triggeronlycellnotcellis" | "triggerstrictcellnotcellis" => {
+                let mut parts = arg.split(',');
+                let number = parts
+                    .next()
+                    .expect("trigger number")
+                    .trim()
+                    .parse()
+                    .expect("trigger number");
+                let x = parts
+                    .next()
+                    .expect("cell x")
+                    .trim()
+                    .parse()
+                    .expect("cell x");
+                let y = parts
+                    .next()
+                    .expect("cell y")
+                    .trim()
+                    .parse()
+                    .expect("cell y");
+                let not_kind = parts
+                    .next()
+                    .map(str::trim)
+                    .map(parse_cell_kind_name)
+                    .expect("cell kind");
+                let other_x = parts
+                    .next()
+                    .expect("other cell x")
+                    .trim()
+                    .parse()
+                    .expect("other cell x");
+                let other_y = parts
+                    .next()
+                    .expect("other cell y")
+                    .trim()
+                    .parse()
+                    .expect("other cell y");
+                let other_kind = parts
+                    .next()
+                    .map(str::trim)
+                    .map(parse_cell_kind_name)
+                    .expect("other cell kind");
+                assert!(
+                    parts.next().is_none(),
+                    "expected trigger,cellx,celly,notkind,otherx,othery,otherkind"
+                );
+                Self::TriggerNumberOnlyWithCellNotAndCellIs(
+                    number, x, y, not_kind, other_x, other_y, other_kind,
+                )
+            }
             other => panic!("unknown lookup goal {other}"),
         }
     }
@@ -2099,6 +2155,81 @@ fn win_ready(grid: &Grid) -> bool {
     winning_action(grid, &tuples).is_some()
 }
 
+fn adjacent_points(grid: &Grid, target: (i32, i32)) -> Vec<(i32, i32)> {
+    let mut out = Vec::new();
+    for dy in -1..=1 {
+        for dx in -1..=1 {
+            if dx == 0 && dy == 0 {
+                continue;
+            }
+            let x = target.0 + dx;
+            let y = target.1 + dy;
+            if x >= 0 && y >= 0 && (x as usize) < grid.width() && (y as usize) < grid.height() {
+                out.push((x, y));
+            }
+        }
+    }
+    out
+}
+
+fn rat_step_ready(grid: &Grid, target: (i32, i32)) -> bool {
+    let nplayers = count_players(grid);
+    let Ok(tuples) = std::panic::catch_unwind(|| all_action_tuples(nplayers)) else {
+        return false;
+    };
+    tuples.iter().any(|actions| {
+        let (next, play_state) = step(grid, actions);
+        play_state != PlayState::GameOver && rat_at(&next, target)
+    })
+}
+
+fn rat_step_ready_heuristic(grid: &Grid, target: (i32, i32)) -> i64 {
+    if rat_step_ready(grid, target) {
+        return 0;
+    }
+
+    let source_cells = adjacent_points(grid, target);
+    if source_cells.is_empty() {
+        return 1_000_000_000;
+    }
+
+    let rats = rat_positions(grid);
+    let rat_source_penalty = nearest_target_distance(&rats, &source_cells) * 10_000;
+
+    let dist = player_dist_map(grid);
+    let mut lure_penalty = 1_000i64;
+    for &(sx, sy) in &source_cells {
+        let dx = (target.0 - sx).signum();
+        let dy = (target.1 - sy).signum();
+        for y in 0..grid.height() {
+            for x in 0..grid.width() {
+                let d = dist[y][x];
+                if d == i32::MAX {
+                    continue;
+                }
+                let px = x as i32;
+                let py = y as i32;
+                let aligned = match (dx, dy) {
+                    (0, 1) => py > sy,
+                    (0, -1) => py < sy,
+                    (1, 0) => px > sx,
+                    (-1, 0) => px < sx,
+                    (1, 1) => px > sx && py > sy,
+                    (1, -1) => px > sx && py < sy,
+                    (-1, 1) => px < sx && py > sy,
+                    (-1, -1) => px < sx && py < sy,
+                    _ => false,
+                };
+                if aligned {
+                    lure_penalty = lure_penalty.min(d as i64);
+                }
+            }
+        }
+    }
+
+    rat_source_penalty + lure_penalty * 1_000 + heuristic(grid) / 1_000
+}
+
 fn lookup_goal_reached(
     goal: LookupGoal,
     initial: &Grid,
@@ -2197,6 +2328,7 @@ fn lookup_goal_reached(
             positions_matching(current, |cell| cell == CellKind::Player).contains(&(x, y))
         }
         LookupGoal::PlayerFacing(x, y, dir) => player_facing(current, (x, y), dir),
+        LookupGoal::RatStepReady(x, y) => rat_step_ready(current, (x, y)),
         LookupGoal::RatAt(x, y) => rat_at(current, (x, y)),
         LookupGoal::RatComponentAtLeast(x, y, minimum) => {
             rat_component_size_at(current, (x, y)).is_some_and(|size| size >= minimum)
@@ -2379,6 +2511,19 @@ fn lookup_goal_reached(
         LookupGoal::TriggerNumberOnlyWithCellNot(number, x, y, kind) => {
             only_trigger_changed(initial, current, number)
                 && current.cell_kind_at(x as usize, y as usize) != kind
+        }
+        LookupGoal::TriggerNumberOnlyWithCellNotAndCellIs(
+            number,
+            x,
+            y,
+            not_kind,
+            other_x,
+            other_y,
+            other_kind,
+        ) => {
+            only_trigger_changed(initial, current, number)
+                && current.cell_kind_at(x as usize, y as usize) != not_kind
+                && current.cell_kind_at(other_x as usize, other_y as usize) == other_kind
         }
     }
 }
@@ -2565,6 +2710,9 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         LookupGoal::PlayerFacing(x, y, _) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::RatStepReady(x, y) => {
+            rat_step_ready_heuristic(current, (x, y)) + heuristic(current) / 1_000
         }
         LookupGoal::RatAt(x, y) => {
             let rats = rat_positions(current);
@@ -2887,6 +3035,30 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             };
             trigger_h + cell_penalty
         }
+        LookupGoal::TriggerNumberOnlyWithCellNotAndCellIs(
+            number,
+            x,
+            y,
+            not_kind,
+            other_x,
+            other_y,
+            other_kind,
+        ) => {
+            let trigger_h =
+                lookup_goal_heuristic(LookupGoal::TriggerNumberOnly(number), initial, current);
+            let cell_penalty = if current.cell_kind_at(x as usize, y as usize) != not_kind {
+                0
+            } else {
+                500_000
+            };
+            let other_penalty =
+                if current.cell_kind_at(other_x as usize, other_y as usize) == other_kind {
+                    0
+                } else {
+                    500_000
+                };
+            trigger_h + cell_penalty + other_penalty
+        }
     }
 }
 
@@ -3023,6 +3195,7 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
             nearest_target_distance(&players, &[(x, y)])
                 + (!player_facing(current, (x, y), dir) as i64)
         }
+        LookupGoal::RatStepReady(x, y) => rat_step_ready_heuristic(current, (x, y)) / 1_000,
         LookupGoal::RatAt(x, y) => !rat_at(current, (x, y)) as i64,
         LookupGoal::RatComponentAtLeast(x, y, minimum) => {
             minimum.saturating_sub(rat_component_size_at(current, (x, y)).unwrap_or(0)) as i64
@@ -3274,6 +3447,19 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
         LookupGoal::TriggerNumberOnlyWithCellNot(number, x, y, kind) => {
             trigger_count(current, number) as i64 * 1_000_000
                 + (current.cell_kind_at(x as usize, y as usize) == kind) as i64
+        }
+        LookupGoal::TriggerNumberOnlyWithCellNotAndCellIs(
+            number,
+            x,
+            y,
+            not_kind,
+            other_x,
+            other_y,
+            other_kind,
+        ) => {
+            trigger_count(current, number) as i64 * 1_000_000
+                + (current.cell_kind_at(x as usize, y as usize) == not_kind) as i64
+                + (current.cell_kind_at(other_x as usize, other_y as usize) != other_kind) as i64
         }
     }
 }
@@ -8973,6 +9159,179 @@ fn main() {
         println!("state={play_state:?} turns_applied={applied}");
         println!("grid:\n{}", state.to_csv());
         print_diagnostics(&state);
+        return;
+    }
+
+    if mode == "stitch" {
+        // solver stitch <csv> --prefix MOVES --suffix MOVES [--depth N] [--secs S]
+        //                    [--maxnodes N] [--min-rats N] [--no-canonical]
+        //
+        // Enumerate bounded safe deviations from a prefix and try appending a known
+        // suffix from every reached state. This is a repair diagnostic for routes
+        // that fail after a small level topology change.
+        let mut prefix_str = String::new();
+        let mut suffix_str = String::new();
+        let mut depth = 20usize;
+        let mut secs = 30.0f64;
+        let mut max_nodes = 250_000usize;
+        let mut min_rats: Option<usize> = None;
+        let mut canonical = true;
+        let mut i = 3;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--suffix" => {
+                    suffix_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--depth" => {
+                    depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--secs" => {
+                    secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--maxnodes" => {
+                    max_nodes = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--min-rats" => {
+                    min_rats = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--no-canonical" => {
+                    canonical = false;
+                    i += 1;
+                }
+                _ => i += 1,
+            }
+        }
+        assert!(!suffix_str.is_empty(), "stitch requires --suffix MOVES");
+
+        let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let suffix = parse_action_string(&suffix_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
+
+        eprintln!(
+            "stitch: players={} prefix={} suffix={} depth={} secs={} maxnodes={} min_rats={:?} canonical={}",
+            nplayers,
+            prefix.len(),
+            suffix.len(),
+            depth,
+            secs,
+            max_nodes,
+            min_rats,
+            canonical
+        );
+
+        let start = Instant::now();
+        let tuples = all_action_tuples(nplayers);
+        let state_key = |state: &Grid| {
+            if canonical {
+                state.search_hash()
+            } else {
+                state.state_hash()
+            }
+        };
+        let mut nodes = vec![Node {
+            grid: start_grid.clone(),
+            parent: usize::MAX,
+            action: Vec::new(),
+            depth: 0,
+        }];
+        let mut visited = HashSet::new();
+        visited.insert(state_key(&start_grid));
+        let mut q = VecDeque::new();
+        q.push_back(0usize);
+        let mut expansions = 0u64;
+        let mut best_idx = 0usize;
+        let mut best_score = lookup_bfs_progress_score(LookupGoal::Win, &start_grid, &start_grid);
+
+        while let Some(idx) = q.pop_front() {
+            expansions += 1;
+            let branch = reconstruct(&nodes, idx);
+            let (suffix_state, suffix_result, suffix_applied) =
+                replay_path(&nodes[idx].grid, &suffix);
+            if suffix_result == PlayState::Won {
+                let mut full_path = prefix;
+                full_path.extend(branch);
+                full_path.extend(suffix);
+                println!(
+                    "SOLVED moves={} stitch_depth={} suffix_applied={} time={:.1}s",
+                    full_path.len(),
+                    nodes[idx].depth,
+                    suffix_applied,
+                    start.elapsed().as_secs_f64()
+                );
+                println!("ARROWS {}", format_path(&full_path));
+                println!("ASCII {}", format_path_ascii(&full_path));
+                return;
+            }
+
+            let suffix_score = lookup_bfs_progress_score(LookupGoal::Win, &start_grid, &suffix_state);
+            if suffix_score < best_score {
+                best_score = suffix_score;
+                best_idx = idx;
+            }
+
+            if start.elapsed().as_secs_f64() > secs || nodes.len() >= max_nodes {
+                break;
+            }
+            if nodes[idx].depth as usize >= depth {
+                continue;
+            }
+
+            let cur_grid = nodes[idx].grid.clone();
+            for actions in &tuples {
+                let (next_grid, play_state) = step(&cur_grid, actions);
+                if play_state == PlayState::GameOver {
+                    continue;
+                }
+                if play_state != PlayState::Won
+                    && min_rats.is_some_and(|minimum| count_rats(&next_grid) < minimum)
+                {
+                    continue;
+                }
+                let hash = state_key(&next_grid);
+                if !visited.insert(hash) {
+                    continue;
+                }
+                let node_idx = nodes.len();
+                nodes.push(Node {
+                    grid: next_grid,
+                    parent: idx,
+                    action: actions.clone(),
+                    depth: nodes[idx].depth + 1,
+                });
+                q.push_back(node_idx);
+            }
+        }
+
+        let best_branch = reconstruct(&nodes, best_idx);
+        eprintln!(
+            "  [stitch stop expansions={} queue={} nodes={} visited={} best_score={} elapsed={:.1}s]",
+            expansions,
+            q.len(),
+            nodes.len(),
+            visited.len(),
+            best_score,
+            start.elapsed().as_secs_f64()
+        );
+        eprintln!("  BEST_BRANCH_ASCII {}", format_path_ascii(&best_branch));
+        eprintln!("  BEST_BRANCH_STATE:\n{}", nodes[best_idx].grid.to_csv());
+        println!("NO_SOLUTION time={:.1}s", start.elapsed().as_secs_f64());
         return;
     }
 

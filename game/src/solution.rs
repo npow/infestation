@@ -1,15 +1,13 @@
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
+use flate2::Compression;
 use flate2::read::ZlibDecoder;
-use serde::Deserialize;
-use std::io::Read;
-
-#[cfg(any(test, target_arch = "wasm32"))]
-use {flate2::Compression, flate2::write::ZlibEncoder, serde::Serialize, std::io::Write};
+use flate2::write::ZlibEncoder;
+use serde::{Deserialize, Serialize};
+use std::io::{Read, Write};
 
 use crate::game::Action;
 
-#[cfg(any(test, target_arch = "wasm32"))]
 #[derive(Serialize)]
 struct Solution<'a> {
     level: &'a str,
@@ -19,13 +17,12 @@ struct Solution<'a> {
 
 #[derive(Deserialize)]
 pub struct DecodedSolution {
-    pub(crate) level: String,
-    pub(crate) grid: String,
-    pub(crate) actions: Vec<Vec<Action>>,
+    pub level: String,
+    pub grid: String,
+    pub actions: Vec<Vec<Action>>,
 }
 
 /// Encode a solution as zlib-compressed, base64-encoded JSON.
-#[cfg(any(test, target_arch = "wasm32"))]
 pub(crate) fn encode_solution(
     level_name: &str,
     initial_grid_csv: &str,
@@ -59,30 +56,6 @@ pub fn decode_solution(encoded: &str) -> DecodedSolution {
     serde_json::from_str(&json_str).expect("invalid solution JSON")
 }
 
-/// Build a mailto URL for emailing a solution.
-#[cfg(any(test, target_arch = "wasm32"))]
-pub(crate) fn mailto_url(level_name: &str, encoded_solution: &str) -> String {
-    let subject = percent_encode(&format!("Solution for {}", level_name));
-    let body = percent_encode(encoded_solution);
-    format!("mailto:dnspies@gmail.com?subject={subject}&body={body}")
-}
-
-#[cfg(any(test, target_arch = "wasm32"))]
-fn percent_encode(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    for byte in s.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                result.push(byte as char);
-            }
-            _ => {
-                result.push_str(&format!("%{:02X}", byte));
-            }
-        }
-    }
-    result
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,12 +70,5 @@ mod tests {
         assert_eq!(decoded.level, "test_level");
         assert_eq!(decoded.grid, ".,.\n▼,.");
         assert_eq!(decoded.actions, actions);
-    }
-
-    #[test]
-    fn mailto_url_structure() {
-        let url = mailto_url("my level", "abc123==");
-        assert!(url.starts_with("mailto:dnspies@gmail.com?subject="));
-        assert!(url.contains("body=abc123%3D%3D"));
     }
 }

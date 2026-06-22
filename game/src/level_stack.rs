@@ -2,6 +2,8 @@ use std::mem;
 
 use crate::game::{Game, PlayState};
 
+pub(crate) const TOP: &str = "intro";
+
 /// Manages the stack of game states when navigating between levels via portals.
 pub(crate) struct LevelStack {
     stack: Vec<(Game, String)>,
@@ -87,11 +89,11 @@ mod tests {
         let initial_pos = player_pos(&parent_game);
 
         // Player moves onto portal
-        assert!(parent_game.apply_action(Action::Move(Dir4::East)));
+        parent_game.apply_action(Action::Move(Dir4::East));
         assert_eq!(player_pos(&parent_game), Position::new(1, 1));
 
         // Create level stack and enter sublevel
-        let mut stack = LevelStack::new("world".to_string());
+        let mut stack = LevelStack::new(TOP.to_string());
         stack.enter_level(&parent_game, "sublevel".to_string());
 
         // Create sublevel game (not completed - still playing)
@@ -111,16 +113,16 @@ mod tests {
         let mut parent_game = game_with_portal_at(Position::new(1, 1), "sublevel");
 
         // Player moves onto portal
-        assert!(parent_game.apply_action(Action::Move(Dir4::East)));
+        parent_game.apply_action(Action::Move(Dir4::East));
         let pos_on_portal = player_pos(&parent_game);
 
         // Create level stack and enter sublevel
-        let mut stack = LevelStack::new("world".to_string());
+        let mut stack = LevelStack::new(TOP.to_string());
         stack.enter_level(&parent_game, "sublevel".to_string());
 
         // Create sublevel game that's been won
         let mut sublevel_game = game_from_csv(".,.,.\n.,►,R\n.,.,.");
-        assert!(sublevel_game.apply_action(Action::Move(Dir4::East))); // Kill the rat
+        sublevel_game.apply_action(Action::Move(Dir4::East)); // Kill the rat
         assert_eq!(sublevel_game.state.play_state(), PlayState::Won);
 
         // Exit after completing
@@ -143,11 +145,11 @@ mod tests {
             .insert("sublevel".to_string());
 
         // Player moves onto portal
-        assert!(parent_game.apply_action(Action::Move(Dir4::East)));
+        parent_game.apply_action(Action::Move(Dir4::East));
         let pos_on_portal = player_pos(&parent_game);
 
         // Create level stack and enter sublevel
-        let mut stack = LevelStack::new("world".to_string());
+        let mut stack = LevelStack::new(TOP.to_string());
         stack.enter_level(&parent_game, "sublevel".to_string());
 
         // Create sublevel game with inherited completed_levels (simulates how main.rs works)

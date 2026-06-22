@@ -1,0 +1,66 @@
+{
+  "name": "Intro",
+  "portals": [
+    {
+      "x": 4,
+      "y": 0,
+      "level": "world"
+    },
+    {
+      "x": 3,
+      "y": 1,
+      "level": "guidance"
+    },
+    {
+      "x": 4,
+      "y": 1,
+      "level": "blackhole_v2"
+    },
+    {
+      "x": 4,
+      "y": 3,
+      "level": "planks"
+    },
+    {
+      "x": 4,
+      "y": 5,
+      "level": "webs"
+    },
+    {
+      "x": 4,
+      "y": 7,
+      "level": "more_rats"
+    },
+    {
+      "x": 5,
+      "y": 7,
+      "level": "trapped_rat"
+    },
+    {
+      "x": 6,
+      "y": 7,
+      "level": "trapped_rat2_v2"
+    },
+    {
+      "x": 4,
+      "y": 9,
+      "level": "rats"
+    }
+  ],
+  "notes": [
+    {
+      "x": 7,
+      "y": 7,
+      "text": "I'm a rat-fighting master!"
+    },
+    {
+      "x": 4,
+      "y": 10,
+      "text": {
+        "controller": "Use the D-pad or left joystick to move",
+        "keyboard": "Use the arrow keys to move",
+        "mobile": "Swipe to move, or drag a path from your character to follow it. Tap to stop."
+      }
+    }
+  ]
+}

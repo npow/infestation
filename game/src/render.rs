@@ -1,16 +1,17 @@
-#[cfg(target_arch = "wasm32")]
-pub(crate) mod email_button;
 pub(crate) mod progress_buttons;
+pub(crate) mod solution_button;
 
 use crate::game::{Game, PlayState};
 use crate::grid::{Cell, Player};
+use crate::position::Position;
 use crate::sprites::Sprites;
 use macroquad::prelude::*;
 use quad_gamepad::ControllerType;
 
 const PADDING: f32 = 4.0;
-const DIALOGUE_HEIGHT: f32 = 160.0;
 const DIALOGUE_PADDING: f32 = 12.0;
+const DIALOGUE_FONT_SIZE: u16 = 26;
+const DIALOGUE_LINE_HEIGHT: f32 = DIALOGUE_FONT_SIZE as f32 * 1.2;
 const BUTTON_BAR_HEIGHT: f32 = 70.0;
 const BUTTON_HEIGHT: f32 = 28.0;
 const BUTTON_SPACING: f32 = 6.0;
@@ -93,7 +94,7 @@ impl InputHints {
     }
 }
 
-fn draw_cell(cell: Cell, px: f32, py: f32, size: f32, sprites: &Sprites) {
+pub(crate) fn draw_cell(cell: Cell, px: f32, py: f32, size: f32, sprites: &Sprites, tint: Color) {
     match cell {
         Cell::Trigger(n) => {
             // Draw digit centered in cell
@@ -102,27 +103,27 @@ fn draw_cell(cell: Cell, px: f32, py: f32, size: f32, sprites: &Sprites) {
             let dims = measure_text_f(text, sprites.font(), font_size);
             let tx = px + (size - dims.width) / 2.0;
             let ty = py + (size + dims.height) / 2.0;
-            draw_text_f(text, tx, ty, sprites.font(), font_size, WHITE);
+            draw_text_f(text, tx, ty, sprites.font(), font_size, tint);
         }
         Cell::Empty => {}
         _ => {
             let texture = match cell {
-                Cell::Player(Player::Player1, dir) => sprites.player(dir),
-                Cell::Player(Player::Player2, dir) => sprites.player2(dir),
-                Cell::Rat(dir) => sprites.rat(dir),
-                Cell::CyborgRat(dir) => sprites.cyborg_rat(dir),
-                Cell::Wall => sprites.wall(),
-                Cell::Plank => sprites.planks(),
-                Cell::Spiderweb => sprites.spiderweb(),
-                Cell::BlackHole => sprites.blackhole(),
-                Cell::Explosive => sprites.explosive(),
+                Cell::Player(Player::Player1, dir) => &sprites.player[dir],
+                Cell::Player(Player::Player2, dir) => &sprites.player2[dir],
+                Cell::Rat(dir) => &sprites.rat[dir],
+                Cell::CyborgRat(dir) => &sprites.cyborg_rat[dir],
+                Cell::Wall => &sprites.wall,
+                Cell::Plank => &sprites.planks,
+                Cell::Spiderweb => &sprites.spiderweb,
+                Cell::BlackHole => &sprites.blackhole,
+                Cell::Explosive => &sprites.explosive,
                 _ => return,
             };
             draw_texture_ex(
                 texture,
                 px,
                 py,
-                WHITE,
+                tint,
                 DrawTextureParams {
                     dest_size: Some(vec2(size, size)),
                     ..Default::default()
@@ -132,6 +133,15 @@ fn draw_cell(cell: Cell, px: f32, py: f32, size: f32, sprites: &Sprites) {
     }
 }
 
+/// Transient previews drawn over the grid: dragged/followed paths and
+/// pending-action ghosts.
+#[derive(Default)]
+pub(crate) struct Overlays {
+    pub(crate) paths: Vec<Vec<Position>>,
+    /// Preregistered moves, shown as translucent entities at their destination.
+    pub(crate) ghosts: Vec<(Position, Cell)>,
+}
+
 pub(crate) fn render(
     game: &Game,
     sprites: &Sprites,
@@ -139,11 +149,13 @@ pub(crate) fn render(
     ui: &UiState,
     hints: InputHints,
     confirm_dialog: ConfirmDialog,
+    overlays: &Overlays,
 ) {
-    let cell = cell_size(game);
+    let dialogue_h = dialogue_height(description, sprites.font());
+    let cell = cell_size(game, dialogue_h);
     let grid_w = game.grid_width() as f32 * cell;
     let grid_h = game.grid_height() as f32 * cell;
-    let (offset_x, offset_y) = grid_offset(game);
+    let (offset_x, offset_y) = grid_offset(game, dialogue_h);
 
     clear_background(Color::from_rgba(30, 30, 40, 255));
 
@@ -201,7 +213,7 @@ pub(crate) fn render(
     // Draw note indicators (underneath entities)
     for (pos, _) in game.state.grid.notes() {
         draw_texture_ex(
-            sprites.note(),
+            &sprites.note,
             offset_x + pos.x as f32 * cell,
             offset_y + pos.y as f32 * cell,
             WHITE,
@@ -222,6 +234,7 @@ pub(crate) fn render(
                 offset_y + pos.y as f32 * cell,
                 cell,
                 sprites,
+                WHITE,
             );
         }
 
@@ -235,6 +248,7 @@ pub(crate) fn render(
                 offset_y + y * cell,
                 cell,
                 sprites,
+                WHITE,
             );
         }
 
@@ -248,7 +262,7 @@ pub(crate) fn render(
             let py = cy - zap_size / 2.0;
 
             draw_texture_ex(
-                sprites.zap(),
+                &sprites.zap,
                 px,
                 py,
                 WHITE,
@@ -271,7 +285,7 @@ pub(crate) fn render(
             let py = cy - explosion_size / 2.0;
 
             draw_texture_ex(
-                sprites.explosion(),
+                &sprites.explosion,
                 px,
                 py,
                 WHITE,
@@ -290,8 +304,26 @@ pub(crate) fn render(
                 offset_y + pos.y as f32 * cell,
                 cell,
                 sprites,
+                WHITE,
             );
         }
+    }
+
+    // Preregistered moves as translucent ghosts at their destination
+    for &(pos, ghost_cell) in &overlays.ghosts {
+        draw_cell(
+            ghost_cell,
+            offset_x + pos.x as f32 * cell,
+            offset_y + pos.y as f32 * cell,
+            cell,
+            sprites,
+            GHOST_TINT,
+        );
+    }
+
+    // Dragged or in-progress player paths
+    for path in &overlays.paths {
+        draw_path(path, offset_x, offset_y, cell);
     }
 
     // Grid center for overlay text
@@ -385,12 +417,11 @@ pub(crate) fn render(
             WHITE,
         );
 
-        #[cfg(target_arch = "wasm32")]
-        email_button::draw(grid_center_x, grid_center_y, font);
+        solution_button::draw(grid_center_x, grid_center_y, font);
     }
 
     // Dialogue area at bottom
-    render_dialogue(description, dialogue_y(game), sprites.font());
+    render_dialogue(description, sprites.font());
 
     // Progress export/import buttons
     progress_buttons::draw(sprites.font());
@@ -398,6 +429,28 @@ pub(crate) fn render(
     // Confirmation dialog on top of everything
     if confirm_dialog != ConfirmDialog::None {
         render_confirm_dialog(confirm_dialog, hints, sprites.font());
+    }
+}
+
+const PATH_COLOR: Color = Color::new(1.0, 0.85, 0.3, 0.6);
+const GHOST_TINT: Color = Color::new(1.0, 1.0, 1.0, 0.4);
+
+/// Draw a path overlay as a line through cell centers with a dot at the end.
+fn draw_path(path: &[Position], offset_x: f32, offset_y: f32, cell: f32) {
+    let center = |pos: Position| {
+        vec2(
+            offset_x + (pos.x as f32 + 0.5) * cell,
+            offset_y + (pos.y as f32 + 0.5) * cell,
+        )
+    };
+    for pair in path.windows(2) {
+        let a = center(pair[0]);
+        let b = center(pair[1]);
+        draw_line(a.x, a.y, b.x, b.y, cell * 0.15, PATH_COLOR);
+    }
+    if let Some(&last) = path.last() {
+        let c = center(last);
+        draw_circle(c.x, c.y, cell * 0.2, PATH_COLOR);
     }
 }
 
@@ -422,7 +475,7 @@ fn render_confirm_dialog(dialog: ConfirmDialog, hints: InputHints, font: &Font) 
 
     let confirm_hint = match hints {
         InputHints::Keyboard => "Space to confirm, Esc to cancel",
-        InputHints::Touch => "Tap to confirm",
+        InputHints::Touch => "",
         InputHints::Controller(Xbox | Generic) => "A/B to confirm, X/Y to cancel",
         InputHints::Controller(PlayStation) => "✕/○ to confirm, □/△ to cancel",
         InputHints::Controller(Nintendo) => "B/A to confirm, Y/X to cancel",
@@ -454,19 +507,96 @@ fn render_confirm_dialog(dialog: ConfirmDialog, hints: InputHints, font: &Font) 
     );
 
     // Hint
-    let hint_dims = measure_text_f(confirm_hint, font, 28);
-    draw_text_f(
-        confirm_hint,
-        center_x - hint_dims.width / 2.0,
-        center_y + 100.0,
-        font,
-        28,
-        WHITE,
-    );
+    if !confirm_hint.is_empty() {
+        let hint_dims = measure_text_f(confirm_hint, font, 28);
+        draw_text_f(
+            confirm_hint,
+            center_x - hint_dims.width / 2.0,
+            center_y + 100.0,
+            font,
+            28,
+            WHITE,
+        );
+    }
+
+    // Yes/No buttons (tappable/clickable)
+    for button in confirm_buttons() {
+        let rect = button.rect;
+        draw_rectangle(
+            rect.x,
+            rect.y,
+            rect.w,
+            rect.h,
+            Color::from_rgba(50, 50, 60, 255),
+        );
+        draw_rectangle_lines(
+            rect.x,
+            rect.y,
+            rect.w,
+            rect.h,
+            1.0,
+            Color::from_rgba(70, 70, 85, 255),
+        );
+        let dims = measure_text_f(button.label, font, 28);
+        draw_text_f(
+            button.label,
+            rect.x + (rect.w - dims.width) / 2.0,
+            rect.y + (rect.h + dims.height) / 2.0,
+            font,
+            28,
+            Color::from_rgba(220, 220, 230, 255),
+        );
+    }
 }
 
-fn render_dialogue(description: Option<&str>, dialogue_y: f32, font: &Font) {
-    let dialogue_height = screen_height() - dialogue_y - BUTTON_BAR_HEIGHT - BOTTOM_SAFE_AREA;
+struct ConfirmButton {
+    rect: Rect,
+    label: &'static str,
+    confirms: bool,
+}
+
+fn confirm_buttons() -> [ConfirmButton; 2] {
+    const WIDTH: f32 = 110.0;
+    const HEIGHT: f32 = 48.0;
+    const GAP: f32 = 30.0;
+    let center_x = screen_width() / 2.0;
+    let y = screen_height() / 2.0 + 130.0;
+    [
+        ConfirmButton {
+            rect: Rect::new(center_x - WIDTH - GAP / 2.0, y, WIDTH, HEIGHT),
+            label: "Yes",
+            confirms: true,
+        },
+        ConfirmButton {
+            rect: Rect::new(center_x + GAP / 2.0, y, WIDTH, HEIGHT),
+            label: "No",
+            confirms: false,
+        },
+    ]
+}
+
+/// Whether a tap on the confirm dialog confirms it, if a button was hit.
+pub(crate) fn confirm_dialog_hit(pos: Vec2) -> Option<bool> {
+    confirm_buttons()
+        .iter()
+        .find(|button| button.rect.contains(pos))
+        .map(|button| button.confirms)
+}
+
+/// Draw the dialogue strip sized to its text, anchored above the button bar.
+fn render_dialogue(description: Option<&str>, font: &Font) {
+    let Some(text) = description else {
+        return;
+    };
+
+    let font_size = DIALOGUE_FONT_SIZE;
+    let line_height = DIALOGUE_LINE_HEIGHT;
+    let max_width = screen_width() - DIALOGUE_PADDING * 2.0;
+
+    // Text with word wrap, preserving explicit newlines
+    let wrapped = wrap_text(text, font, font_size, max_width);
+    let dialogue_height = DIALOGUE_PADDING * 2.0 + wrapped.len() as f32 * line_height;
+    let dialogue_y = button_bar_y() - dialogue_height;
 
     // Background
     draw_rectangle(
@@ -487,20 +617,11 @@ fn render_dialogue(description: Option<&str>, dialogue_y: f32, font: &Font) {
         Color::from_rgba(60, 60, 80, 255),
     );
 
-    // Text with word wrap, preserving explicit newlines
-    if let Some(text) = description {
-        let font_size: u16 = 26;
-        let line_height = font_size as f32 * 1.2;
-        let max_width = screen_width() - DIALOGUE_PADDING * 2.0;
-        let color = Color::from_rgba(200, 200, 220, 255);
-
-        let wrapped = wrap_text(text, font, font_size, max_width);
-
-        let mut y = dialogue_y + DIALOGUE_PADDING + font_size as f32;
-        for line in &wrapped {
-            draw_text_f(line, DIALOGUE_PADDING, y, font, font_size, color);
-            y += line_height;
-        }
+    let color = Color::from_rgba(200, 200, 220, 255);
+    let mut y = dialogue_y + DIALOGUE_PADDING + font_size as f32 * 0.8;
+    for line in &wrapped {
+        draw_text_f(line, DIALOGUE_PADDING, y, font, font_size, color);
+        y += line_height;
     }
 }
 
@@ -526,28 +647,46 @@ fn wrap_text(text: &str, font: &Font, font_size: u16, max_width: f32) -> Vec<Str
     lines
 }
 
-pub(crate) fn cell_size(game: &Game) -> f32 {
+/// Height of the dialogue strip for the given text (one line when empty).
+/// The grid layout reserves exactly this much, so the grid resizes while
+/// standing on a note with long text rather than being covered by it.
+pub(crate) fn dialogue_height(description: Option<&str>, font: &Font) -> f32 {
+    let max_width = screen_width() - DIALOGUE_PADDING * 2.0;
+    let lines = description
+        .map_or(1, |text| {
+            wrap_text(text, font, DIALOGUE_FONT_SIZE, max_width).len()
+        })
+        .max(1);
+    DIALOGUE_PADDING * 2.0 + lines as f32 * DIALOGUE_LINE_HEIGHT
+}
+
+fn cell_size(game: &Game, dialogue_height: f32) -> f32 {
     let width = screen_width();
-    let height = screen_height() - DIALOGUE_HEIGHT - BUTTON_BAR_HEIGHT - BOTTOM_SAFE_AREA;
+    let height = screen_height() - dialogue_height - BUTTON_BAR_HEIGHT - BOTTOM_SAFE_AREA;
     let cell_w = (width - PADDING * 2.0) / game.grid_width() as f32;
     let cell_h = (height - PADDING * 2.0) / game.grid_height() as f32;
     cell_w.min(cell_h)
 }
 
-pub(crate) fn grid_offset(game: &Game) -> (f32, f32) {
-    let cell = cell_size(game);
+fn grid_offset(game: &Game, dialogue_height: f32) -> (f32, f32) {
+    let cell = cell_size(game, dialogue_height);
     let grid_w = game.grid_width() as f32 * cell;
     let offset_x = (screen_width() - grid_w) / 2.0;
     let offset_y = PADDING; // Grid at top
     (offset_x, offset_y)
 }
 
-fn dialogue_y(game: &Game) -> f32 {
-    let cell = cell_size(game);
-    let grid_h = game.grid_height() as f32 * cell;
-    let grid_bottom = PADDING + grid_h + PADDING;
-    // Dialogue starts at grid bottom, but no higher than needed to fit dialogue + button bar + safe area
-    grid_bottom.min(screen_height() - DIALOGUE_HEIGHT - BUTTON_BAR_HEIGHT - BOTTOM_SAFE_AREA)
+/// Convert a screen position to a grid cell, if it's within the grid.
+pub(crate) fn screen_to_grid(game: &Game, dialogue_height: f32, pos: Vec2) -> Option<Position> {
+    let cell = cell_size(game, dialogue_height);
+    let (offset_x, offset_y) = grid_offset(game, dialogue_height);
+    let cell_pos = Position {
+        x: ((pos.x - offset_x) / cell).floor() as i32,
+        y: ((pos.y - offset_y) / cell).floor() as i32,
+    };
+    cell_pos
+        .in_bounds((game.grid_width(), game.grid_height()))
+        .then_some(cell_pos)
 }
 
 pub(crate) fn button_bar_y() -> f32 {
@@ -604,19 +743,19 @@ fn button_labels(on_portal: bool, hints: InputHints) -> [(&'static str, ButtonAc
     ]
 }
 
-pub(crate) fn button_rects(
+fn button_rects(
     on_portal: bool,
     hints: InputHints,
     bar_y: f32,
     font: &Font,
-) -> [(f32, f32, f32, f32, ButtonAction); 4] {
+) -> [(Rect, ButtonAction); 4] {
     let buttons = button_labels(on_portal, hints);
 
     // 2x2 grid: row 0 = buttons 0,1; row 1 = buttons 2,3
     let row_height = BUTTON_HEIGHT + BUTTON_SPACING;
     let y_start = bar_y + (BUTTON_BAR_HEIGHT - 2.0 * BUTTON_HEIGHT - BUTTON_SPACING) / 2.0;
 
-    let mut rects = [(0.0, 0.0, 0.0, 0.0, ButtonAction::Reset); 4];
+    let mut rects = [(Rect::default(), ButtonAction::Reset); 4];
     for row in 0..2 {
         let row_buttons: Vec<_> = buttons[row * 2..(row + 1) * 2].to_vec();
         let row_width: f32 = row_buttons
@@ -630,7 +769,7 @@ pub(crate) fn button_rects(
 
         for (i, (label, action)) in row_buttons.iter().enumerate() {
             let w = measure_text_f(label, font, 22).width + 20.0;
-            rects[row * 2 + i] = (x, y, w, BUTTON_HEIGHT, *action);
+            rects[row * 2 + i] = (Rect::new(x, y, w, BUTTON_HEIGHT), *action);
             x += w + BUTTON_SPACING;
         }
     }
@@ -665,7 +804,7 @@ fn render_button_bar(ui: &UiState, is_playing: bool, hints: InputHints, bar_y: f
         (ButtonAction::Exit, ui.can_exit),
     ];
 
-    for (x, y, w, h, action) in button_rects(ui.on_portal, hints, bar_y, font) {
+    for (rect, action) in button_rects(ui.on_portal, hints, bar_y, font) {
         let (label, _) = labels.iter().find(|&&(_, a)| a == action).unwrap();
         let enabled = enabled_states
             .iter()
@@ -685,17 +824,49 @@ fn render_button_bar(ui: &UiState, is_playing: bool, hints: InputHints, bar_y: f
             )
         };
 
-        draw_rectangle(x, y, w, h, bg_color);
-        draw_rectangle_lines(x, y, w, h, 1.0, Color::from_rgba(70, 70, 85, 255));
+        draw_rectangle(rect.x, rect.y, rect.w, rect.h, bg_color);
+        draw_rectangle_lines(
+            rect.x,
+            rect.y,
+            rect.w,
+            rect.h,
+            1.0,
+            Color::from_rgba(70, 70, 85, 255),
+        );
 
         let dims = measure_text_f(label, font, 22);
         draw_text_f(
             label,
-            x + (w - dims.width) / 2.0,
-            y + (h + dims.height) / 2.0 - 2.0,
+            rect.x + (rect.w - dims.width) / 2.0,
+            rect.y + (rect.h + dims.height) / 2.0 - 2.0,
             font,
             22,
             text_color,
         );
     }
+}
+
+/// Returns the button action at the given screen position, if any
+pub(crate) fn button_at_position(
+    pos: Vec2,
+    ui: &UiState,
+    is_playing: bool,
+    hints: InputHints,
+    bar_y: f32,
+    font: &Font,
+) -> Option<ButtonAction> {
+    for (rect, action) in button_rects(ui.on_portal, hints, bar_y, font) {
+        if rect.contains(pos) {
+            let enabled = match action {
+                ButtonAction::Reset => ui.can_reset,
+                ButtonAction::Undo => ui.can_undo,
+                ButtonAction::Stall => is_playing,
+                ButtonAction::Exit => ui.can_exit,
+            };
+            if enabled {
+                return Some(action);
+            }
+        }
+    }
+    None
 }

@@ -2,6 +2,7 @@ use std::borrow::BorrowMut;
 
 use crate::direction::Dir8;
 use crate::grid::{Cell, Grid, Player};
+use crate::position::Position;
 
 use super::{MoveHandler, Moving, PlayerInfo};
 
@@ -21,6 +22,27 @@ pub(super) struct RatMoveKey<T = i32> {
 }
 
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
+    /// Turn an entity in place to face the nearest player
+    /// (preferring moved players, then P1, on ties).
+    pub(super) fn turn_to_face_nearest(
+        &mut self,
+        pos: Position,
+        players: &[PlayerInfo],
+        make_cell: fn(Dir8) -> Cell,
+    ) {
+        let nearest = players
+            .iter()
+            .min_by_key(|p| (pos.dist_sq(p.pos), !p.moved, p.player))
+            .unwrap();
+        let face_dir = Dir8::from_delta(nearest.pos - pos).unwrap();
+        self.begin_move(Moving {
+            cell: make_cell(face_dir),
+            from: pos,
+            progress: 1.0,
+            to: pos,
+        });
+    }
+
     pub(crate) fn move_rats(&mut self, players: &[PlayerInfo]) {
         let mut rats: Vec<_> = self
             .grid
@@ -73,7 +95,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     // Check sword blocking against all players
                     let sword_blocked = players
                         .iter()
-                        .any(|p| new_pos == p.pos && dir == p.dir.opposite().into_dir8());
+                        .any(|p| new_pos == p.pos && dir == p.dir.opposite());
                     if sword_blocked {
                         continue;
                     }
@@ -98,18 +120,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     to: rat_pos + dir.delta(),
                 });
             } else {
-                // Rat stays: face nearest player
-                let nearest = players
-                    .iter()
-                    .min_by_key(|p| (rat_pos.dist_sq(p.pos), !p.moved, p.player))
-                    .unwrap();
-                let face_dir = Dir8::from_delta(nearest.pos - rat_pos).unwrap();
-                self.begin_move(Moving {
-                    cell: Cell::Rat(face_dir),
-                    from: rat_pos,
-                    progress: 1.0,
-                    to: rat_pos,
-                });
+                self.turn_to_face_nearest(rat_pos, players, Cell::Rat);
             }
         }
     }

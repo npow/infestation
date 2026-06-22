@@ -3,12 +3,11 @@ use std::collections::HashMap;
 use csv::ReaderBuilder;
 use serde::{Deserialize, Serialize};
 
-use crate::direction::Dir4;
 use crate::position::Position;
 
 use crate::render::InputHints;
 
-use super::{Cell, Grid, Player};
+use super::{Cell, Grid};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -140,7 +139,7 @@ impl LevelMetadata {
 }
 
 impl Grid {
-    pub(crate) fn from_csv(csv_str: &str) -> Self {
+    pub fn from_csv(csv_str: &str) -> Self {
         Self::parse_csv(csv_str, HashMap::new(), HashMap::new())
     }
 
@@ -153,94 +152,36 @@ impl Grid {
         portals: HashMap<Position, String>,
         notes: HashMap<Position, NoteText>,
     ) -> Self {
-        let mut cells: Vec<Vec<Cell>> = Vec::new();
-        let mut player_pos: Option<Position> = None;
-        let mut player2_pos: Option<Position> = None;
-        let mut rat_positions: Vec<Position> = Vec::new();
-        let mut cyborg_rat_positions: Vec<Position> = Vec::new();
-
         let mut reader = ReaderBuilder::new()
             .has_headers(false)
             .flexible(false)
             .from_reader(csv_str.as_bytes());
 
-        for (y, result) in reader.records().enumerate() {
-            let record = result.expect("invalid CSV");
-            let mut row = Vec::new();
-            for (x, field) in record.iter().enumerate() {
-                let pos = Position::new(x, y);
-                let cell = match field.trim() {
-                    "▲" => {
-                        player_pos = Some(pos);
-                        Cell::Player(Player::Player1, Dir4::North)
-                    }
-                    "▼" => {
-                        player_pos = Some(pos);
-                        Cell::Player(Player::Player1, Dir4::South)
-                    }
-                    "►" => {
-                        player_pos = Some(pos);
-                        Cell::Player(Player::Player1, Dir4::East)
-                    }
-                    "◄" => {
-                        player_pos = Some(pos);
-                        Cell::Player(Player::Player1, Dir4::West)
-                    }
-                    "△" => {
-                        player2_pos = Some(pos);
-                        Cell::Player(Player::Player2, Dir4::North)
-                    }
-                    "▽" => {
-                        player2_pos = Some(pos);
-                        Cell::Player(Player::Player2, Dir4::South)
-                    }
-                    "▷" => {
-                        player2_pos = Some(pos);
-                        Cell::Player(Player::Player2, Dir4::East)
-                    }
-                    "◁" => {
-                        player2_pos = Some(pos);
-                        Cell::Player(Player::Player2, Dir4::West)
-                    }
-                    "#" => Cell::Wall,
-                    "=" => Cell::Plank,
-                    "w" => Cell::Spiderweb,
-                    "O" => Cell::BlackHole,
-                    "X" => Cell::Explosive,
-                    "1" => Cell::Trigger(1),
-                    "2" => Cell::Trigger(2),
-                    "3" => Cell::Trigger(3),
-                    "4" => Cell::Trigger(4),
-                    "5" => Cell::Trigger(5),
-                    "6" => Cell::Trigger(6),
-                    "7" => Cell::Trigger(7),
-                    "8" => Cell::Trigger(8),
-                    "9" => Cell::Trigger(9),
-                    "R" => {
-                        rat_positions.push(pos);
-                        Cell::Empty
-                    }
-                    "C" => {
-                        cyborg_rat_positions.push(pos);
-                        Cell::Empty
-                    }
-                    _ => Cell::Empty,
-                };
-                row.push(cell);
-            }
-            cells.push(row);
-        }
+        let cells = reader
+            .records()
+            .map(|result| {
+                let record = result.expect("invalid CSV");
+                record
+                    .iter()
+                    .map(|field| Cell::from_symbol(field.trim()))
+                    .collect()
+            })
+            .collect();
 
         let mut grid = Grid::new(cells, portals, notes);
-        // Use player1 position if available, otherwise player2
-        let target = player_pos.or(player2_pos).unwrap();
-        for rat in rat_positions {
-            let dir = rat.direction_to(target).unwrap();
-            *grid.at_mut(rat) = Cell::Rat(dir);
-        }
-        for cyborg in cyborg_rat_positions {
-            let dir = cyborg.direction_to(target).unwrap();
-            *grid.at_mut(cyborg) = Cell::CyborgRat(dir);
+
+        // Point each rat toward a player (P1 if present, otherwise P2)
+        let target = grid.find_players().first().map(|p| p.pos);
+        let rats: Vec<_> = grid
+            .find_entities(|cell| matches!(cell, Cell::Rat(_) | Cell::CyborgRat(_)))
+            .collect();
+        for (pos, cell) in rats {
+            let target = target.expect("grid has rats but no players");
+            let dir = pos.direction_to(target).unwrap();
+            *grid.at_mut(pos) = match cell {
+                Cell::Rat(_) => Cell::Rat(dir),
+                _ => Cell::CyborgRat(dir),
+            };
         }
         grid
     }

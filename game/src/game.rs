@@ -5,7 +5,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Deserialize, Serialize};
 
 use crate::direction::Dir4;
-use crate::enum_all::EnumAll;
 use crate::grid::{Cell, Grid, NoteText, Player};
 use crate::levels;
 use crate::position::Position;
@@ -14,7 +13,7 @@ use crate::storage::strip_path_prefix;
 static ALL_LEVELS_UNLOCKED: AtomicBool = AtomicBool::new(false);
 
 #[unsafe(no_mangle)]
-pub(crate) extern "C" fn unlock_all_levels() {
+pub extern "C" fn unlock_all_levels() {
     ALL_LEVELS_UNLOCKED.store(true, Ordering::Relaxed);
 }
 
@@ -28,12 +27,12 @@ mod zap;
 
 /// Information about a player for movement resolution.
 #[derive(Clone, Copy)]
-pub(crate) struct PlayerInfo {
-    pub(crate) pos: Position,
-    pub(crate) dir: Dir4,
+pub struct PlayerInfo {
+    pub pos: Position,
+    pub dir: Dir4,
     /// True if the player moved (not just stalled) this turn.
-    pub(crate) moved: bool,
-    pub(crate) player: Player,
+    pub moved: bool,
+    pub player: Player,
 }
 
 const MOVE_SPEED: f32 = 15.0;
@@ -100,6 +99,9 @@ impl TryFrom<String> for Action {
 pub(crate) struct MoveHandler<G = Grid> {
     /// Grid being modified (also used for rendering during animation).
     pub(crate) grid: G,
+    /// A cell both players tried to enter. Players stay put, but the cell's
+    /// normal on-enter effects resolve after player movement.
+    pub(crate) contested_cell: Option<Position>,
     /// Movement animations in progress.
     pub(crate) moving: Vec<Moving>,
     /// Zap animations in progress.
@@ -116,6 +118,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
     pub(crate) fn new(grid: G) -> Self {
         Self {
             grid,
+            contested_cell: None,
             moving: Vec::new(),
             zapping: Vec::new(),
             triggered_numbers: Vec::new(),
@@ -148,7 +151,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
 /// Core game state without animation.
 #[derive(Clone)]
-pub(crate) struct GameState {
+pub struct GameState {
     pub(crate) grid: Grid,
     pub(crate) initial_grid: Grid,
     pub(crate) history: Vec<Grid>,
@@ -186,12 +189,18 @@ impl GameState {
         }
     }
 
+    /// Current position of the given player, if it's still on the grid.
+    pub(crate) fn player_position(&self, player: Player) -> Option<Position> {
+        self.grid
+            .find_players()
+            .into_iter()
+            .find(|p| p.player == player)
+            .map(|p| p.pos)
+    }
+
     /// Returns the portal destination for a specific player.
     pub(crate) fn player_standing_on_portal(&self, player: Player) -> Option<&str> {
-        self.grid
-            .entries()
-            .find(|(_, cell)| matches!(cell, Cell::Player(p, _) if *p == player))
-            .and_then(|(pos, _)| self.grid.get_portal(pos))
+        self.grid.get_portal(self.player_position(player)?)
     }
 
     /// Returns the portal destination if any player is currently standing on a portal.
@@ -205,18 +214,9 @@ impl GameState {
     /// Priority: if both players are on notes, prefer whichever moved last.
     /// If both moved in sync, prefer P1.
     pub(crate) fn standing_on_note(&self) -> Option<&NoteText> {
-        // Find all players and their notes
-        let p1_note = self
-            .grid
-            .find_entities(|cell| matches!(cell, Cell::Player(Player::Player1, _)))
-            .next()
-            .and_then(|(pos, _)| self.grid.get_note(pos));
-
-        let p2_note = self
-            .grid
-            .find_entities(|cell| matches!(cell, Cell::Player(Player::Player2, _)))
-            .next()
-            .and_then(|(pos, _)| self.grid.get_note(pos));
+        let note_under = |player| self.grid.get_note(self.player_position(player)?);
+        let p1_note = note_under(Player::Player1);
+        let p2_note = note_under(Player::Player2);
 
         match (p1_note, p2_note) {
             (Some(_), Some(_)) => {
@@ -248,12 +248,6 @@ impl GameState {
         let portal = self.standing_on_portal()?;
         self.is_level_completed(portal)
             .then(|| levels::get_level(portal).map(|l| l.display_name.as_str()))?
-    }
-
-    /// Returns true if the given player is standing on a completed portal.
-    pub(crate) fn player_on_completed_portal(&self, player: Player) -> bool {
-        self.player_standing_on_portal(player)
-            .is_some_and(|portal| self.is_level_completed(portal))
     }
 
     /// Returns the portal destination if any player just stepped onto an unvisited portal (auto-enter).
@@ -369,7 +363,8 @@ impl Game {
         }
 
         // Track which player(s) moved for note priority
-        let moving_players: Vec<Player> = Player::iter_all()
+        let moving_players: Vec<Player> = [Player::Player1, Player::Player2]
+            .into_iter()
             .zip(actions.iter())
             .filter_map(|(player, action)| matches!(action, Action::Move(_)).then_some(player))
             .collect();
@@ -401,13 +396,11 @@ impl Game {
     }
 
     /// Apply an input immediately without animation (for editor replay)
-    #[must_use]
     pub fn apply_action(&mut self, m: Action) -> bool {
         self.apply_actions(&[m])
     }
 
     /// Apply multiple player actions immediately without animation.
-    #[must_use]
     pub fn apply_actions(&mut self, actions: &[Action]) -> bool {
         let play_state = self.state.play_state();
 

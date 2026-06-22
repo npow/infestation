@@ -1,5 +1,5 @@
 #![cfg(test)]
-use infestation::testing::{ScenarioInput, game_from_csv};
+use infestation::testing::{ScenarioInput, apply_actions, game_from_csv, grid_to_csv, play_state};
 
 fn run_scenario_test(before: &str, after: &str, after_path: &str, json_path: &str) {
     let json_content = std::fs::read_to_string(json_path).expect("Failed to read JSON");
@@ -10,17 +10,17 @@ fn run_scenario_test(before: &str, after: &str, after_path: &str, json_path: &st
 
     let expected_state = match &input {
         ScenarioInput::TwoPlayer { p1, p2, state } => {
-            assert!(game.apply_actions(&[*p1, *p2]));
+            apply_actions(&mut game, &[*p1, *p2]);
             *state
         }
         ScenarioInput::SinglePlayer { action, state } => {
-            assert!(game.apply_action(*action));
+            game.apply_action(*action);
             *state
         }
     };
 
-    let result = game.grid_to_csv();
-    let actual_state = game.play_state();
+    let result = grid_to_csv(&game);
+    let actual_state = play_state(&game);
 
     if std::env::var("UPDATE_SNAPSHOTS").is_ok() {
         std::fs::write(after_path, &result).expect("Failed to update snapshot");

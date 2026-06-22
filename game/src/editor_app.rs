@@ -6,30 +6,31 @@ use std::str;
 use macroquad::prelude::*;
 
 use crate::direction::{Dir4, Dir8};
-use crate::enum_all::EnumAll;
 use enum_map::EnumMap;
 
 use crate::game::{Action, Game, PlayState};
 use crate::grid::{Cell, Grid, LevelMetadata, NoteText, Player};
+use crate::input::{arrow_key, wasd_key};
 use crate::position::{Position, PositionDelta};
+use crate::render::draw_cell;
 use crate::sprites::Sprites;
 use crate::testing::ScenarioInput;
 
 const PADDING: f32 = 8.0;
 const TOOLBAR_WIDTH: f32 = 150.0;
 
-#[derive(Clone, Copy)]
-struct Rect {
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
-}
-
-impl Rect {
-    fn contains(&self, px: f32, py: f32) -> bool {
-        px >= self.x && px < self.x + self.w && py >= self.y && py < self.y + self.h
-    }
+/// Top-left and bottom-right corners of the rectangle spanned by two positions.
+fn rect_corners(a: Position, b: Position) -> (Position, Position) {
+    (
+        Position {
+            x: a.x.min(b.x),
+            y: a.y.min(b.y),
+        },
+        Position {
+            x: a.x.max(b.x),
+            y: a.y.max(b.y),
+        },
+    )
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -86,21 +87,22 @@ impl Tool {
         }
     }
 
-    fn key(&self) -> &'static str {
+    /// Keyboard shortcut to select this tool, if any.
+    fn key(&self) -> Option<char> {
         match self {
-            Tool::Move => "m",
-            Tool::Wall => "#",
-            Tool::Player => "1",
-            Tool::Player2 => "2",
-            Tool::Rat => "",
-            Tool::CyborgRat => "c",
-            Tool::Portal => "g",
-            Tool::Note => "n",
-            Tool::Plank => "=",
-            Tool::Spiderweb => "",
-            Tool::BlackHole => "o",
-            Tool::Explosive => "x",
-            Tool::Trigger => "t",
+            Tool::Move => Some('m'),
+            Tool::Wall => Some('#'),
+            Tool::Player => Some('1'),
+            Tool::Player2 => Some('2'),
+            Tool::Rat => None,
+            Tool::CyborgRat => Some('c'),
+            Tool::Portal => Some('g'),
+            Tool::Note => Some('n'),
+            Tool::Plank => Some('='),
+            Tool::Spiderweb => None,
+            Tool::BlackHole => Some('o'),
+            Tool::Explosive => Some('x'),
+            Tool::Trigger => Some('t'),
         }
     }
 
@@ -249,7 +251,7 @@ impl Editor {
             **game = Game::new(self.before_grid.clone(), HashSet::new());
             for actions in input_history {
                 if game.state.play_state() == PlayState::Playing {
-                    assert!(game.apply_actions(actions));
+                    game.apply_actions(actions);
                 }
             }
         }
@@ -291,7 +293,7 @@ impl Editor {
         } = self.mode
             && game.state.play_state() == PlayState::Playing
         {
-            assert!(game.apply_actions(&actions));
+            game.apply_actions(&actions);
             input_history.push(actions);
         }
     }
@@ -311,16 +313,21 @@ impl Editor {
             return;
         }
 
-        let players = || Player::iter_all().take(player_count);
-        let has_non_synced = players().any(|p| self.pending[p].is_some_and(|pa| !pa.synced));
-        let all_synced = players().all(|p| self.pending[p].is_some_and(|pa| pa.synced));
+        let players = &[Player::Player1, Player::Player2][..player_count];
+        let has_non_synced = players
+            .iter()
+            .any(|&p| self.pending[p].is_some_and(|pa| !pa.synced));
+        let all_synced = players
+            .iter()
+            .all(|&p| self.pending[p].is_some_and(|pa| pa.synced));
 
         if !has_non_synced && !all_synced {
             return;
         }
 
-        let actions: Vec<Action> = players()
-            .map(|p| {
+        let actions: Vec<Action> = players
+            .iter()
+            .map(|&p| {
                 self.pending[p]
                     .take()
                     .map(|pa| pa.action)
@@ -536,32 +543,17 @@ impl Editor {
 
     fn end_selection(&mut self, pane: usize) {
         if let Some((start, end)) = self.selecting_rect.take() {
-            let min_x = start.x.min(end.x);
-            let max_x = start.x.max(end.x);
-            let min_y = start.y.min(end.y);
-            let max_y = start.y.max(end.y);
-
-            // First pass: collect positions with content (immutable borrow)
+            let (min, max) = rect_corners(start, end);
             let grid = self.grid_for_pane(pane);
-            let mut selected_positions = Vec::new();
-            for y in min_y..=max_y {
-                for x in min_x..=max_x {
-                    let pos = Position { x, y };
-                    // Select if non-empty cell, or has a portal or note
-                    let has_content = !matches!(grid.at(pos), Cell::Empty)
+            // Select cells with content: non-empty, or with a portal or note
+            self.selection = (min.y..=max.y)
+                .flat_map(|y| (min.x..=max.x).map(move |x| Position { x, y }))
+                .filter(|&pos| {
+                    !matches!(grid.at(pos), Cell::Empty)
                         || grid.get_portal(pos).is_some()
-                        || grid.get_note(pos).is_some();
-                    if has_content {
-                        selected_positions.push(pos);
-                    }
-                }
-            }
-
-            // Second pass: update selection (mutable borrow)
-            self.selection.clear();
-            for pos in selected_positions {
-                self.selection.insert(pos);
-            }
+                        || grid.get_note(pos).is_some()
+                })
+                .collect();
         }
     }
 
@@ -809,14 +801,10 @@ impl Editor {
 
         // Draw selection rectangle while selecting
         if let Some((start, end)) = self.selecting_rect {
-            let min_x = start.x.min(end.x);
-            let max_x = start.x.max(end.x);
-            let min_y = start.y.min(end.y);
-            let max_y = start.y.max(end.y);
-
-            let (sx, sy) = self.grid_to_screen(Position { x: min_x, y: min_y }, 0);
-            let width = (max_x - min_x + 1) as f32 * cell_size;
-            let height = (max_y - min_y + 1) as f32 * cell_size;
+            let (min, max) = rect_corners(start, end);
+            let (sx, sy) = self.grid_to_screen(min, 0);
+            let width = (max.x - min.x + 1) as f32 * cell_size;
+            let height = (max.y - min.y + 1) as f32 * cell_size;
 
             draw_rectangle(sx, sy, width, height, Color::from_rgba(100, 150, 255, 40));
             draw_rectangle_lines(
@@ -885,42 +873,8 @@ impl Editor {
     }
 
     fn draw_cell_preview(&self, cell: Cell, x: f32, y: f32, cell_size: f32, alpha: u8) {
-        if let Cell::Trigger(n) = cell {
-            let text = &n.to_string();
-            let font_size = cell_size * 0.8;
-            let dims = measure_text(text, None, font_size as u16, 1.0);
-            let tx = x + (cell_size - dims.width) / 2.0;
-            let ty = y + (cell_size + dims.height) / 2.0;
-            draw_text(
-                text,
-                tx,
-                ty,
-                font_size,
-                Color::from_rgba(255, 255, 255, alpha),
-            );
-        } else if let Some(texture) = match cell {
-            Cell::Player(Player::Player1, dir) => Some(self.sprites.player(dir)),
-            Cell::Player(Player::Player2, dir) => Some(self.sprites.player2(dir)),
-            Cell::Rat(dir) => Some(self.sprites.rat(dir)),
-            Cell::CyborgRat(dir) => Some(self.sprites.cyborg_rat(dir)),
-            Cell::Wall => Some(self.sprites.wall()),
-            Cell::Plank => Some(self.sprites.planks()),
-            Cell::Spiderweb => Some(self.sprites.spiderweb()),
-            Cell::BlackHole => Some(self.sprites.blackhole()),
-            Cell::Explosive => Some(self.sprites.explosive()),
-            Cell::Empty | Cell::Trigger(_) => None,
-        } {
-            draw_texture_ex(
-                texture,
-                x,
-                y,
-                Color::from_rgba(255, 255, 255, alpha),
-                DrawTextureParams {
-                    dest_size: Some(vec2(cell_size, cell_size)),
-                    ..Default::default()
-                },
-            );
-        }
+        let tint = Color::from_rgba(255, 255, 255, alpha);
+        draw_cell(cell, x, y, cell_size, &self.sprites, tint);
     }
 
     fn render_grid(&self, grid: &Grid, pane: usize, pane_width: f32, cell_size: f32, label: &str) {
@@ -975,7 +929,7 @@ impl Editor {
         // Draw notes
         for (pos, _) in grid.notes() {
             draw_texture_ex(
-                self.sprites.note(),
+                &self.sprites.note,
                 offset_x + pos.x as f32 * cell_size,
                 offset_y + pos.y as f32 * cell_size,
                 WHITE,
@@ -990,38 +944,7 @@ impl Editor {
         for (pos, cell) in grid.entries() {
             let px = offset_x + pos.x as f32 * cell_size;
             let py = offset_y + pos.y as f32 * cell_size;
-
-            if let Cell::Trigger(n) = cell {
-                let text = &n.to_string();
-                let font_size = cell_size * 0.8;
-                let dims = measure_text(text, None, font_size as u16, 1.0);
-                let tx = px + (cell_size - dims.width) / 2.0;
-                let ty = py + (cell_size + dims.height) / 2.0;
-                draw_text(text, tx, ty, font_size, WHITE);
-            } else {
-                let texture = match cell {
-                    Cell::Player(Player::Player1, dir) => self.sprites.player(dir),
-                    Cell::Player(Player::Player2, dir) => self.sprites.player2(dir),
-                    Cell::Rat(dir) => self.sprites.rat(dir),
-                    Cell::CyborgRat(dir) => self.sprites.cyborg_rat(dir),
-                    Cell::Wall => self.sprites.wall(),
-                    Cell::Plank => self.sprites.planks(),
-                    Cell::Spiderweb => self.sprites.spiderweb(),
-                    Cell::BlackHole => self.sprites.blackhole(),
-                    Cell::Explosive => self.sprites.explosive(),
-                    Cell::Empty | Cell::Trigger(_) => continue,
-                };
-                draw_texture_ex(
-                    texture,
-                    px,
-                    py,
-                    WHITE,
-                    DrawTextureParams {
-                        dest_size: Some(vec2(cell_size, cell_size)),
-                        ..Default::default()
-                    },
-                );
-            }
+            draw_cell(cell, px, py, cell_size, &self.sprites, WHITE);
         }
 
         // Show game state on right pane (level mode only - scenario mode shows in toolbar)
@@ -1126,22 +1049,18 @@ impl Editor {
 
         // Check size buttons
         let [w_minus, w_plus, h_minus, h_plus] = self.size_button_rects();
+        let pos = vec2(mx, my);
 
-        if w_minus.contains(mx, my) {
-            self.resize(-1, 0);
-            return true;
-        }
-        if w_plus.contains(mx, my) {
-            self.resize(1, 0);
-            return true;
-        }
-        if h_minus.contains(mx, my) {
-            self.resize(0, -1);
-            return true;
-        }
-        if h_plus.contains(mx, my) {
-            self.resize(0, 1);
-            return true;
+        for (rect, dw, dh) in [
+            (w_minus, -1, 0),
+            (w_plus, 1, 0),
+            (h_minus, 0, -1),
+            (h_plus, 0, 1),
+        ] {
+            if rect.contains(pos) {
+                self.resize(dw, dh);
+                return true;
+            }
         }
 
         false
@@ -1169,7 +1088,8 @@ impl Editor {
 
             draw_rectangle(bx, by, bw, bh, bg_color);
 
-            let label = format!("[{}] {}", tool.key(), tool.name());
+            let key = tool.key().map(String::from).unwrap_or_default();
+            let label = format!("[{}] {}", key, tool.name());
             let dims = measure_text(&label, None, 22, 1.0);
             draw_text(
                 &label,
@@ -1327,6 +1247,7 @@ impl Editor {
         ((minus_x, y), (plus_x, y))
     }
 
+    /// Rects for [w_minus, w_plus, h_minus, h_plus] size buttons.
     fn size_button_rects(&self) -> [Rect; 4] {
         let btn_size = 24.0;
         let minus_x = PADDING;
@@ -1338,30 +1259,10 @@ impl Editor {
         let height_y = width_y + 30.0;
 
         [
-            Rect {
-                x: minus_x,
-                y: width_y,
-                w: btn_size,
-                h: btn_size,
-            }, // w_minus
-            Rect {
-                x: plus_x,
-                y: width_y,
-                w: btn_size,
-                h: btn_size,
-            }, // w_plus
-            Rect {
-                x: minus_x,
-                y: height_y,
-                w: btn_size,
-                h: btn_size,
-            }, // h_minus
-            Rect {
-                x: plus_x,
-                y: height_y,
-                w: btn_size,
-                h: btn_size,
-            }, // h_plus
+            Rect::new(minus_x, width_y, btn_size, btn_size),
+            Rect::new(plus_x, width_y, btn_size, btn_size),
+            Rect::new(minus_x, height_y, btn_size, btn_size),
+            Rect::new(plus_x, height_y, btn_size, btn_size),
         ]
     }
 
@@ -1649,32 +1550,17 @@ impl App {
 
         // Tool selection via character input
         if let Some(c) = get_char_pressed() {
-            match c.to_ascii_lowercase() {
-                'm' => self.editor.tool = Tool::Move,
-                '#' => self.editor.tool = Tool::Wall,
-                '1' => self.editor.tool = Tool::Player,
-                '2' => self.editor.tool = Tool::Player2,
-                'c' => self.editor.tool = Tool::CyborgRat,
-                'g' => self.editor.tool = Tool::Portal,
-                'n' => {
-                    if self.editor.replay_actions.is_some() {
-                        self.editor.step_replay_forward();
-                    } else {
-                        self.editor.tool = Tool::Note;
-                    }
+            let c = c.to_ascii_lowercase();
+            if c == 'q' {
+                // Q-pick: sample the cell under the cursor
+                let (mx, my) = mouse_position();
+                if let Some((pos, pane)) = self.editor.screen_to_grid(mx, my) {
+                    self.editor.q_pick(pos, pane);
                 }
-                '=' => self.editor.tool = Tool::Plank,
-                'o' => self.editor.tool = Tool::BlackHole,
-                'x' => self.editor.tool = Tool::Explosive,
-                't' => self.editor.tool = Tool::Trigger,
-                'q' => {
-                    // Q-pick: sample the cell under the cursor
-                    let (mx, my) = mouse_position();
-                    if let Some((pos, pane)) = self.editor.screen_to_grid(mx, my) {
-                        self.editor.q_pick(pos, pane);
-                    }
-                }
-                _ => {}
+            } else if c == 'n' && self.editor.replay_actions.is_some() {
+                self.editor.step_replay_forward();
+            } else if let Some(tool) = Tool::all().into_iter().find(|t| t.key() == Some(c)) {
+                self.editor.tool = tool;
             }
         }
 
@@ -1703,68 +1589,26 @@ impl App {
                     let synced_p1 = is_key_down(KeyCode::RightShift);
                     let synced_p2 = is_key_down(KeyCode::LeftShift);
 
-                    // P1: arrow keys + space
-                    if is_key_pressed(KeyCode::Up) {
-                        self.editor.register_action(
-                            Player::Player1,
-                            Action::Move(Dir4::North),
-                            synced_p1,
-                        );
-                    }
-                    if is_key_pressed(KeyCode::Down) {
-                        self.editor.register_action(
-                            Player::Player1,
-                            Action::Move(Dir4::South),
-                            synced_p1,
-                        );
-                    }
-                    if is_key_pressed(KeyCode::Left) {
-                        self.editor.register_action(
-                            Player::Player1,
-                            Action::Move(Dir4::West),
-                            synced_p1,
-                        );
-                    }
-                    if is_key_pressed(KeyCode::Right) {
-                        self.editor.register_action(
-                            Player::Player1,
-                            Action::Move(Dir4::East),
-                            synced_p1,
-                        );
+                    // P1: arrow keys + space; P2: WASD + tab
+                    for dir in Dir4::all() {
+                        if is_key_pressed(arrow_key(dir)) {
+                            self.editor.register_action(
+                                Player::Player1,
+                                Action::Move(dir),
+                                synced_p1,
+                            );
+                        }
+                        if is_key_pressed(wasd_key(dir)) {
+                            self.editor.register_action(
+                                Player::Player2,
+                                Action::Move(dir),
+                                synced_p2,
+                            );
+                        }
                     }
                     if is_key_pressed(KeyCode::Space) {
                         self.editor
                             .register_action(Player::Player1, Action::Stall, synced_p1);
-                    }
-
-                    // P2: WASD + tab
-                    if is_key_pressed(KeyCode::W) {
-                        self.editor.register_action(
-                            Player::Player2,
-                            Action::Move(Dir4::North),
-                            synced_p2,
-                        );
-                    }
-                    if is_key_pressed(KeyCode::S) {
-                        self.editor.register_action(
-                            Player::Player2,
-                            Action::Move(Dir4::South),
-                            synced_p2,
-                        );
-                    }
-                    if is_key_pressed(KeyCode::A) {
-                        self.editor.register_action(
-                            Player::Player2,
-                            Action::Move(Dir4::West),
-                            synced_p2,
-                        );
-                    }
-                    if is_key_pressed(KeyCode::D) {
-                        self.editor.register_action(
-                            Player::Player2,
-                            Action::Move(Dir4::East),
-                            synced_p2,
-                        );
                     }
                     if is_key_pressed(KeyCode::Tab) {
                         self.editor

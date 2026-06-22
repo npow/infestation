@@ -79,7 +79,7 @@
     {
       "x": 7,
       "y": 20,
-      "level": "tinderbox_v2"
+      "level": "tinderbox"
     },
     {
       "x": 8,
@@ -90,62 +90,6 @@
       "x": 6,
       "y": 21,
       "level": "no_retreat"
-    },
-    {
-      "x": 3,
-      "y": 22,
-      "level": "guidance"
-    },
-    {
-      "x": 4,
-      "y": 22,
-      "level": "blackhole_v2"
-    },
-    {
-      "x": 4,
-      "y": 24,
-      "level": "planks"
-    },
-    {
-      "x": 4,
-      "y": 26,
-      "level": "webs"
-    },
-    {
-      "x": 4,
-      "y": 28,
-      "level": "more_rats"
-    },
-    {
-      "x": 5,
-      "y": 28,
-      "level": "trapped_rat"
-    },
-    {
-      "x": 6,
-      "y": 28,
-      "level": "trapped_rat2_v2"
-    },
-    {
-      "x": 4,
-      "y": 30,
-      "level": "rats"
-    }
-  ],
-  "notes": [
-    {
-      "x": 7,
-      "y": 28,
-      "text": "I'm a rat-fighting master!"
-    },
-    {
-      "x": 4,
-      "y": 31,
-      "text": {
-        "controller": "Use the D-pad or left joystick to move",
-        "keyboard": "Use the arrow keys to move",
-        "mobile": "Swipe up, down, left, or right to move"
-      }
     }
   ]
 }

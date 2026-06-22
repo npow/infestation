@@ -1,7 +1,6 @@
 use std::borrow::BorrowMut;
 
 use crate::direction::Dir8;
-use crate::enum_all::EnumAll;
 use crate::grid::{Cell, Grid};
 
 use super::{Exploding, MoveHandler};
@@ -28,7 +27,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             let center = explosion.pos;
 
             // Check all 8 neighbors + center for chain reactions and casualties
-            for dir in Dir8::iter_all() {
+            for dir in Dir8::all() {
                 let pos = center + dir.delta();
                 let cell = grid.at(pos);
 

@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use enum_map::Enum;
-use serde::{Deserialize, Serialize};
 
 use crate::direction::{Dir4, Dir8};
 use crate::position::Position;
@@ -9,11 +8,8 @@ use crate::position::Position;
 mod parse;
 pub(crate) use parse::{LevelMetadata, NoteText};
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Enum, Serialize, Deserialize,
-)]
-#[serde(rename_all = "lowercase")]
-pub enum Player {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Enum)]
+pub(crate) enum Player {
     Player1,
     Player2,
 }
@@ -69,7 +65,62 @@ impl CellKind {
     }
 }
 
+/// CSV symbols for players: (symbol, player, facing).
+const PLAYER_SYMBOLS: [(&str, Player, Dir4); 8] = [
+    ("▲", Player::Player1, Dir4::North),
+    ("▼", Player::Player1, Dir4::South),
+    ("►", Player::Player1, Dir4::East),
+    ("◄", Player::Player1, Dir4::West),
+    ("△", Player::Player2, Dir4::North),
+    ("▽", Player::Player2, Dir4::South),
+    ("▷", Player::Player2, Dir4::East),
+    ("◁", Player::Player2, Dir4::West),
+];
+
 impl Cell {
+    /// The CSV symbol for this cell. Rat and cyborg rat directions are not
+    /// encoded; they're recomputed toward a player on load.
+    pub(crate) fn symbol(self) -> String {
+        match self {
+            Cell::Player(player, dir) => PLAYER_SYMBOLS
+                .iter()
+                .find(|&&(_, p, d)| p == player && d == dir)
+                .unwrap()
+                .0
+                .to_string(),
+            Cell::Wall => "#".to_string(),
+            Cell::Rat(_) => "R".to_string(),
+            Cell::CyborgRat(_) => "C".to_string(),
+            Cell::Plank => "=".to_string(),
+            Cell::Spiderweb => "w".to_string(),
+            Cell::BlackHole => "O".to_string(),
+            Cell::Explosive => "X".to_string(),
+            Cell::Trigger(n) => n.to_string(),
+            Cell::Empty => ".".to_string(),
+        }
+    }
+
+    /// Parse a CSV symbol. Rats and cyborg rats get a placeholder direction
+    /// that the loader points toward a player afterwards.
+    pub(crate) fn from_symbol(s: &str) -> Cell {
+        if let Some(&(_, player, dir)) = PLAYER_SYMBOLS.iter().find(|&&(sym, ..)| sym == s) {
+            return Cell::Player(player, dir);
+        }
+        match s {
+            "#" => Cell::Wall,
+            "R" => Cell::Rat(Dir8::North),
+            "C" => Cell::CyborgRat(Dir8::North),
+            "=" => Cell::Plank,
+            "w" => Cell::Spiderweb,
+            "O" => Cell::BlackHole,
+            "X" => Cell::Explosive,
+            _ => match s.parse() {
+                Ok(n @ 1..=9) => Cell::Trigger(n),
+                _ => Cell::Empty,
+            },
+        }
+    }
+
     pub(crate) fn blocks_player(&self) -> bool {
         matches!(self, Cell::Wall | Cell::Plank)
     }
@@ -141,34 +192,13 @@ impl Grid {
     }
 
     pub fn to_csv(&self) -> String {
-        let mut lines = Vec::new();
-        for y in 0..self.height {
-            let mut row = Vec::new();
-            for x in 0..self.width {
-                let cell_str = match self.cells[y][x] {
-                    Cell::Player(Player::Player1, Dir4::North) => "▲".to_string(),
-                    Cell::Player(Player::Player1, Dir4::South) => "▼".to_string(),
-                    Cell::Player(Player::Player1, Dir4::East) => "►".to_string(),
-                    Cell::Player(Player::Player1, Dir4::West) => "◄".to_string(),
-                    Cell::Player(Player::Player2, Dir4::North) => "△".to_string(),
-                    Cell::Player(Player::Player2, Dir4::South) => "▽".to_string(),
-                    Cell::Player(Player::Player2, Dir4::East) => "▷".to_string(),
-                    Cell::Player(Player::Player2, Dir4::West) => "◁".to_string(),
-                    Cell::Wall => "#".to_string(),
-                    Cell::Rat(_) => "R".to_string(),
-                    Cell::CyborgRat(_) => "C".to_string(),
-                    Cell::Plank => "=".to_string(),
-                    Cell::Spiderweb => "w".to_string(),
-                    Cell::BlackHole => "O".to_string(),
-                    Cell::Explosive => "X".to_string(),
-                    Cell::Trigger(n) => n.to_string(),
-                    Cell::Empty => ".".to_string(),
-                };
-                row.push(cell_str);
-            }
-            lines.push(row.join(",") + "\n");
-        }
-        lines.join("")
+        self.cells
+            .iter()
+            .map(|row| {
+                let symbols: Vec<String> = row.iter().map(|cell| cell.symbol()).collect();
+                symbols.join(",") + "\n"
+            })
+            .collect()
     }
 
     pub fn width(&self) -> usize {

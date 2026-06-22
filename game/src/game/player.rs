@@ -48,6 +48,8 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             let moving = [dests[0] != players[0].pos, dests[1] != players[1].pos];
 
             if moving[0] && moving[1] && dests[0] == dests[1] {
+                self.contested_cell = Some(dests[0]);
+                *self.grid.borrow_mut().at_mut(dests[0]) = Cell::Empty;
                 // Both target same cell → both blocked
                 dests[0] = players[0].pos;
                 dests[1] = players[1].pos;
@@ -64,7 +66,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 for (i, j) in [(0usize, 1usize), (1, 0)] {
                     if moving[i] && dests[i] == players[j].pos && dests[j] == players[j].pos {
                         // Player i moves into player j's cell while j stays
-                        if facing_dirs[j] == move_dirs[i].unwrap().opposite() {
+                        if facing_dirs[j].is_opposite(move_dirs[i].unwrap()) {
                             // j faces i → i blocked
                             dests[i] = players[i].pos;
                         }
