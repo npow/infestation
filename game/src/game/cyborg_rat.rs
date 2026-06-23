@@ -1,7 +1,6 @@
 use std::borrow::BorrowMut;
 use std::cmp::{Ordering, Reverse};
-use std::collections::hash_map::Entry;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::BinaryHeap;
 
 use crate::direction::Dir8;
 use crate::game::rat::RatMoveKey;
@@ -11,12 +10,59 @@ use crate::position::Position;
 use super::cyborg_distance::{CyborgDistance, CyborgEntry};
 use super::{MoveHandler, Moving, PlayerInfo};
 
+struct CyborgDistanceMap {
+    entries: Vec<Option<CyborgEntry>>,
+    width: usize,
+    height: usize,
+}
+
+impl CyborgDistanceMap {
+    fn new(width: usize, height: usize) -> Self {
+        Self {
+            entries: vec![None; width * height],
+            width,
+            height,
+        }
+    }
+
+    fn index(&self, pos: Position) -> Option<usize> {
+        if pos.x < 0 || pos.y < 0 {
+            return None;
+        }
+        let (x, y) = (pos.x as usize, pos.y as usize);
+        (x < self.width && y < self.height).then_some(y * self.width + x)
+    }
+
+    fn contains(&self, pos: Position) -> bool {
+        self.index(pos)
+            .is_some_and(|index| self.entries[index].is_some())
+    }
+
+    fn get(&self, pos: Position) -> Option<&CyborgEntry> {
+        self.index(pos)
+            .and_then(|index| self.entries[index].as_ref())
+    }
+
+    fn insert_if_empty(&mut self, pos: Position, entry: CyborgEntry) -> bool {
+        let Some(index) = self.index(pos) else {
+            return false;
+        };
+        if self.entries[index].is_some() {
+            return false;
+        }
+        self.entries[index] = Some(entry);
+        true
+    }
+}
+
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
     /// Compute shortest path distances from all players using multi-source Dijkstra.
     /// Returns each position's distance to the nearest player and which player that is.
     /// Ties broken by: prefer moved players, then P1.
-    fn compute_cyborg_distances(&self, players: &[PlayerInfo]) -> HashMap<Position, CyborgEntry> {
-        let mut distances: HashMap<Position, CyborgEntry> = HashMap::new();
+    fn compute_cyborg_distances(&self, players: &[PlayerInfo]) -> CyborgDistanceMap {
+        let grid = self.grid.borrow();
+        let bounds = grid.bounds();
+        let mut distances = CyborgDistanceMap::new(bounds.0, bounds.1);
         let mut heap: BinaryHeap<Reverse<(CyborgEntry, Position)>> = BinaryHeap::new();
 
         for p in players {
@@ -30,9 +76,6 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             )));
         }
 
-        let grid = self.grid.borrow();
-        let bounds = grid.bounds();
-
         while let Some(Reverse((
             entry @ CyborgEntry {
                 dist,
@@ -42,12 +85,9 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             pos,
         ))) = heap.pop()
         {
-            match distances.entry(pos) {
-                Entry::Vacant(vacant_entry) => {
-                    vacant_entry.insert(entry);
-                }
-                Entry::Occupied(_) => continue,
-            };
+            if !distances.insert_if_empty(pos, entry) {
+                continue;
+            }
 
             // Check all 8 neighbors
             for dir in Dir8::all() {
@@ -58,7 +98,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 }
 
                 // Skip if already finalized
-                if distances.contains_key(&neighbor) {
+                if distances.contains(neighbor) {
                     continue;
                 }
 
@@ -93,20 +133,23 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
     }
 
     pub(crate) fn move_cyborg_rats(&mut self, players: &[PlayerInfo]) {
-        // Single multi-source Dijkstra from all players
-        let distances = self.compute_cyborg_distances(players);
-
         let cyborg_positions: Vec<_> = self
             .grid
             .borrow()
             .find_entities(|cell| matches!(cell, Cell::CyborgRat(_)))
             .map(|(pos, _)| pos)
             .collect();
+        if cyborg_positions.is_empty() {
+            return;
+        }
+
+        // Single multi-source Dijkstra from all players
+        let distances = self.compute_cyborg_distances(players);
 
         // Partition into reachable and unreachable
         let (reachable, unreachable): (Vec<_>, Vec<_>) = cyborg_positions
             .into_iter()
-            .partition(|pos| distances.contains_key(pos));
+            .partition(|pos| distances.contains(*pos));
 
         // Unreachable cyborg rats just turn to face the nearest player (by Euclidean)
         for cyborg_pos in unreachable {
@@ -117,7 +160,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         let mut movable_cyborgs: Vec<_> = reachable
             .into_iter()
             .map(|pos| {
-                let &entry = distances.get(&pos).unwrap();
+                let &entry = distances.get(pos).unwrap();
                 (entry, pos)
             })
             .collect();
@@ -143,7 +186,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                     dist,
                     still,
                     player,
-                }) = distances.get(&new_pos)
+                }) = distances.get(new_pos)
                 else {
                     continue;
                 };

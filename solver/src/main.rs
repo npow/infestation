@@ -9,9 +9,12 @@
 //! For two players, use "a1|a2 a1|a2 ..." space-separated turns (each turn pipe-separated).
 
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::sync::OnceLock;
 use std::time::Instant;
 
-use infestation::testing::{Action, CellKind, Dir4, Grid, PlayState, grid_from_csv, step_grid};
+use infestation::testing::{
+    Action, CellKind, Dir4, Grid, PlayState, grid_from_csv, step_grid, step_grid_assume_playing,
+};
 use serde_json::{Value, json};
 
 fn ch_to_action(c: char) -> Option<Action> {
@@ -43,6 +46,16 @@ fn arrow(a: Action) -> char {
         Action::Move(Dir4::East) => '→',
         Action::Stall => '.',
     }
+}
+
+fn progress_h_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("PROGRESS_H").is_some())
+}
+
+fn smart_h_enabled() -> bool {
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    *ENABLED.get_or_init(|| std::env::var_os("SMART_H").is_some())
 }
 
 fn count_players(grid: &Grid) -> usize {
@@ -758,88 +771,51 @@ fn adjacent_trigger_count(grid: &Grid, x: usize, y: usize) -> usize {
 /// nearest "actionable" cell (a rat reachable to be killed, or an explosive).
 /// This provides a gradient even in levels where rats only die at the end.
 fn heuristic(grid: &Grid) -> i64 {
-    let rats = count_rats(grid) as i64;
+    let use_progress = progress_h_enabled();
+    let use_smart = smart_h_enabled();
+    let analysis = SearchAnalysis::from_grid(grid, use_smart);
+    let rats = analysis.features.rats as i64;
     if rats == 0 {
         return 0;
     }
-    let dist = player_dist_map(grid);
-    let mut nearest_rat = i32::MAX;
-    let mut nearest_trigger = i32::MAX;
-    for y in 0..grid.height() {
-        for x in 0..grid.width() {
-            let cell = grid.cell_kind_at(x, y);
-            let d = dist[y][x];
-            if d == i32::MAX {
-                continue;
-            }
-            if matches!(cell, CellKind::Rat | CellKind::CyborgRat) {
-                // player can step onto a rat to kill it (players walk through webs)
-                nearest_rat = nearest_rat.min(d);
-            } else if matches!(cell, CellKind::Trigger(_)) {
-                // numbered trigger: stepping on it zaps explosives safely
-                nearest_trigger = nearest_trigger.min(d);
-            }
-            // NOTE: explosives are NOT targets — stepping on one kills the player.
-        }
-    }
-    // count remaining numbered triggers and explosives — consuming/detonating them
-    // is progress in chain-reaction puzzles (clears walls protecting the rats).
-    let mut triggers_left = 0i64;
-    let mut explosives_left = 0i64;
-    let mut webs_left = 0i64;
-    let mut unreachable_rats = 0i64;
-    let mut unreachable_triggers = 0i64;
-    for y in 0..grid.height() {
-        for x in 0..grid.width() {
-            match grid.cell_kind_at(x, y) {
-                CellKind::Rat | CellKind::CyborgRat => {
-                    if dist[y][x] == i32::MAX {
-                        unreachable_rats += 1;
-                    }
-                }
-                CellKind::Trigger(_) => {
-                    triggers_left += 1;
-                    if dist[y][x] == i32::MAX {
-                        unreachable_triggers += 1;
-                    }
-                }
-                CellKind::Explosive => explosives_left += 1,
-                CellKind::Spiderweb => webs_left += 1,
-                _ => {}
-            }
-        }
-    }
-    let secondary = nearest_rat.min(nearest_trigger);
-    let secondary = if secondary == i32::MAX {
-        1000
-    } else {
-        secondary as i64
-    };
-    let dead_end_penalty = if nearest_rat == i32::MAX && nearest_trigger == i32::MAX {
+    let secondary = analysis
+        .nearest_reachable_rat
+        .into_iter()
+        .chain(analysis.nearest_reachable_trigger)
+        .min()
+        .map_or(1000, i64::from);
+    let dead_end_penalty = if analysis.nearest_reachable_rat.is_none()
+        && analysis.nearest_reachable_trigger.is_none()
+    {
         rats * 250_000_000
     } else {
         0
     };
-    // weights chosen so rats dominate, then structural progress, then positioning.
-    let use_progress = std::env::var("PROGRESS_H").is_ok();
-    let smart_penalty = if std::env::var("SMART_H").is_ok() {
-        let trapped_unreachable_rats = trapped_unreachable_rat_count(grid) as i64;
+    let smart_penalty = if use_smart {
+        let unreachable_rats = rats.saturating_sub(analysis.reachable_rats as i64);
+        let trapped_unreachable_rats = analysis.trapped_unreachable_rats as i64;
+        let unreachable_triggers = analysis.unreachable_triggers as i64;
         unreachable_rats * 25_000_000
             + trapped_unreachable_rats * 100_000_000
             + unreachable_triggers * 500_000
     } else {
         0
     };
+    // weights chosen so rats dominate, then structural progress, then positioning.
     if use_progress {
         rats * 1_000_000
             + dead_end_penalty
             + smart_penalty
-            + explosives_left * 300
-            + webs_left * 100
-            + triggers_left * 2_000
+            + analysis.features.explosives as i64 * 300
+            + analysis.features.webs as i64 * 100
+            + analysis.features.triggers as i64 * 2_000
             + secondary
     } else {
-        rats * 1_000_000 + dead_end_penalty + smart_penalty + triggers_left * 2_000 + secondary
+        rats * 1_000_000
+            + dead_end_penalty
+            + smart_penalty
+            + analysis.features.triggers as i64 * 2_000
+            + secondary
     }
 }
 
@@ -985,6 +961,16 @@ fn step(grid: &Grid, actions: &[Action]) -> (Grid, PlayState) {
     step_grid(grid, actions)
 }
 
+/// Transition for live search frontier states.
+fn step_search(
+    grid: &Grid,
+    actions: &[Action],
+    initial_player_count: usize,
+    initial_had_rats: bool,
+) -> (Grid, PlayState) {
+    step_grid_assume_playing(grid, actions, initial_player_count, initial_had_rats)
+}
+
 /// Enumerate all action-tuples for the given number of players.
 fn all_action_tuples(nplayers: usize) -> Vec<Vec<Action>> {
     let single = [
@@ -1101,21 +1087,32 @@ impl TrapConstraints {
             return true;
         }
         let features = Features::from_grid(grid);
-        self.min_reachable_rats
-            .is_none_or(|minimum| reachable_rat_count(grid) >= minimum)
-            && (!self.all_rats_reachable || all_rats_reachable(grid))
+        let need_analysis = self.min_reachable_rats.is_some()
+            || self.all_rats_reachable
+            || self.max_unreachable_rats.is_some()
+            || self.max_trapped_rats.is_some()
+            || self.min_reachable_cells.is_some()
+            || self.min_reachable_triggers.is_some();
+        let analysis =
+            need_analysis.then(|| SearchAnalysis::from_grid(grid, self.max_trapped_rats.is_some()));
+        self.min_reachable_rats.is_none_or(|minimum| {
+            analysis.is_some_and(|analysis| analysis.reachable_rats >= minimum)
+        }) && (!self.all_rats_reachable
+            || analysis.is_some_and(|analysis| analysis.reachable_rats == features.rats))
             && self.max_unreachable_rats.is_none_or(|maximum| {
-                features.rats.saturating_sub(reachable_rat_count(grid)) <= maximum
+                analysis.is_some_and(|analysis| {
+                    features.rats.saturating_sub(analysis.reachable_rats) <= maximum
+                })
             })
-            && self
-                .max_trapped_rats
-                .is_none_or(|maximum| trapped_unreachable_rat_count(grid) <= maximum)
-            && self
-                .min_reachable_cells
-                .is_none_or(|minimum| player_reachable_cell_count(grid) >= minimum)
-            && self
-                .min_reachable_triggers
-                .is_none_or(|minimum| reachable_trigger_count(grid) >= minimum)
+            && self.max_trapped_rats.is_none_or(|maximum| {
+                analysis.is_some_and(|analysis| analysis.trapped_unreachable_rats <= maximum)
+            })
+            && self.min_reachable_cells.is_none_or(|minimum| {
+                analysis.is_some_and(|analysis| analysis.player_reachable_cells >= minimum)
+            })
+            && self.min_reachable_triggers.is_none_or(|minimum| {
+                analysis.is_some_and(|analysis| analysis.reachable_triggers >= minimum)
+            })
             && self
                 .require_reachable_trigger
                 .is_none_or(|number| nearest_reachable_trigger_distance(grid, number).is_some())
@@ -3096,16 +3093,21 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
 
     match goal {
         LookupGoal::Win => {
-            let features = Features::from_grid(current);
+            let use_smart_progress = smart_h_enabled() || progress_h_enabled();
+            let analysis = use_smart_progress.then(|| SearchAnalysis::from_grid(current, true));
+            let features = analysis.as_ref().map_or_else(
+                || Features::from_grid(current),
+                |analysis| analysis.features,
+            );
             let rats = features.rats as i64;
             let mut score = rats * 1_000_000
                 + features.triggers as i64 * 1_000
                 + features.explosives as i64 * 100;
-            if std::env::var("SMART_H").is_ok() || std::env::var("PROGRESS_H").is_ok() {
-                let reachable_rats = reachable_rat_count(current) as i64;
+            if let Some(analysis) = analysis {
+                let reachable_rats = analysis.reachable_rats as i64;
                 let unreachable_rats = rats.saturating_sub(reachable_rats);
-                let reachable_triggers = reachable_trigger_count(current) as i64;
-                let trapped = trapped_unreachable_rat_count(current) as i64;
+                let reachable_triggers = analysis.reachable_triggers as i64;
+                let trapped = analysis.trapped_unreachable_rats as i64;
                 score += unreachable_rats * 25_000_000 + trapped * 100_000_000;
                 if rats > 0 && reachable_rats == 0 && reachable_triggers == 0 {
                     score += rats * 250_000_000;
@@ -3508,20 +3510,22 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
 }
 
 fn lookup_dead_state(grid: &Grid) -> bool {
-    let features = Features::from_grid(grid);
+    let analysis = SearchAnalysis::from_grid(grid, false);
+    let features = analysis.features;
     features.rats > 0
         && features.explosives == 0
-        && reachable_rat_count(grid) == 0
-        && reachable_trigger_count(grid) == 0
+        && analysis.reachable_rats == 0
+        && analysis.reachable_triggers == 0
 }
 
 fn lookup_stranded_state(grid: &Grid) -> bool {
-    let features = Features::from_grid(grid);
+    let analysis = SearchAnalysis::from_grid(grid, true);
+    let features = analysis.features;
     features.rats > 0
         && features.explosives == 0
         && features.triggers == 0
         && features.planks == 0
-        && trapped_unreachable_rat_count(grid) > 0
+        && analysis.trapped_unreachable_rats > 0
 }
 
 struct PQItem {
@@ -4212,6 +4216,7 @@ fn solve_novelty(
     max_novelty: u8,
 ) -> Option<Vec<Vec<Action>>> {
     let nplayers = count_players(grid);
+    let initial_had_rats = count_rats(grid) > 0;
     let tuples = all_action_tuples(nplayers);
     let start = Instant::now();
     let base = base_cell_kinds(grid);
@@ -4268,9 +4273,9 @@ fn solve_novelty(
         if cur_depth as usize >= max_depth {
             continue;
         }
-        let cur_grid = nodes[idx].grid.clone();
         for actions in &tuples {
-            let (next_grid, play_state) = step(&cur_grid, actions);
+            let (next_grid, play_state) =
+                step_search(&nodes[idx].grid, actions, nplayers, initial_had_rats);
             if play_state == PlayState::GameOver {
                 continue;
             }
@@ -4338,6 +4343,7 @@ fn solve_lookup(
     stagnation_limit_secs: f64,
 ) -> Option<(Vec<Vec<Action>>, PlayState)> {
     let nplayers = count_players(grid);
+    let initial_had_rats = count_rats(grid) > 0;
     let tuples = all_action_tuples(nplayers);
     let start = Instant::now();
     let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
@@ -4430,9 +4436,9 @@ fn solve_lookup(
             if cur_depth as usize >= max_depth {
                 continue;
             }
-            let cur_grid = nodes[idx].grid.clone();
             for actions in &tuples {
-                let (next_grid, play_state) = step(&cur_grid, actions);
+                let (next_grid, play_state) =
+                    step_search(&nodes[idx].grid, actions, nplayers, initial_had_rats);
                 if play_state == PlayState::GameOver {
                     continue;
                 }
@@ -4441,24 +4447,29 @@ fn solve_lookup(
                 {
                     continue;
                 }
+                let hash = state_key(&next_grid);
+                let goal_reached = play_state == PlayState::Won
+                    || lookup_goal_reached(goal, grid, &next_grid, play_state);
+                if !goal_reached && visited.contains_key(&hash) {
+                    continue;
+                }
                 if prune_dead
                     && play_state == PlayState::Playing
-                    && !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                    && !goal_reached
                     && lookup_dead_state(&next_grid)
                 {
                     continue;
                 }
                 if prune_stranded
                     && play_state == PlayState::Playing
-                    && !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                    && !goal_reached
                     && lookup_stranded_state(&next_grid)
                 {
                     continue;
                 }
-                let hash = state_key(&next_grid);
-                let accepted_goal = play_state == PlayState::Won
-                    || (lookup_goal_reached(goal, grid, &next_grid, play_state)
-                        && trap_constraints.accepts(&next_grid, play_state));
+                let accepted_goal = goal_reached
+                    && (play_state == PlayState::Won
+                        || trap_constraints.accepts(&next_grid, play_state));
                 if !accepted_goal && visited.contains_key(&hash) {
                     continue;
                 }
@@ -4540,9 +4551,9 @@ fn solve_lookup(
         if cur_depth as i64 > item.g || cur_depth as usize >= max_depth {
             continue;
         }
-        let cur_grid = nodes[idx].grid.clone();
         for actions in &tuples {
-            let (next_grid, play_state) = step(&cur_grid, actions);
+            let (next_grid, play_state) =
+                step_search(&nodes[idx].grid, actions, nplayers, initial_had_rats);
             if play_state == PlayState::GameOver {
                 continue;
             }
@@ -4551,24 +4562,26 @@ fn solve_lookup(
             {
                 continue;
             }
+            let next_depth = cur_depth + 1;
+            let hash = state_key(&next_grid);
+            if let Some(&previous_depth) = visited.get(&hash)
+                && previous_depth <= next_depth
+            {
+                continue;
+            }
+            let goal_reached = play_state == PlayState::Won
+                || lookup_goal_reached(goal, grid, &next_grid, play_state);
             if prune_dead
                 && play_state == PlayState::Playing
-                && !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                && !goal_reached
                 && lookup_dead_state(&next_grid)
             {
                 continue;
             }
             if prune_stranded
                 && play_state == PlayState::Playing
-                && !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                && !goal_reached
                 && lookup_stranded_state(&next_grid)
-            {
-                continue;
-            }
-            let next_depth = cur_depth + 1;
-            let hash = state_key(&next_grid);
-            if let Some(&previous_depth) = visited.get(&hash)
-                && previous_depth <= next_depth
             {
                 continue;
             }
@@ -4580,9 +4593,9 @@ fn solve_lookup(
                 action: actions.clone(),
                 depth: next_depth,
             });
-            if play_state == PlayState::Won
-                || (lookup_goal_reached(goal, grid, &next_grid, play_state)
-                    && trap_constraints.accepts(&next_grid, play_state))
+            if goal_reached
+                && (play_state == PlayState::Won
+                    || trap_constraints.accepts(&next_grid, play_state))
             {
                 return Some((reconstruct(&nodes, node_idx), play_state));
             }
@@ -4611,11 +4624,12 @@ fn solve_lookup(
 }
 
 fn lookup_branch_score(grid: &Grid, path_len: usize) -> i64 {
-    let features = Features::from_grid(grid);
-    let reachable_rats = reachable_rat_count(grid);
+    let analysis = SearchAnalysis::from_grid(grid, true);
+    let features = analysis.features;
+    let reachable_rats = analysis.reachable_rats;
     let unreachable_rats = features.rats.saturating_sub(reachable_rats);
-    let reachable_triggers = reachable_trigger_count(grid);
-    let trapped_unreachable_rats = trapped_unreachable_rat_count(grid);
+    let reachable_triggers = analysis.reachable_triggers;
+    let trapped_unreachable_rats = analysis.trapped_unreachable_rats;
     let stranded_remote_penalty = if unreachable_rats > 0 && reachable_triggers == 0 {
         unreachable_rats as i64 * 100_000_000_000
     } else {
@@ -4635,11 +4649,12 @@ fn lookup_branch_score(grid: &Grid, path_len: usize) -> i64 {
 }
 
 fn fess_branch_score(grid: &Grid, path_len: usize) -> i64 {
-    let features = Features::from_grid(grid);
-    let reachable_rats = reachable_rat_count(grid);
+    let analysis = SearchAnalysis::from_grid(grid, true);
+    let features = analysis.features;
+    let reachable_rats = analysis.reachable_rats;
     let unreachable_rats = features.rats.saturating_sub(reachable_rats);
-    let trapped_unreachable_rats = trapped_unreachable_rat_count(grid);
-    let reachable_triggers = reachable_trigger_count(grid);
+    let trapped_unreachable_rats = analysis.trapped_unreachable_rats;
+    let reachable_triggers = analysis.reachable_triggers;
     let dead_cleanup_penalty = if features.rats > 0 && reachable_rats == 0 {
         2_000_000_000_000
     } else {
@@ -4674,7 +4689,7 @@ fn fess_branch_score(grid: &Grid, path_len: usize) -> i64 {
         - reachable_triggers as i64 * 3_000_000
         - features.explosives as i64 * 100_000
         - features.triggers as i64 * 50_000
-        - player_reachable_cell_count(grid) as i64 * 1_000
+        - analysis.player_reachable_cells as i64 * 1_000
 }
 
 fn rat_can_step_on(cell: CellKind) -> bool {
@@ -4799,6 +4814,7 @@ fn solve_lookup_goal_branches(
     canonical: bool,
 ) -> Vec<Branch> {
     let nplayers = count_players(grid);
+    let initial_had_rats = count_rats(grid) > 0;
     let tuples = all_action_tuples(nplayers);
     let start = Instant::now();
     let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
@@ -4846,26 +4862,31 @@ fn solve_lookup_goal_branches(
             .take()
             .expect("branch search node should have grid before expansion");
         for actions in &tuples {
-            let (next_grid, play_state) = step(&cur_grid, actions);
+            let (next_grid, play_state) =
+                step_search(&cur_grid, actions, nplayers, initial_had_rats);
             if play_state == PlayState::GameOver {
+                continue;
+            }
+            let goal_reached = play_state == PlayState::Won
+                || lookup_goal_reached(goal, grid, &next_grid, play_state);
+            let hash = state_key(&next_grid);
+            if !goal_reached && visited.contains(&hash) {
                 continue;
             }
             if prune_dead
                 && play_state == PlayState::Playing
-                && !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                && !goal_reached
                 && lookup_dead_state(&next_grid)
             {
                 continue;
             }
             if prune_stranded
                 && play_state == PlayState::Playing
-                && !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                && !goal_reached
                 && lookup_stranded_state(&next_grid)
             {
                 continue;
             }
-            let goal_reached = play_state == PlayState::Won
-                || lookup_goal_reached(goal, grid, &next_grid, play_state);
             if goal_reached && trap_constraints.accepts(&next_grid, play_state) {
                 if play_state != PlayState::Won
                     && min_rats.is_some_and(|min_rats| count_rats(&next_grid) < min_rats)
@@ -4873,7 +4894,6 @@ fn solve_lookup_goal_branches(
                     // Keep exploring this branch: the irreversible event may be useful only
                     // after a short stabilization sequence.
                 } else {
-                    let hash = state_key(&next_grid);
                     if reached.insert(hash) {
                         let path = reconstruct_branch_child(&nodes, idx, actions);
                         let score = lookup_branch_score(&next_grid, path.len());
@@ -4889,7 +4909,6 @@ fn solve_lookup_goal_branches(
                 }
             }
 
-            let hash = state_key(&next_grid);
             if visited.insert(hash) {
                 let node_idx = nodes.len();
                 nodes.push(BranchSearchNode {
@@ -5188,6 +5207,91 @@ impl Features {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct SearchAnalysis {
+    features: Features,
+    player_reachable_cells: usize,
+    reachable_rats: usize,
+    reachable_triggers: usize,
+    unreachable_triggers: usize,
+    trapped_unreachable_rats: usize,
+    nearest_reachable_rat: Option<i32>,
+    nearest_reachable_trigger: Option<i32>,
+}
+
+impl SearchAnalysis {
+    fn from_grid(grid: &Grid, include_trapped: bool) -> Self {
+        let dist = player_dist_map(grid);
+        let mut features = Features {
+            rats: 0,
+            explosives: 0,
+            webs: 0,
+            triggers: 0,
+            planks: 0,
+            walls: 0,
+        };
+        let mut player_reachable_cells = 0usize;
+        let mut reachable_rats = 0usize;
+        let mut reachable_triggers = 0usize;
+        let mut unreachable_triggers = 0usize;
+        let mut trapped_unreachable_rats = 0usize;
+        let mut nearest_reachable_rat: Option<i32> = None;
+        let mut nearest_reachable_trigger: Option<i32> = None;
+
+        for y in 0..grid.height() {
+            for x in 0..grid.width() {
+                let kind = grid.cell_kind_at(x, y);
+                let reachable = dist[y][x] != i32::MAX;
+                if reachable {
+                    player_reachable_cells += 1;
+                }
+                match kind {
+                    CellKind::Rat | CellKind::CyborgRat => {
+                        features.rats += 1;
+                        if reachable {
+                            reachable_rats += 1;
+                            nearest_reachable_rat = Some(
+                                nearest_reachable_rat
+                                    .map_or(dist[y][x], |best| best.min(dist[y][x])),
+                            );
+                        } else if include_trapped && !component_has_local_rat_death(grid, (x, y)) {
+                            trapped_unreachable_rats += 1;
+                        }
+                    }
+                    CellKind::Explosive => features.explosives += 1,
+                    CellKind::Spiderweb => features.webs += 1,
+                    CellKind::Trigger(_) => {
+                        features.triggers += 1;
+                        if reachable {
+                            reachable_triggers += 1;
+                            nearest_reachable_trigger = Some(
+                                nearest_reachable_trigger
+                                    .map_or(dist[y][x], |best| best.min(dist[y][x])),
+                            );
+                        } else {
+                            unreachable_triggers += 1;
+                        }
+                    }
+                    CellKind::Plank => features.planks += 1,
+                    CellKind::Wall => features.walls += 1,
+                    _ => {}
+                }
+            }
+        }
+
+        Self {
+            features,
+            player_reachable_cells,
+            reachable_rats,
+            reachable_triggers,
+            unreachable_triggers,
+            trapped_unreachable_rats,
+            nearest_reachable_rat,
+            nearest_reachable_trigger,
+        }
+    }
+}
+
 fn resource_exhaustion_penalty(features: Features) -> i64 {
     if features.rats > 0 && features.triggers == 0 && features.explosives == 0 {
         features.rats as i64 * 20_000_000
@@ -5320,12 +5424,13 @@ struct RouteBeamState {
 }
 
 fn feature_bucket_key(grid: &Grid) -> String {
-    let features = Features::from_grid(grid);
-    let reachable_rats = reachable_rat_count(grid);
+    let analysis = SearchAnalysis::from_grid(grid, true);
+    let features = analysis.features;
+    let reachable_rats = analysis.reachable_rats;
     let unreachable_rats = features.rats.saturating_sub(reachable_rats);
-    let reachable_triggers = reachable_trigger_count(grid);
-    let trapped = trapped_unreachable_rat_count(grid);
-    let player_reachable_bucket = player_reachable_cell_count(grid) / 8;
+    let reachable_triggers = analysis.reachable_triggers;
+    let trapped = analysis.trapped_unreachable_rats;
+    let player_reachable_bucket = analysis.player_reachable_cells / 8;
     let trigger_positions = limited_positions_key(grid, trigger_cell, 16);
     let web_positions = limited_positions_key(grid, web_cell, 16);
     let unreachable_positions = unreachable_rat_positions_key(grid, false, 6);

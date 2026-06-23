@@ -84,6 +84,26 @@ pub fn step_grid(grid: &Grid, actions: &[Action]) -> (Grid, PlayState) {
     (next, play_state)
 }
 
+/// Apply actions to a state the caller already knows is Playing.
+///
+/// Search callers expand only live frontier states and already know the level's
+/// player count, so this avoids two full-grid scans before every candidate move.
+#[must_use]
+pub fn step_grid_assume_playing(
+    grid: &Grid,
+    actions: &[Action],
+    initial_player_count: usize,
+    initial_had_rats: bool,
+) -> (Grid, PlayState) {
+    let mut next = grid.clone();
+    let mut resolver = MoveHandler::new(&mut next);
+    resolver.do_player_moves(actions);
+    resolver.resolve_all();
+
+    let play_state = play_state_from_grid(&next, initial_player_count, initial_had_rats);
+    (next, play_state)
+}
+
 fn count_players(grid: &Grid) -> usize {
     grid.entries()
         .filter(|(_, cell)| matches!(cell, Cell::Player(..)))
@@ -100,11 +120,21 @@ fn play_state_from_grid(
     initial_player_count: usize,
     initial_had_rats: bool,
 ) -> PlayState {
-    if count_players(grid) < initial_player_count {
+    let mut player_count = 0usize;
+    let mut has_rats = false;
+    for (_, cell) in grid.entries() {
+        match cell {
+            Cell::Player(..) => player_count += 1,
+            Cell::Rat(_) | Cell::CyborgRat(_) => has_rats = true,
+            _ => {}
+        }
+    }
+
+    if player_count < initial_player_count {
         return PlayState::GameOver;
     }
 
-    if !has_rats(grid) && initial_had_rats {
+    if !has_rats && initial_had_rats {
         PlayState::Won
     } else {
         PlayState::Playing
