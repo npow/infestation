@@ -7684,10 +7684,15 @@ fn solve_event_fess(
         frontier.sort_by_key(|branch| branch.score);
         if mop_secs > 0.0 {
             for branch in frontier.iter().take(width.min(frontier.len())) {
+                let remaining_secs = (total_secs - started.elapsed().as_secs_f64()).max(0.0);
+                let this_mop_secs = mop_secs.min(remaining_secs);
+                if this_mop_secs <= 0.0 {
+                    break;
+                }
                 if let Some(mop) = solve_with_context(
                     &branch.grid,
                     mop_depth,
-                    mop_secs,
+                    this_mop_secs,
                     mop_strategy,
                     mop_weight,
                     &branch.path,

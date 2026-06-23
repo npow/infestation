@@ -334,12 +334,33 @@ def unique_best(candidates: Iterable[Candidate], per_level: int, rank_key: str) 
     for candidate in candidates:
         by_level[candidate.level].setdefault(candidate.prefix, candidate)
 
+    def viability_bucket(candidate: Candidate) -> int:
+        """Prefer frontiers where remaining rats are still actionable.
+
+        Archive records with reachability diagnostics are more informative than
+        static seeds. A low rat count is tempting, but a frontier with zero
+        reachable rats or trapped rats usually sends bounded probes into an
+        already-dead basin. Unknown/static seeds are kept ahead of known-dead
+        states so they can still seed exploration.
+        """
+        known_reachable = candidate.reachable_rats >= 0
+        known_trapped = candidate.trapped < 999
+        has_rats = candidate.rats > 0 and candidate.rats < 999
+        if known_reachable and candidate.reachable_rats > 0:
+            return 0 if not (known_trapped and candidate.trapped > 0) else 1
+        if not known_reachable:
+            return 2
+        if has_rats and candidate.reachable_rats == 0:
+            return 4 if known_trapped and candidate.trapped > 0 else 3
+        return 2
+
     selected = []
     for level, by_prefix in sorted(by_level.items()):
         if rank_key == "score":
             ranked = sorted(
                 by_prefix.values(),
                 key=lambda c: (
+                    viability_bucket(c),
                     c.score,
                     c.rats,
                     -c.reachable_rats,
@@ -351,6 +372,7 @@ def unique_best(candidates: Iterable[Candidate], per_level: int, rank_key: str) 
             ranked = sorted(
                 by_prefix.values(),
                 key=lambda c: (
+                    viability_bucket(c),
                     c.rats,
                     -c.reachable_rats,
                     c.trapped,
