@@ -194,6 +194,16 @@ def warning_flags(level: str, diag: Diag) -> tuple[str, ...]:
     elif level.endswith("blocked_v2.csv"):
         if diag.reachable_rats < diag.total_rats:
             flags.append("blocked-unreachable-rat")
+    elif level.endswith("chase.csv"):
+        if rat_unreachable(diag, (11, 17)):
+            flags.append("chase-sealed-rat")
+        if diag.total_rats > 0 and diag.reachable_rats < diag.total_rats:
+            flags.append("chase-unreachable-rat")
+    elif level.endswith("tinderrectangle.csv"):
+        if diag.total_rats < 16:
+            flags.append("tinder-dropped-rat")
+        if diag.total_rats == 16 and diag.reachable_rats < 16:
+            flags.append("tinder-unreachable-rat")
     return tuple(flags)
 
 
@@ -205,6 +215,8 @@ def oracle_score(candidate: Candidate, diag: Diag, flags: tuple[str, ...]) -> tu
         or flag in {
             "no-reachable-rats",
             "no-remaining-mechanism",
+            "chase-unreachable-rat",
+            "tinder-unreachable-rat",
             "release-trigger2-unreachable",
             "reload-trigger2-unreachable",
             "tug-low-reachability",

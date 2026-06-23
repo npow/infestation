@@ -456,6 +456,30 @@ def _limit_child_memory(mem_mb: int) -> None:
     resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
 
 
+def available_memory_mb() -> int | None:
+    try:
+        for line in pathlib.Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) // 1024
+    except OSError:
+        return None
+    return None
+
+
+def auto_jobs(requested: int, job_count: int, mem_mb: int) -> int:
+    if requested > 0:
+        return max(1, min(requested, job_count))
+    cpu_count = os.cpu_count() or 1
+    if mem_mb <= 0:
+        return max(1, min(cpu_count, job_count))
+    mem_available = available_memory_mb()
+    if mem_available is None:
+        return max(1, min(cpu_count, job_count))
+    reserve_mb = 4096
+    memory_workers = max(1, (mem_available - reserve_mb) // mem_mb)
+    return max(1, min(cpu_count, memory_workers, job_count))
+
+
 def start_job(job: Job, out_dir: pathlib.Path) -> ActiveJob:
     log_path = out_dir / f"{job.name}.log"
     command = [str(SOLVER), *job.args]
@@ -468,6 +492,7 @@ def start_job(job: Job, out_dir: pathlib.Path) -> ActiveJob:
     log.write("$ " + shlex.join(command) + "\n")
     if job.prune_dead:
         log.write("# env PRUNE_DEAD=1\n")
+    log.write(f"# mem_mb={job.mem_mb} timeout_sec={job.timeout_sec}\n")
     log.flush()
     process = subprocess.Popen(
         command,
@@ -566,7 +591,12 @@ def parse_args() -> argparse.Namespace:
         default=[],
         help="JSONL records with level/prefix fields, such as frontier_triage --seeds-out",
     )
-    parser.add_argument("--jobs", type=int, default=6)
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=0,
+        help="maximum concurrent jobs; 0 chooses a CPU/memory-aware default",
+    )
     parser.add_argument(
         "--static",
         action=argparse.BooleanOptionalAction,
@@ -645,8 +675,10 @@ def main() -> int:
     out_dir = args.out_dir or RUN_ROOT / f"{timestamp}_go_explore"
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    workers = auto_jobs(args.jobs, len(jobs), args.mem_mb)
     print(
-        f"candidates={len(candidates)} jobs={len(jobs)} concurrency={args.jobs} logs={out_dir}",
+        f"candidates={len(candidates)} jobs={len(jobs)} concurrency={workers} "
+        f"requested_jobs={args.jobs} mem_available_mb={available_memory_mb()} logs={out_dir}",
         flush=True,
     )
     for candidate in candidates:
@@ -665,7 +697,7 @@ def main() -> int:
             print("$", shlex.join([str(SOLVER), *job.args]))
         return 0
 
-    found_solution = run_jobs(jobs, out_dir, args.jobs)
+    found_solution = run_jobs(jobs, out_dir, workers)
     if not found_solution:
         print("no solved job in this go-explore portfolio")
     return 0

@@ -12,6 +12,7 @@ import argparse
 import concurrent.futures
 import dataclasses
 import datetime as dt
+import os
 import pathlib
 import re
 import resource
@@ -443,6 +444,30 @@ def set_memory_limit(mem_mb: int) -> None:
     resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
 
 
+def available_memory_mb() -> int | None:
+    try:
+        for line in pathlib.Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) // 1024
+    except OSError:
+        return None
+    return None
+
+
+def auto_jobs(requested: int, job_count: int, mem_mb: int) -> int:
+    if requested > 0:
+        return max(1, min(requested, job_count))
+    cpu_count = os.cpu_count() or 1
+    if mem_mb <= 0:
+        return max(1, min(cpu_count, job_count))
+    mem_available = available_memory_mb()
+    if mem_available is None:
+        return max(1, min(cpu_count, job_count))
+    reserve_mb = 4096
+    memory_workers = max(1, (mem_available - reserve_mb) // mem_mb)
+    return max(1, min(cpu_count, memory_workers, job_count))
+
+
 def selected_jobs(only: list[str]) -> list[PredicateJob]:
     jobs = list(PREDICATES)
     if only:
@@ -507,7 +532,12 @@ def run_job(job: PredicateJob, out_dir: pathlib.Path, mem_mb: int) -> tuple[str,
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out-dir", type=pathlib.Path)
-    parser.add_argument("--jobs", type=int, default=6)
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=0,
+        help="maximum concurrent jobs; 0 chooses a CPU/memory-aware default",
+    )
     parser.add_argument("--mem-mb", type=int, default=1200)
     parser.add_argument("--only", action="append", default=[])
     parser.add_argument("--list", action="store_true")
@@ -521,7 +551,7 @@ def main() -> int:
     jobs = selected_jobs(args.only)
     if args.list:
         for job in jobs:
-            print(f"{job.name}\t{job.level}\t{' '.join(job.args)}")
+            print(f"{job.name}\t{job.level}\t{' '.join(job.args)}", flush=True)
         return 0
     if not jobs:
         raise SystemExit("no predicate jobs selected")
@@ -530,13 +560,18 @@ def main() -> int:
         stamp = dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%SZ")
         out_dir = pathlib.Path("/tmp/infestation-runs") / f"{stamp}_obligation_predicates"
     out_dir.mkdir(parents=True, exist_ok=True)
-    workers = max(1, min(args.jobs, len(jobs)))
-    print(f"out_dir={out_dir} jobs={len(jobs)} workers={workers} mem_mb={args.mem_mb}")
+    workers = auto_jobs(args.jobs, len(jobs), args.mem_mb)
+    print(
+        f"out_dir={out_dir} jobs={len(jobs)} workers={workers} "
+        f"requested_jobs={args.jobs} mem_mb={args.mem_mb} "
+        f"mem_available_mb={available_memory_mb()}",
+        flush=True,
+    )
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
         futures = [pool.submit(run_job, job, out_dir, args.mem_mb) for job in jobs]
         for future in concurrent.futures.as_completed(futures):
             name, status, returncode = future.result()
-            print(f"{status}\t{returncode}\t{name}")
+            print(f"{status}\t{returncode}\t{name}", flush=True)
     return 0
 
 

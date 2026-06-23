@@ -9,11 +9,11 @@ limits wall time, and records stdout/stderr for every job.
 from __future__ import annotations
 
 import argparse
-import concurrent.futures
 import dataclasses
 import datetime as dt
 import os
 import pathlib
+import re
 import resource
 import shlex
 import subprocess
@@ -21,6 +21,7 @@ import sys
 import time
 from collections import defaultdict, deque
 from collections.abc import Iterable
+from typing import Any
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -36,6 +37,19 @@ class Job:
     mem_mb: int = 1_200
 
 
+@dataclasses.dataclass
+class ActiveJob:
+    job: Job
+    process: subprocess.Popen[None]
+    log_path: pathlib.Path
+    log_handle: Any
+    started: float
+    effective_mem_mb: int
+
+
+BEST_H_RE = re.compile(r"\bbest_h=(-?\d+)\b")
+
+
 TINDER_T106 = (
     "<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv"
     "^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv"
@@ -46,6 +60,10 @@ RELEASE_P37 = "v<vv^^>>vv><<v<<<^<^^<<>>>vvv>>>>>>>>"
 RELEASE_EARLY_T2 = "v<vv^^>"
 RELOAD_T2 = ">>>^>>>>.>>.<.<<<<"
 RELOAD_STATION = ">>>^>>>>vvv.v<^<<<v<<<<<<<^^<^"
+CHASE_P109 = (
+    "^>>>v^^^>^^>>>>>v>>vvvvv^^^^^^<<<<v<<<>v<<^^^<<<^^^^^^>>>>>>vvv>>>>"
+    "^^<^^^^vv<<v<<<vvvvvvvvvvvvvv<<>^^^^^>>>vv"
+)
 AI_B75 = "^^^^^^v^vvvvvvv>>>vv^^^vv<<<v>>>>>^^^^v>>>v>vv>>vvvvv<<<<<<<<<<<<<<<<^^^<<<"
 AI_EARLY_ROW5 = "v<vv^^^"
 BLOCKED_B20 = "^< ^^ v^ ^^ v> v> v> vv vv ^v ^v ^< ^v ^v v< ^> v> ^< v< ^^"
@@ -60,6 +78,108 @@ BLOCKED_POST_T5_PRE_T1 = "vv v^ vv <^ <v <^ <. <^ ^^ ^^"
 def current_jobs() -> list[Job]:
     """Small, mechanism-focused portfolio for the current hard set."""
     return [
+        Job(
+            "chase_initial_open_11_16_with_rat",
+            (
+                "branchdump",
+                "levels/chase.csv",
+                "--goal",
+                "cellnotratrect:11,16,web,11,17,11,17",
+                "--depth",
+                "140",
+                "--secs",
+                "75",
+                "--maxnodes",
+                "1200000",
+                "--results",
+                "8",
+                "--min-rats",
+                "4",
+                "--min-reachable-rats",
+                "4",
+                "--max-trapped-rats",
+                "0",
+                "--no-canonical",
+            ),
+        ),
+        Job(
+            "chase_p109_open_11_16",
+            (
+                "branchdump",
+                "levels/chase.csv",
+                "--prefix",
+                CHASE_P109,
+                "--goal",
+                "cellnot:11,16,web",
+                "--depth",
+                "90",
+                "--secs",
+                "75",
+                "--maxnodes",
+                "1200000",
+                "--results",
+                "8",
+                "--min-rats",
+                "4",
+                "--min-reachable-rats",
+                "4",
+                "--max-trapped-rats",
+                "0",
+                "--no-canonical",
+            ),
+        ),
+        Job(
+            "chase_p109_move_or_remove_11_17",
+            (
+                "branchdump",
+                "levels/chase.csv",
+                "--prefix",
+                CHASE_P109,
+                "--goal",
+                "ratgone:11,17",
+                "--depth",
+                "90",
+                "--secs",
+                "75",
+                "--maxnodes",
+                "1200000",
+                "--results",
+                "8",
+                "--min-rats",
+                "3",
+                "--min-reachable-rats",
+                "3",
+                "--max-trapped-rats",
+                "0",
+                "--no-canonical",
+            ),
+        ),
+        Job(
+            "chase_p109_merge_11_17_component",
+            (
+                "branchdump",
+                "levels/chase.csv",
+                "--prefix",
+                CHASE_P109,
+                "--goal",
+                "ratrectcomponentge:11,17,11,17,2",
+                "--depth",
+                "90",
+                "--secs",
+                "75",
+                "--maxnodes",
+                "1200000",
+                "--results",
+                "8",
+                "--min-rats",
+                "4",
+                "--min-reachable-rats",
+                "4",
+                "--max-trapped-rats",
+                "0",
+                "--no-canonical",
+            ),
+        ),
         Job(
             "tinder_t106_rectsep",
             (
@@ -451,42 +571,169 @@ def set_limits(mem_mb: int) -> None:
     resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
 
 
-def run_job(
+def available_memory_mb() -> int | None:
+    try:
+        for line in pathlib.Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) // 1024
+    except OSError:
+        return None
+    return None
+
+
+def auto_jobs(requested: int, jobs: list[Job], mem_mb: int | None) -> int:
+    if requested > 0:
+        return max(1, min(requested, len(jobs)))
+    cpu_count = os.cpu_count() or 1
+    effective_mem_mb = mem_mb or max(job.mem_mb for job in jobs)
+    mem_available = available_memory_mb()
+    if mem_available is None:
+        return max(1, min(cpu_count, len(jobs)))
+    reserve_mb = 4096
+    memory_workers = max(1, (mem_available - reserve_mb) // effective_mem_mb)
+    return max(1, min(cpu_count, memory_workers, len(jobs)))
+
+
+def classify_log(text: str, returncode: int) -> str:
+    if "SOLVED " in text or "result=Won" in text:
+        return "SOLVED"
+    if "BRANCH " in text or "\nGOAL " in text:
+        return "HIT"
+    if "PREFIX_STOP" in text:
+        return "PREFIX_STOP"
+    if "NO_EVENTS" in text:
+        return "NO_EVENTS"
+    if "NO_SOLUTION" in text:
+        return "NO_SOLUTION"
+    if "branchdump:" in text:
+        return "NO_BRANCH"
+    if "TIMEOUT" in text or returncode == 124:
+        best_h = BEST_H_RE.findall(text)
+        if best_h:
+            tail = best_h[-3:]
+            if len(tail) >= 2 and len(set(tail)) == 1:
+                return f"TIMEOUT_STALLED_H={tail[-1]}"
+            return f"TIMEOUT_BEST_H={best_h[-1]}"
+        return "TIMEOUT"
+    if returncode != 0:
+        if "memory allocation" in text or "Cannot allocate memory" in text:
+            return "MEMORY"
+        return f"EXIT_{returncode}"
+    best_h = BEST_H_RE.findall(text)
+    if best_h:
+        tail = best_h[-3:]
+        if len(tail) >= 2 and len(set(tail)) == 1:
+            return f"STALLED_H={tail[-1]}"
+    return "DONE"
+
+
+def start_job(
     job: Job,
     out_dir: pathlib.Path,
     prune_dead: bool,
-) -> tuple[str, int, float, pathlib.Path, bool]:
+    mem_mb: int | None,
+) -> ActiveJob:
     log_path = out_dir / f"{job.name}.log"
     command = [str(SOLVER), *job.args]
-    started = time.monotonic()
+    effective_mem_mb = mem_mb or job.mem_mb
     env = None
     if prune_dead:
         env = dict(os.environ)
         env["PRUNE_DEAD"] = "1"
-    with log_path.open("w", encoding="utf-8") as log:
-        log.write("$ " + shlex.join(command) + "\n")
-        if prune_dead:
-            log.write("# env PRUNE_DEAD=1\n")
-        log.flush()
-        try:
-            proc = subprocess.run(
-                command,
-                cwd=ROOT,
-                env=env,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                timeout=job.timeout_sec,
-                preexec_fn=lambda: set_limits(job.mem_mb),
-                check=False,
-            )
-            code = proc.returncode
-        except subprocess.TimeoutExpired:
-            log.write(f"\nTIMEOUT after {job.timeout_sec}s\n")
-            code = 124
-    elapsed = time.monotonic() - started
-    text = log_path.read_text(encoding="utf-8", errors="replace")
+
+    log = log_path.open("w", encoding="utf-8")
+    log.write("$ " + shlex.join(command) + "\n")
+    if prune_dead:
+        log.write("# env PRUNE_DEAD=1\n")
+    log.write(f"# mem_mb={effective_mem_mb} timeout_sec={job.timeout_sec}\n")
+    log.flush()
+    process = subprocess.Popen(
+        command,
+        cwd=ROOT,
+        env=env,
+        stdout=log,
+        stderr=subprocess.STDOUT,
+        preexec_fn=lambda: set_limits(effective_mem_mb),
+    )
+    return ActiveJob(
+        job=job,
+        process=process,
+        log_path=log_path,
+        log_handle=log,
+        started=time.monotonic(),
+        effective_mem_mb=effective_mem_mb,
+    )
+
+
+def finish_job(active: ActiveJob, code: int) -> tuple[str, int, float, pathlib.Path, bool, str]:
+    elapsed = time.monotonic() - active.started
+    active.log_handle.write(f"\nEXIT {code}\n")
+    active.log_handle.close()
+    text = active.log_path.read_text(encoding="utf-8", errors="replace")
     solved = "SOLVED " in text or "result=Won" in text
-    return job.name, code, elapsed, log_path, solved
+    return (
+        active.job.name,
+        code,
+        elapsed,
+        active.log_path,
+        solved,
+        classify_log(text, code),
+    )
+
+
+def stop_timed_out_job(active: ActiveJob) -> int:
+    active.log_handle.write(f"\nTIMEOUT after {active.job.timeout_sec}s\n")
+    active.log_handle.flush()
+    active.process.terminate()
+    try:
+        active.process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        active.process.kill()
+        active.process.wait()
+    return 124
+
+
+def run_jobs(
+    jobs: list[Job],
+    out_dir: pathlib.Path,
+    prune_dead: bool,
+    mem_mb: int | None,
+    workers: int,
+) -> bool:
+    pending = deque(jobs)
+    active: list[ActiveJob] = []
+    found_solution = False
+
+    def launch_ready() -> None:
+        while pending and len(active) < workers:
+            job = pending.popleft()
+            active_job = start_job(job, out_dir, prune_dead, mem_mb)
+            active.append(active_job)
+            print(
+                f"start {job.name} pid={active_job.process.pid} "
+                f"mem={active_job.effective_mem_mb}MB timeout={job.timeout_sec}s"
+            )
+            sys.stdout.flush()
+
+    launch_ready()
+    while active:
+        now = time.monotonic()
+        for running in list(active):
+            code = running.process.poll()
+            if code is None and now - running.started >= running.job.timeout_sec:
+                code = stop_timed_out_job(running)
+            if code is None:
+                continue
+            active.remove(running)
+            name, code, elapsed, log_path, solved, signal = finish_job(running, code)
+            found_solution = found_solution or solved
+            marker = "SOLVED" if solved else signal
+            print(f"{marker} {name} code={code} elapsed={elapsed:.1f}s log={log_path}")
+            sys.stdout.flush()
+            launch_ready()
+        if active:
+            time.sleep(0.25)
+    return found_solution
 
 
 def interleave_by_level(jobs: Iterable[Job]) -> list[Job]:
@@ -509,7 +756,12 @@ def interleave_by_level(jobs: Iterable[Job]) -> list[Job]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--jobs", type=int, default=3, help="maximum concurrent jobs")
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=0,
+        help="maximum concurrent jobs; 0 chooses a CPU/memory-aware default",
+    )
     parser.add_argument("--preset", choices=["current"], default="current")
     parser.add_argument(
         "--only",
@@ -530,6 +782,11 @@ def parse_args() -> argparse.Namespace:
         help="set PRUNE_DEAD=1 for solver children",
     )
     parser.add_argument("--out-dir", type=pathlib.Path)
+    parser.add_argument(
+        "--mem-mb",
+        type=int,
+        help="override per-child virtual-memory cap",
+    )
     return parser.parse_args()
 
 
@@ -549,15 +806,13 @@ def main() -> int:
     if not jobs:
         raise SystemExit("no jobs selected")
     jobs = interleave_by_level(jobs)
-    print(f"running {len(jobs)} jobs with concurrency={args.jobs} logs={out_dir}")
-    found_solution = False
-    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as executor:
-        futures = [executor.submit(run_job, job, out_dir, args.prune_dead) for job in jobs]
-        for future in concurrent.futures.as_completed(futures):
-            name, code, elapsed, log_path, solved = future.result()
-            found_solution = found_solution or solved
-            marker = "SOLVED" if solved else "done"
-            print(f"{marker} {name} code={code} elapsed={elapsed:.1f}s log={log_path}")
+    workers = auto_jobs(args.jobs, jobs, args.mem_mb)
+    mem_available = available_memory_mb()
+    print(
+        f"running {len(jobs)} jobs with concurrency={workers} "
+        f"requested_jobs={args.jobs} mem_available_mb={mem_available} logs={out_dir}"
+    )
+    found_solution = run_jobs(jobs, out_dir, args.prune_dead, args.mem_mb, workers)
     if not found_solution:
         print("no solved job in this bounded portfolio")
     return 0

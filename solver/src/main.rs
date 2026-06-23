@@ -1025,6 +1025,13 @@ struct Node {
     depth: u32,
 }
 
+struct BranchSearchNode {
+    grid: Option<Grid>,
+    parent: usize,       // usize::MAX for root
+    action: Vec<Action>, // action taken from parent to reach this node
+    depth: u32,
+}
+
 fn reconstruct(nodes: &[Node], mut idx: usize) -> Vec<Vec<Action>> {
     let mut acts: Vec<Vec<Action>> = Vec::new();
     while nodes[idx].parent != usize::MAX {
@@ -1032,6 +1039,26 @@ fn reconstruct(nodes: &[Node], mut idx: usize) -> Vec<Vec<Action>> {
         idx = nodes[idx].parent;
     }
     acts.reverse();
+    acts
+}
+
+fn reconstruct_branch(nodes: &[BranchSearchNode], mut idx: usize) -> Vec<Vec<Action>> {
+    let mut acts: Vec<Vec<Action>> = Vec::new();
+    while nodes[idx].parent != usize::MAX {
+        acts.push(nodes[idx].action.clone());
+        idx = nodes[idx].parent;
+    }
+    acts.reverse();
+    acts
+}
+
+fn reconstruct_branch_child(
+    nodes: &[BranchSearchNode],
+    parent: usize,
+    action: &[Action],
+) -> Vec<Vec<Action>> {
+    let mut acts = reconstruct_branch(nodes, parent);
+    acts.push(action.to_vec());
     acts
 }
 
@@ -4726,8 +4753,8 @@ fn solve_lookup_goal_branches(
             state.state_hash()
         }
     };
-    let mut nodes = vec![Node {
-        grid: grid.clone(),
+    let mut nodes = vec![BranchSearchNode {
+        grid: Some(grid.clone()),
         parent: usize::MAX,
         action: Vec::new(),
         depth: 0,
@@ -4754,9 +4781,13 @@ fn solve_lookup_goal_branches(
 
         let cur_depth = nodes[idx].depth;
         if cur_depth as usize >= max_depth {
+            nodes[idx].grid = None;
             continue;
         }
-        let cur_grid = nodes[idx].grid.clone();
+        let cur_grid = nodes[idx]
+            .grid
+            .take()
+            .expect("branch search node should have grid before expansion");
         for actions in &tuples {
             let (next_grid, play_state) = step(&cur_grid, actions);
             if play_state == PlayState::GameOver {
@@ -4769,14 +4800,6 @@ fn solve_lookup_goal_branches(
             {
                 continue;
             }
-            let node_idx = nodes.len();
-            nodes.push(Node {
-                grid: next_grid.clone(),
-                parent: idx,
-                action: actions.clone(),
-                depth: cur_depth + 1,
-            });
-
             let goal_reached = play_state == PlayState::Won
                 || lookup_goal_reached(goal, grid, &next_grid, play_state);
             if goal_reached && trap_constraints.accepts(&next_grid, play_state) {
@@ -4788,10 +4811,11 @@ fn solve_lookup_goal_branches(
                 } else {
                     let hash = state_key(&next_grid);
                     if reached.insert(hash) {
-                        let path = reconstruct(&nodes, node_idx);
+                        let path = reconstruct_branch_child(&nodes, idx, actions);
+                        let score = lookup_branch_score(&next_grid, path.len());
                         results.push(Branch {
                             grid: next_grid,
-                            score: lookup_branch_score(&nodes[node_idx].grid, path.len()),
+                            score,
                             path,
                         });
                         results.sort_by_key(|branch| branch.score);
@@ -4803,6 +4827,13 @@ fn solve_lookup_goal_branches(
 
             let hash = state_key(&next_grid);
             if visited.insert(hash) {
+                let node_idx = nodes.len();
+                nodes.push(BranchSearchNode {
+                    grid: Some(next_grid),
+                    parent: idx,
+                    action: actions.clone(),
+                    depth: cur_depth + 1,
+                });
                 q.push_back(node_idx);
             }
         }
