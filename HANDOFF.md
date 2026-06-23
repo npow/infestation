@@ -10263,7 +10263,7 @@ solver/                             Rust oracle crate
   src/main.rs                         all modes: solve / verify / trace / wp
   Cargo.toml
 solver/solutions/
-  SOLUTIONS.md                       33 verified original solutions + 5 Claude puzzles
+  SOLUTIONS.md                       35 verified original solutions + 5 Claude puzzles
   final_solutions.json               machine-readable verified set
   autoplay.js                        browser console auto-player (1p + 2p)
   results/                           raw search outputs (results*.json, autoplay_data.json)
@@ -10277,7 +10277,7 @@ solver/solutions/
 ## 6. Session context
 - A session Stop-hook with goal **"solve all the puzzles"** may be active in
   some environments. The current missing inventory is 7 rat-bearing hard
-  levels: `blocked_v2`, `handoff`, `ai_takeover`, `on_the_clock`, `release`,
+  levels: `chase`, `blocked_v2`, `handoff`, `ai_takeover`, `release`,
   `reload_v3`, and `tinderrectangle`. `claude/gauntlet.csv` is zero-rat and
   portal-route verified separately. Resume by working §4.
 - Fork created with `gh repo fork`; push with `gh auth setup-git --hostname github.com` then

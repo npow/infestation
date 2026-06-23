@@ -3069,9 +3069,25 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
 
     match goal {
         LookupGoal::Win => {
-            count_rats(current) as i64 * 1_000_000
-                + Features::from_grid(current).triggers as i64 * 1_000
-                + Features::from_grid(current).explosives as i64 * 100
+            let features = Features::from_grid(current);
+            let rats = features.rats as i64;
+            let mut score = rats * 1_000_000
+                + features.triggers as i64 * 1_000
+                + features.explosives as i64 * 100;
+            if std::env::var("SMART_H").is_ok() || std::env::var("PROGRESS_H").is_ok() {
+                let reachable_rats = reachable_rat_count(current) as i64;
+                let unreachable_rats = rats.saturating_sub(reachable_rats);
+                let reachable_triggers = reachable_trigger_count(current) as i64;
+                let trapped = trapped_unreachable_rat_count(current) as i64;
+                score += unreachable_rats * 25_000_000 + trapped * 100_000_000;
+                if rats > 0 && reachable_rats == 0 && reachable_triggers == 0 {
+                    score += rats * 250_000_000;
+                }
+                if features.triggers > 0 && reachable_triggers == 0 {
+                    score += 50_000_000;
+                }
+            }
+            score
         }
         LookupGoal::WinReady => {
             count_rats(current) as i64 * 1_000_000
@@ -5200,6 +5216,14 @@ struct BeamState {
     score: i64,
 }
 
+#[derive(Clone)]
+struct RouteBeamState {
+    grid: Grid,
+    path: Vec<Vec<Action>>,
+    deviations: usize,
+    score: i64,
+}
+
 fn feature_bucket_key(grid: &Grid) -> String {
     let features = Features::from_grid(grid);
     let reachable_rats = reachable_rat_count(grid);
@@ -5253,13 +5277,21 @@ fn rectangle_fess_bucket_key(grid: &Grid) -> Option<String> {
     let safe_targets = rectangle_lower_safe_targets();
     let lower_distance = lower_rats
         .iter()
-        .flat_map(|&rat| rat_targets.iter().map(move |&target| manhattan(rat, target)))
+        .flat_map(|&rat| {
+            rat_targets
+                .iter()
+                .map(move |&target| manhattan(rat, target))
+        })
         .min()
         .unwrap_or(99)
         .min(20);
     let safe_distance = players
         .iter()
-        .flat_map(|&player| safe_targets.iter().map(move |&target| manhattan(player, target)))
+        .flat_map(|&player| {
+            safe_targets
+                .iter()
+                .map(move |&target| manhattan(player, target))
+        })
         .min()
         .unwrap_or(99)
         .min(20);
@@ -8008,6 +8040,125 @@ fn solve_beam(
     None
 }
 
+fn solve_routebeam(
+    grid: &Grid,
+    reference: &[Vec<Action>],
+    width: usize,
+    extra_depth: usize,
+    time_limit_secs: f64,
+    deviation_penalty: i64,
+    max_deviations: Option<usize>,
+    seed: u64,
+    jitter: i64,
+) -> Option<Vec<Vec<Action>>> {
+    let nplayers = count_players(grid);
+    let tuples = all_action_tuples(nplayers);
+    let start = Instant::now();
+    let max_depth = reference.len() + extra_depth;
+    let initial_score = lookup_bfs_progress_score(LookupGoal::Win, grid, grid);
+    let mut frontier = vec![RouteBeamState {
+        grid: grid.clone(),
+        path: Vec::new(),
+        deviations: 0,
+        score: initial_score,
+    }];
+    let mut best = frontier[0].clone();
+
+    for depth in 0..max_depth {
+        if start.elapsed().as_secs_f64() > time_limit_secs {
+            eprintln!(
+                "  [routebeam timeout at depth={} frontier={} best_score={} deviations={}]",
+                depth,
+                frontier.len(),
+                best.score,
+                best.deviations
+            );
+            eprintln!("  BEST_ASCII {}", format_path_ascii(&best.path));
+            eprintln!("  BEST_STATE:\n{}", best.grid.to_csv());
+            return None;
+        }
+
+        let mut by_state: HashMap<u64, RouteBeamState> = HashMap::new();
+        for state in &frontier {
+            for actions in &tuples {
+                let reference_action = reference.get(depth);
+                let deviates = reference_action.is_some_and(|wanted| wanted != actions);
+                let deviations = state.deviations + usize::from(deviates);
+                if max_deviations.is_some_and(|limit| deviations > limit) {
+                    continue;
+                }
+
+                let (next_grid, play_state) = step(&state.grid, actions);
+                if play_state == PlayState::GameOver {
+                    continue;
+                }
+
+                let mut path = state.path.clone();
+                path.push(actions.clone());
+                if play_state == PlayState::Won {
+                    return Some(path);
+                }
+
+                let hash = next_grid.state_hash();
+                let h = lookup_bfs_progress_score(LookupGoal::Win, grid, &next_grid);
+                let score = h
+                    + deviations as i64 * deviation_penalty
+                    + path.len() as i64
+                    + jitter_for(hash, depth, seed, jitter);
+                let candidate = RouteBeamState {
+                    grid: next_grid,
+                    path,
+                    deviations,
+                    score,
+                };
+                if candidate.score < best.score {
+                    best = candidate.clone();
+                }
+
+                match by_state.get(&hash) {
+                    Some(existing) if existing.score <= candidate.score => {}
+                    _ => {
+                        by_state.insert(hash, candidate);
+                    }
+                }
+            }
+        }
+
+        if by_state.is_empty() {
+            eprintln!(
+                "  [routebeam exhausted at depth={} best_score={} deviations={}]",
+                depth, best.score, best.deviations
+            );
+            eprintln!("  BEST_ASCII {}", format_path_ascii(&best.path));
+            eprintln!("  BEST_STATE:\n{}", best.grid.to_csv());
+            return None;
+        }
+
+        let mut next: Vec<RouteBeamState> = by_state.into_values().collect();
+        next.sort_by_key(|state| state.score);
+        next.truncate(width);
+        frontier = next;
+
+        if depth % 25 == 24 || depth + 1 == reference.len() {
+            eprintln!(
+                "  [routebeam depth={} frontier={} best_score={} deviations={}]",
+                depth + 1,
+                frontier.len(),
+                best.score,
+                best.deviations
+            );
+        }
+    }
+
+    eprintln!(
+        "  [routebeam max-depth best_score={} deviations={}]",
+        best.score, best.deviations
+    );
+    eprintln!("  BEST_ASCII {}", format_path_ascii(&best.path));
+    eprintln!("  BEST_STATE:\n{}", best.grid.to_csv());
+    None
+}
+
 fn count_explosives(grid: &Grid) -> usize {
     let mut explosives = 0;
     for y in 0..grid.height() {
@@ -9280,7 +9431,8 @@ fn main() {
                 return;
             }
 
-            let suffix_score = lookup_bfs_progress_score(LookupGoal::Win, &start_grid, &suffix_state);
+            let suffix_score =
+                lookup_bfs_progress_score(LookupGoal::Win, &start_grid, &suffix_state);
             if suffix_score < best_score {
                 best_score = suffix_score;
                 best_idx = idx;
@@ -11101,6 +11253,124 @@ fn main() {
                         .join(" ")
                 };
                 println!("ASCII {}", ascii);
+            }
+            None => println!("NO_SOLUTION time={:.1}s", t0.elapsed().as_secs_f64()),
+        }
+        return;
+    }
+
+    if mode == "routebeam" {
+        // solver routebeam <csv> --reference MOVES [--prefix MOVES]
+        //                        [--width N] [--extra N] [--secs S]
+        //                        [--dev-penalty N] [--max-dev N]
+        //                        [--seed N] [--jitter N]
+        //
+        // Repair a stale known route by staying near its action skeleton while
+        // allowing multiple coordinated deviations.
+        let mut reference_str = String::new();
+        let mut prefix_str = String::new();
+        let mut width = 50_000usize;
+        let mut extra_depth = 40usize;
+        let mut secs = 120.0;
+        let mut deviation_penalty = 10_000i64;
+        let mut max_deviations: Option<usize> = None;
+        let mut seed = 0u64;
+        let mut jitter = 0i64;
+        let mut i = 3;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--reference" | "--route" => {
+                    reference_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--prefix" => {
+                    prefix_str = args[i + 1].clone();
+                    i += 2;
+                }
+                "--width" => {
+                    width = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--extra" | "--extra-depth" => {
+                    extra_depth = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--secs" => {
+                    secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--dev-penalty" | "--deviation-penalty" => {
+                    deviation_penalty = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--max-dev" | "--max-deviations" => {
+                    max_deviations = Some(args[i + 1].parse().unwrap());
+                    i += 2;
+                }
+                "--seed" => {
+                    seed = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--jitter" => {
+                    jitter = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                _ => {
+                    i += 1;
+                }
+            }
+        }
+        assert!(
+            !reference_str.is_empty(),
+            "routebeam requires --reference MOVES"
+        );
+
+        let nplayers = count_players(&grid);
+        let prefix = parse_action_string(&prefix_str, nplayers);
+        let reference = parse_action_string(&reference_str, nplayers);
+        let (start_grid, prefix_state, applied) = replay_path(&grid, &prefix);
+        if applied != prefix.len() || prefix_state != PlayState::Playing {
+            println!(
+                "PREFIX_STOP state={:?} turns_applied={}",
+                prefix_state, applied
+            );
+            return;
+        }
+        eprintln!(
+            "routebeam solve: players={} prefix={} reference={} width={} extra={} secs={} dev_penalty={} max_dev={:?} seed={} jitter={}",
+            nplayers,
+            prefix.len(),
+            reference.len(),
+            width,
+            extra_depth,
+            secs,
+            deviation_penalty,
+            max_deviations,
+            seed,
+            jitter
+        );
+        let t0 = Instant::now();
+        match solve_routebeam(
+            &start_grid,
+            &reference,
+            width,
+            extra_depth,
+            secs,
+            deviation_penalty,
+            max_deviations,
+            seed,
+            jitter,
+        ) {
+            Some(suffix) => {
+                let mut path = prefix;
+                path.extend(suffix);
+                println!(
+                    "SOLVED moves={} time={:.1}s",
+                    path.len(),
+                    t0.elapsed().as_secs_f64()
+                );
+                println!("ARROWS {}", format_path(&path));
+                println!("ASCII {}", format_path_ascii(&path));
             }
             None => println!("NO_SOLUTION time={:.1}s", t0.elapsed().as_secs_f64()),
         }
