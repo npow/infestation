@@ -631,20 +631,31 @@ def start_job(
     job: Job,
     out_dir: pathlib.Path,
     prune_dead: bool,
+    progress_h: bool,
+    smart_h: bool,
     mem_mb: int | None,
 ) -> ActiveJob:
     log_path = out_dir / f"{job.name}.log"
     command = [str(SOLVER), *job.args]
     effective_mem_mb = mem_mb or job.mem_mb
     env = None
-    if prune_dead:
+    if prune_dead or progress_h or smart_h:
         env = dict(os.environ)
+    if prune_dead:
         env["PRUNE_DEAD"] = "1"
+    if progress_h:
+        env["PROGRESS_H"] = "1"
+    if smart_h:
+        env["SMART_H"] = "1"
 
     log = log_path.open("w", encoding="utf-8")
     log.write("$ " + shlex.join(command) + "\n")
     if prune_dead:
         log.write("# env PRUNE_DEAD=1\n")
+    if progress_h:
+        log.write("# env PROGRESS_H=1\n")
+    if smart_h:
+        log.write("# env SMART_H=1\n")
     log.write(f"# mem_mb={effective_mem_mb} timeout_sec={job.timeout_sec}\n")
     log.flush()
     process = subprocess.Popen(
@@ -697,6 +708,8 @@ def run_jobs(
     jobs: list[Job],
     out_dir: pathlib.Path,
     prune_dead: bool,
+    progress_h: bool,
+    smart_h: bool,
     mem_mb: int | None,
     workers: int,
 ) -> bool:
@@ -707,7 +720,7 @@ def run_jobs(
     def launch_ready() -> None:
         while pending and len(active) < workers:
             job = pending.popleft()
-            active_job = start_job(job, out_dir, prune_dead, mem_mb)
+            active_job = start_job(job, out_dir, prune_dead, progress_h, smart_h, mem_mb)
             active.append(active_job)
             print(
                 f"start {job.name} pid={active_job.process.pid} "
@@ -781,6 +794,18 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="set PRUNE_DEAD=1 for solver children",
     )
+    parser.add_argument(
+        "--progress-h",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="set PROGRESS_H=1 for solver children so setup work has a heuristic gradient",
+    )
+    parser.add_argument(
+        "--smart-h",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="set SMART_H=1 for solver children to penalize unreachable/trapped rats",
+    )
     parser.add_argument("--out-dir", type=pathlib.Path)
     parser.add_argument(
         "--mem-mb",
@@ -812,7 +837,15 @@ def main() -> int:
         f"running {len(jobs)} jobs with concurrency={workers} "
         f"requested_jobs={args.jobs} mem_available_mb={mem_available} logs={out_dir}"
     )
-    found_solution = run_jobs(jobs, out_dir, args.prune_dead, args.mem_mb, workers)
+    found_solution = run_jobs(
+        jobs,
+        out_dir,
+        args.prune_dead,
+        args.progress_h,
+        args.smart_h,
+        args.mem_mb,
+        workers,
+    )
     if not found_solution:
         print("no solved job in this bounded portfolio")
     return 0

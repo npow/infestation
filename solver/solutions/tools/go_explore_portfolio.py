@@ -62,6 +62,8 @@ class Job:
     timeout_sec: int
     mem_mb: int
     prune_dead: bool
+    progress_h: bool
+    smart_h: bool
 
 
 @dataclasses.dataclass
@@ -395,6 +397,8 @@ def jobs_for_candidate(
     timeout_sec: int,
     mem_mb: int,
     prune_dead: bool,
+    progress_h: bool,
+    smart_h: bool,
     lookup_depth: int,
     lookup_maxnodes: int,
     lookup_weight: int,
@@ -432,6 +436,8 @@ def jobs_for_candidate(
             timeout_sec,
             mem_mb,
             prune_dead,
+            progress_h,
+            smart_h,
         ),
         Job(
             f"{base}_dropchain",
@@ -460,6 +466,8 @@ def jobs_for_candidate(
             timeout_sec,
             mem_mb,
             prune_dead,
+            progress_h,
+            smart_h,
         ),
         Job(
             f"{base}_lookup_win",
@@ -484,6 +492,8 @@ def jobs_for_candidate(
             timeout_sec,
             mem_mb,
             prune_dead,
+            progress_h,
+            smart_h,
         ),
         Job(
             f"{base}_novelty",
@@ -502,6 +512,8 @@ def jobs_for_candidate(
             timeout_sec,
             mem_mb,
             prune_dead,
+            progress_h,
+            smart_h,
         ),
     ]
 
@@ -539,14 +551,23 @@ def start_job(job: Job, out_dir: pathlib.Path) -> ActiveJob:
     log_path = out_dir / f"{job.name}.log"
     command = [str(SOLVER), *job.args]
     env = None
-    if job.prune_dead:
+    if job.prune_dead or job.progress_h or job.smart_h:
         env = dict(os.environ)
+    if job.prune_dead:
         env["PRUNE_DEAD"] = "1"
+    if job.progress_h:
+        env["PROGRESS_H"] = "1"
+    if job.smart_h:
+        env["SMART_H"] = "1"
 
     log = log_path.open("w", encoding="utf-8")
     log.write("$ " + shlex.join(command) + "\n")
     if job.prune_dead:
         log.write("# env PRUNE_DEAD=1\n")
+    if job.progress_h:
+        log.write("# env PROGRESS_H=1\n")
+    if job.smart_h:
+        log.write("# env SMART_H=1\n")
     log.write(f"# mem_mb={job.mem_mb} timeout_sec={job.timeout_sec}\n")
     log.flush()
     process = subprocess.Popen(
@@ -729,6 +750,18 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="set PRUNE_DEAD=1 for solver children",
     )
+    parser.add_argument(
+        "--progress-h",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="set PROGRESS_H=1 for solver children so setup work has a heuristic gradient",
+    )
+    parser.add_argument(
+        "--smart-h",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="set SMART_H=1 for solver children to penalize unreachable/trapped rats",
+    )
     parser.add_argument("--out-dir", type=pathlib.Path)
     parser.add_argument(
         "--solutions-file",
@@ -805,6 +838,8 @@ def main() -> int:
             args.timeout_sec,
             args.mem_mb,
             args.prune_dead,
+            args.progress_h,
+            args.smart_h,
             args.lookup_depth,
             args.lookup_maxnodes,
             args.lookup_weight,
