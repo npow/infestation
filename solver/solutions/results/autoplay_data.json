@@ -99,6 +99,10 @@
     "p": 1,
     "s": "↓↓↓↓←←←←←"
   },
+  "on_the_clock": {
+    "p": 1,
+    "s": "^>><vvvvv<v^^^^^>>v>>^<^^^^^^^>>>vvvvvvvvv^^^>>>><<>>vvv>>v>>>>>>vv<<<<<<<<<vv^^>>>>>>>>>^^<<<<<<^<^^^<<<vvv<<<<v<vvvv>>><<<<<<"
+  },
   "order_of_operations": {
     "p": 1,
     "s": "<^v^^<^^^>^^<vv^vv^^^^^^^^^^>^v>vv<vvvvvvvv>>>>>^^^^^^^^^^^^^^^>>>>>vvvvvvv>vvvvvvv>>vv"

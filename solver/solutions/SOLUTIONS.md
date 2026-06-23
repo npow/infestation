@@ -5,7 +5,7 @@ All move-strings below were **verified against the real game engine** (`solver v
 Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-separated `P1P2` pairs.
 
 
-## Original levels (34 solved)
+## Original levels (35 solved)
 
 | Level | Players | Moves | Solution |
 |---|---|---|---|
@@ -29,6 +29,7 @@ Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-s
 | `more_rats.csv` | 1 | 29 | `↓←←→←→←→←→←→→↑↑↑↑↑↑←←→←→←→←←←` |
 | `no_retreat.csv` | 1 | 76 | `↓←↑←←←←↑←→↑↑→→→↑↑←←↑←←←←→→→.←←←→←↑↑→→→→→→→→↑↑←←←←←←←←↑↑→→→→→→→→→→→→↑→→→→↑→→→` |
 | `old_levels/old_levels.csv` | 1 | 9 | `↓↓↓↓←←←←←` |
+| `old_levels/on_the_clock.csv` | 1 | 127 | `^>><vvvvv<v^^^^^>>v>>^<^^^^^^^>>>vvvvvvvvv^^^>>>><<>>vvv>>v>>>>>>vv<<<<<<<<<vv^^>>>>>>>>>^^<<<<<<^<^^^<<<vvv<<<<v<vvvv>>><<<<<<` |
 | `old_levels/order_of_operations.csv` | 1 | 87 | `<^v^^<^^^>^^<vv^vv^^^^^^^^^^>^v>vv<vvvvvvvv>>>>>^^^^^^^^^^^^^^^>>>>>vvvvvvv>vvvvvvv>>vv` |
 | `old_levels/overstep.csv` | 1 | 167 | `vvvvvv>>>>>>>>>v>><>><<^v^>>>^>^>^^^^^^^^^^^<<<<<>>>v>v>vvvvvvvvvvv<<<><<<<^<<<<^^<<^<<<^^<<^^^^^^>>>>>>>v>>>^^<<vvv<<>^^<<<<<vvv<<vvv>>vvvv<<<vv^^>>^^^^>^>>v^^^^^^^>>` |
 | `order_of_operations_new_v2.csv` | 1 | 36 | `↓→→→→↑→↑↑↑→→↓→.....→→→↓←↓↓↓↓↓↓↓↓↓↓↓↓` |

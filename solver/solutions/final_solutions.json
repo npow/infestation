@@ -124,6 +124,11 @@
     "players": 1,
     "moves": 9
   },
+  "old_levels/on_the_clock.csv": {
+    "sol": "^>><vvvvv<v^^^^^>>v>>^<^^^^^^^>>>vvvvvvvvv^^^>>>><<>>vvv>>v>>>>>>vv<<<<<<<<<vv^^>>>>>>>>>^^<<<<<<^<^^^<<<vvv<<<<v<vvvv>>><<<<<<",
+    "players": 1,
+    "moves": 127
+  },
   "old_levels/order_of_operations.csv": {
     "sol": "<^v^^<^^^>^^<vv^vv^^^^^^^^^^>^v>vv<vvvvvvvv>>>>>^^^^^^^^^^^^^^^>>>>>vvvvvvv>vvvvvvv>>vv",
     "players": 1,
