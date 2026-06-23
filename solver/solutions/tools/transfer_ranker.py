@@ -27,7 +27,13 @@ import torch
 from huggingface_hub import hf_hub_download
 from torch import nn
 
-from go_explore_portfolio import Candidate, SOLVER, archive_candidates, static_candidates
+from go_explore_portfolio import (
+    Candidate,
+    SOLVER,
+    archive_candidates,
+    coerce_score,
+    static_candidates,
+)
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[3]
@@ -406,16 +412,18 @@ def load_candidates(
             prefix = record.get("prefix")
             if isinstance(level, str) and isinstance(prefix, str):
                 diag = record.get("diag") if isinstance(record.get("diag"), dict) else {}
-                features = diag.get("features") if isinstance(diag.get("features"), dict) else {}
+                diag_features = diag.get("features") if isinstance(diag.get("features"), dict) else {}
+                top_features = record.get("features") if isinstance(record.get("features"), dict) else {}
+                features = diag_features or top_features
                 candidates.append(
                     Candidate(
                         level=level,
                         prefix=prefix,
                         source=str(record.get("source") or seed_file),
-                        rats=int(record.get("rats", features.get("rats", 999))),
+                        rats=int(record.get("rats", features.get("rats", diag.get("total_rats", 999)))),
                         reachable_rats=int(record.get("reachable_rats", diag.get("reachable_rats", -1))),
                         trapped=int(record.get("trapped", diag.get("trapped", 999))),
-                        score=int(record.get("score", 0)),
+                        score=coerce_score(record.get("score")),
                     )
                 )
     if include_static:

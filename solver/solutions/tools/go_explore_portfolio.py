@@ -23,7 +23,7 @@ import signal
 import subprocess
 import sys
 import time
-from collections import defaultdict, deque
+from collections import Counter, defaultdict, deque
 from collections.abc import Iterable
 from typing import Any
 
@@ -54,6 +54,8 @@ class Candidate:
     trapped: int
     score: int
     event_key: str | None = None
+    flags: tuple[str, ...] = ()
+    diag_known: bool = False
 
 
 @dataclasses.dataclass(frozen=True)
@@ -245,6 +247,7 @@ def archive_candidates(archive: pathlib.Path) -> list[Candidate]:
                 reachable_rats=int(record.get("reachable_rats", -1)),
                 trapped=int(record.get("trapped", 999)),
                 score=int(record.get("score", 0)),
+                diag_known=False,
             )
         )
     return candidates
@@ -263,26 +266,28 @@ def static_candidates() -> list[Candidate]:
                     reachable_rats=-1,
                     trapped=999,
                     score=0,
+                    diag_known=False,
                 )
             )
     return result
+
+
+def coerce_score(value: Any, fallback: int = 0) -> int:
+    if isinstance(value, int | float):
+        return int(value)
+    if isinstance(value, list) and all(isinstance(item, int | float) for item in value):
+        score = 0
+        # Preserve lexicographic ordering for frontier_triage score arrays.
+        for item in value:
+            score = score * 1_000_000 + int(item) + 500_000
+        return score
+    return fallback
 
 
 def seed_file_candidates(seed_file: pathlib.Path) -> list[Candidate]:
     candidates: list[Candidate] = []
     if not seed_file.exists():
         raise SystemExit(f"missing seed file: {seed_file}")
-
-    def coerce_score(value: Any, fallback: int = 0) -> int:
-        if isinstance(value, int | float):
-            return int(value)
-        if isinstance(value, list) and all(isinstance(item, int | float) for item in value):
-            score = 0
-            # Preserve lexicographic ordering for frontier_triage score arrays.
-            for item in value:
-                score = score * 1_000_000 + int(item) + 500_000
-            return score
-        return fallback
 
     for line_number, line in enumerate(seed_file.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
@@ -296,7 +301,17 @@ def seed_file_candidates(seed_file: pathlib.Path) -> list[Candidate]:
         if not isinstance(level, str) or not isinstance(prefix, str):
             raise SystemExit(f"{seed_file}:{line_number}: expected level and prefix strings")
         diag = record.get("diag") if isinstance(record.get("diag"), dict) else {}
-        features = diag.get("features") if isinstance(diag.get("features"), dict) else {}
+        diag_features = diag.get("features") if isinstance(diag.get("features"), dict) else {}
+        top_features = record.get("features") if isinstance(record.get("features"), dict) else {}
+        features = diag_features or top_features
+        structural_known = bool(diag) or (
+            bool(features)
+            and isinstance(record.get("reachable_rats"), int | float)
+            and isinstance(record.get("trapped"), int | float)
+        )
+        flags = record.get("flags")
+        if not isinstance(flags, list):
+            flags = []
         rank_score = record.get("rank_score")
         learned_score = record.get("learned_score")
         score = coerce_score(record.get("score"))
@@ -311,11 +326,13 @@ def seed_file_candidates(seed_file: pathlib.Path) -> list[Candidate]:
                 level=level,
                 prefix=prefix,
                 source=str(record.get("source") or seed_file),
-                rats=int(record.get("rats", features.get("rats", 999))),
+                rats=int(record.get("rats", features.get("rats", diag.get("total_rats", 999)))),
                 reachable_rats=int(record.get("reachable_rats", diag.get("reachable_rats", -1))),
                 trapped=int(record.get("trapped", diag.get("trapped", 999))),
                 score=score,
                 event_key=event_key,
+                flags=tuple(str(flag) for flag in flags),
+                diag_known=structural_known,
             )
         )
     return candidates
@@ -552,6 +569,62 @@ def jobs_for_candidate(
     return jobs
 
 
+def expensive_filter_reason(candidate: Candidate, policy: str) -> str | None:
+    """Return why expensive speculative modes should be skipped for a candidate.
+
+    The cheap modes are useful smoke tests for almost any prefix. FESS and
+    dropchain are much more costly and repeatedly timed out from states whose
+    oracle diagnostics already showed sealed, partial, or otherwise failed
+    basins. Keep the old exhaustive behavior behind --expensive-filter all.
+    """
+    if policy == "all":
+        return None
+    if not candidate.diag_known:
+        return "unknown_diag"
+
+    hard_flags = {
+        flag
+        for flag in candidate.flags
+        if flag.startswith("state:")
+        or flag in {
+            "no-reachable-rats",
+            "no-remaining-mechanism",
+            "tinder-dropped-rat",
+        }
+    }
+    if hard_flags:
+        return "hard_flags:" + ",".join(sorted(hard_flags))
+
+    if policy == "known-clean":
+        if candidate.rats <= 0:
+            return "no_rats"
+        if candidate.reachable_rats < 0:
+            return "unknown_reachability"
+        if candidate.reachable_rats != candidate.rats:
+            return "not_all_rats_reachable"
+        if candidate.trapped > 0:
+            return "trapped_rats"
+        return None
+
+    raise ValueError(f"unknown expensive filter policy: {policy}")
+
+
+def filter_expensive_jobs(
+    jobs: Iterable[Job],
+    candidate: Candidate,
+    expensive_filter: str,
+) -> tuple[list[Job], Counter[str]]:
+    reason = expensive_filter_reason(candidate, expensive_filter)
+    kept = []
+    skipped: Counter[str] = Counter()
+    for job in jobs:
+        if reason is not None and job.args[0] in {"fess", "dropchain"}:
+            skipped[reason] += 1
+            continue
+        kept.append(job)
+    return kept, skipped
+
+
 def _limit_child_memory(mem_mb: int) -> None:
     limit = mem_mb * 1024 * 1024
     resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
@@ -780,6 +853,15 @@ def parse_args() -> argparse.Namespace:
         help="stop speculative lookup_win jobs after this many seconds without heuristic improvement; 0 disables",
     )
     parser.add_argument(
+        "--expensive-filter",
+        choices=["known-clean", "all"],
+        default="known-clean",
+        help=(
+            "gate expensive fess/dropchain probes; known-clean only runs them "
+            "when seed diagnostics show all rats reachable and none trapped"
+        ),
+    )
+    parser.add_argument(
         "--dedupe-event-key",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -876,22 +958,27 @@ def main() -> int:
         ]
         skipped_level = before - len(candidates)
     candidates = unique_best(candidates, args.per_level, args.rank_key, args.dedupe_event_key)
-    jobs = [
-        job
-        for candidate in candidates
-        for job in jobs_for_candidate(
+    jobs = []
+    skipped_expensive: Counter[str] = Counter()
+    for candidate in candidates:
+        candidate_jobs, skipped = filter_expensive_jobs(
+            jobs_for_candidate(
+                candidate,
+                args.timeout_sec,
+                args.mem_mb,
+                args.prune_dead,
+                args.progress_h,
+                args.smart_h,
+                args.lookup_depth,
+                args.lookup_maxnodes,
+                args.lookup_weight,
+                args.lookup_stagnation_secs,
+            ),
             candidate,
-            args.timeout_sec,
-            args.mem_mb,
-            args.prune_dead,
-            args.progress_h,
-            args.smart_h,
-            args.lookup_depth,
-            args.lookup_maxnodes,
-            args.lookup_weight,
-            args.lookup_stagnation_secs,
+            args.expensive_filter,
         )
-    ]
+        jobs.extend(candidate_jobs)
+        skipped_expensive.update(skipped)
     if args.strategy:
         wanted = set(args.strategy)
         jobs = [
@@ -915,20 +1002,31 @@ def main() -> int:
     print(
         f"raw_candidates={raw_candidate_count} selected_candidates={len(candidates)} "
         f"skipped_solved={skipped_solved} skipped_level={skipped_level} "
+        f"skipped_expensive_jobs={sum(skipped_expensive.values())} "
         f"queued_jobs={len(jobs)} concurrency={workers} requested_concurrency={args.jobs} "
         f"cpu_count={cpu_count} max_queued_jobs={args.max_jobs} "
         f"dedupe_event_key={args.dedupe_event_key} "
+        f"expensive_filter={args.expensive_filter} "
         f"lookup_stagnation_secs={args.lookup_stagnation_secs} "
         f"mem_available_mb={available_memory_mb()} logs={out_dir}",
         flush=True,
     )
+    if skipped_expensive:
+        reason_text = ", ".join(
+            f"{reason}={count}" for reason, count in sorted(skipped_expensive.items())
+        )
+        print(f"skipped_expensive_reasons {reason_text}", flush=True)
     for candidate in candidates:
+        flag_text = ",".join(candidate.flags) if candidate.flags else "-"
+        diag_text = "known" if candidate.diag_known else "unknown"
         print(
             "candidate",
             candidate.level,
             f"rats={candidate.rats}",
             f"rr={candidate.reachable_rats}",
             f"trapped={candidate.trapped}",
+            f"diag={diag_text}",
+            f"flags={flag_text}",
             f"source={candidate.source}",
             f"prefix={shlex.quote(candidate.prefix)}",
             flush=True,

@@ -426,17 +426,7 @@ def main() -> int:
         args.seeds_out.parent.mkdir(parents=True, exist_ok=True)
         with args.seeds_out.open("w", encoding="utf-8") as out:
             for record in final:
-                out.write(
-                    json.dumps(
-                        {
-                            "level": record.candidate.level,
-                            "prefix": record.candidate.prefix,
-                            "source": record.candidate.source,
-                        },
-                        sort_keys=True,
-                    )
-                    + "\n"
-                )
+                out.write(json.dumps(record_json(record), sort_keys=True) + "\n")
 
     print(f"\ntriaged={len(records)} selected={len(final)}")
     return 0

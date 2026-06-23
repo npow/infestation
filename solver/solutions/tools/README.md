@@ -28,14 +28,18 @@ paths; check before reusing those.
   default before per-level selection; use `--no-dedupe-event-key` to compare
   every route variant. Speculative `lookup win` jobs also stop after
   `--lookup-stagnation-secs` seconds without heuristic improvement; pass `0` to
-  restore the older full-budget behavior.
+  restore the older full-budget behavior. By default, expensive `fess` and
+  `dropchain` jobs run only for seed records with known clean diagnostics
+  (`--expensive-filter known-clean`); pass `--expensive-filter all` to restore
+  the older exhaustive queue.
 - `frontier_triage.py` — replays archive/static prefixes with the Rust oracle's
-  `diag` mode, attaches structural warning flags, and emits compact seed JSONL.
+  `diag` mode, attaches structural warning flags, and emits rich seed JSONL.
   By default it ranks high-penalty dead-frontier flags below live mechanisms,
   caps repeated diagnostic signatures, and drops high-penalty records when a
   level has lower-penalty alternatives. Use `--per-signature 0` and
   `--max-flag-penalty -1` to preserve the older exhaustive ranking behavior.
-  Use this before learned ranking so known dead basins become labeled examples.
+  Use this before learned ranking so known dead basins become labeled examples
+  and the portfolio runner can avoid expensive probes from already-bad basins.
 - `event_seed_builder.py` — macro-expands ranked/static return cells by one
   Rust-oracle `events --families` layer and writes transfer-rankable JSONL
   seeds. With `--transfer-rank`, it lazy-loads the same frozen Sokoban prior and
