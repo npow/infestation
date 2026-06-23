@@ -565,13 +565,30 @@ def stop_timed_out_job(active: ActiveJob) -> int:
     return 124
 
 
-def run_jobs(jobs: list[Job], out_dir: pathlib.Path, concurrency: int) -> bool:
+def stop_job(active: ActiveJob, reason: str) -> int:
+    active.log_handle.write(f"\nSTOPPED {reason}\n")
+    active.log_handle.flush()
+    active.process.send_signal(signal.SIGTERM)
+    try:
+        active.process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        active.process.kill()
+        active.process.wait()
+    return 130
+
+
+def run_jobs(
+    jobs: list[Job],
+    out_dir: pathlib.Path,
+    concurrency: int,
+    stop_on_solved: bool,
+) -> bool:
     pending = deque(jobs)
     active: list[ActiveJob] = []
     found_solution = False
 
     def launch_ready() -> None:
-        while pending and len(active) < concurrency:
+        while pending and len(active) < concurrency and not (stop_on_solved and found_solution):
             job = pending.popleft()
             active.append(start_job(job, out_dir))
 
@@ -590,6 +607,22 @@ def run_jobs(jobs: list[Job], out_dir: pathlib.Path, concurrency: int) -> bool:
             marker = "SOLVED" if solved else "done"
             print(f"{marker} {name} code={code} elapsed={elapsed:.1f}s log={log_path}")
             sys.stdout.flush()
+            if solved and stop_on_solved:
+                pending.clear()
+                for other in list(active):
+                    active.remove(other)
+                    stopped_code = stop_job(other, "after_solution")
+                    stopped_name, _, stopped_elapsed, stopped_log_path, stopped_solved = finish_job(
+                        other, stopped_code
+                    )
+                    found_solution = found_solution or stopped_solved
+                    stopped_marker = "SOLVED" if stopped_solved else "stopped"
+                    print(
+                        f"{stopped_marker} {stopped_name} code={stopped_code} "
+                        f"elapsed={stopped_elapsed:.1f}s log={stopped_log_path}"
+                    )
+                    sys.stdout.flush()
+                break
             launch_ready()
         if active:
             time.sleep(0.25)
@@ -695,6 +728,12 @@ def parse_args() -> argparse.Namespace:
         help="skip candidates whose level contains this token; repeatable",
     )
     parser.add_argument("--strategy", action="append", default=[])
+    parser.add_argument(
+        "--stop-on-solved",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="terminate remaining queued/running jobs after a solution marker appears",
+    )
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -793,7 +832,7 @@ def main() -> int:
             print("$", shlex.join([str(SOLVER), *job.args]))
         return 0
 
-    found_solution = run_jobs(jobs, out_dir, workers)
+    found_solution = run_jobs(jobs, out_dir, workers, args.stop_on_solved)
     if not found_solution:
         print("no solved job in this go-explore portfolio")
     return 0

@@ -4069,7 +4069,7 @@ fn solve_with_context(
         q.push_back(0);
         while let Some(idx) = q.pop_front() {
             expansions += 1;
-            if expansions % 10_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+            if expansions % 1_024 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
                 return None;
             }
             let cur_grid = nodes[idx].grid.clone();
@@ -4121,7 +4121,7 @@ fn solve_with_context(
     let mut best_idx_seen = 0usize;
     while let Some(item) = pq.pop() {
         expansions += 1;
-        if expansions % 10_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+        if expansions % 1_024 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
             let best_path = reconstruct(&nodes, best_idx_seen);
             eprintln!(
                 "  [timeout after {expansions} expansions, best_h={best_h_seen}, nodes={}]",
@@ -4231,7 +4231,7 @@ fn solve_novelty(
     let mut best_idx = 0usize;
     while let Some(item) = pq.pop() {
         expansions += 1;
-        if expansions % 10_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+        if expansions % 1_024 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
             let best_path = reconstruct(&nodes, best_idx);
             eprintln!(
                 "  [novelty timeout after {} expansions, best_h={}, nodes={}]",
@@ -4770,7 +4770,7 @@ fn solve_lookup_goal_branches(
 
     while let Some(idx) = q.pop_front() {
         expansions += 1;
-        if expansions % 256 == 0
+        if expansions % 128 == 0
             && (start.elapsed().as_secs_f64() > time_limit_secs || nodes.len() >= max_nodes)
         {
             break;
@@ -6428,7 +6428,7 @@ fn solve_lure(
 
     while let Some(item) = pq.pop() {
         expansions += 1;
-        if expansions % 20_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+        if expansions % 1_024 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
             print_best_search_state(
                 "lure",
                 "timeout",
@@ -6567,7 +6567,7 @@ fn solve_geom_lure(
 
     while let Some(item) = pq.pop() {
         expansions += 1;
-        if expansions % 20_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+        if expansions % 1_024 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
             print_best_search_state(
                 "geomlure",
                 "timeout",
@@ -7445,7 +7445,7 @@ fn find_event_successors(
 
     while let Some(idx) = q.pop_front() {
         expansions += 1;
-        if expansions % 5_000 == 0 && start_time.elapsed().as_secs_f64() > time_limit_secs {
+        if expansions % 512 == 0 && start_time.elapsed().as_secs_f64() > time_limit_secs {
             break;
         }
 
@@ -7824,7 +7824,7 @@ fn solve_to_event(
         let mut expansions = 0u64;
         while let Some(idx) = q.pop_front() {
             expansions += 1;
-            if expansions % 20_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+            if expansions % 1_024 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
                 eprintln!("  [event timeout after {} expansions]", expansions);
                 return None;
             }
@@ -7874,7 +7874,7 @@ fn solve_to_event(
     let mut best_idx_seen = 0usize;
     while let Some(item) = pq.pop() {
         expansions += 1;
-        if expansions % 20_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+        if expansions % 1_024 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
             let best_path = reconstruct(&nodes, best_idx_seen);
             eprintln!(
                 "  [event timeout after {} expansions, best_h={}, nodes={}]",
@@ -8954,7 +8954,7 @@ fn solve_tinderbox(
 
     while let Some(item) = pq.pop() {
         expansions += 1;
-        if expansions % 100_000 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
+        if expansions % 2_048 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
             let best_path = reconstruct(&nodes, best_idx_seen);
             eprintln!(
                 "  [tinder timeout after {expansions} expansions, best_h={best_h_seen}, nodes={}]",

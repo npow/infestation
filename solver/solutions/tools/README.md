@@ -20,7 +20,9 @@ paths; check before reusing those.
 - `go_explore_portfolio.py` — archive-seeded portfolio runner. It treats saved
   frontier prefixes as return cells, then launches capped `fess`, `dropchain`,
   `lookup win`, and `novelty` probes from the best diverse prefixes per level.
-  It also interleaves levels and enables `PRUNE_DEAD=1` by default.
+  It also interleaves levels, enables `PRUNE_DEAD=1` by default, and stops
+  remaining queued/running probes after a solution marker unless
+  `--no-stop-on-solved` is passed.
   Use `--max-jobs` to run short, inspectable waves instead of the whole archive
   queue.
 - `frontier_triage.py` — replays archive/static prefixes with the Rust oracle's
