@@ -17,9 +17,9 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         assert!(!players.is_empty());
 
         // Phase 1: Determine each player's intended destination (wall/plank blocks only)
-        let mut dests: Vec<Position> = Vec::new();
-        let mut move_dirs: Vec<Option<Dir4>> = Vec::new();
-        let mut facing_dirs: Vec<Dir4> = Vec::new();
+        let mut dests = [Position { x: 0, y: 0 }; 2];
+        let mut move_dirs = [None; 2];
+        let mut facing_dirs = [Dir4::North; 2];
 
         for (i, player) in players.iter().enumerate() {
             let (player_pos, current_dir) = (player.pos, player.dir);
@@ -28,14 +28,14 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 Action::Move(dir) => {
                     let candidate = player_pos + dir.delta();
                     let wall_blocked = self.grid.borrow().at(candidate).blocks_player();
-                    dests.push(if wall_blocked { player_pos } else { candidate });
-                    move_dirs.push(Some(dir));
-                    facing_dirs.push(dir);
+                    dests[i] = if wall_blocked { player_pos } else { candidate };
+                    move_dirs[i] = Some(dir);
+                    facing_dirs[i] = dir;
                 }
                 Action::Stall => {
-                    dests.push(player_pos);
-                    move_dirs.push(None);
-                    facing_dirs.push(current_dir);
+                    dests[i] = player_pos;
+                    move_dirs[i] = None;
+                    facing_dirs[i] = current_dir;
                 }
             }
         }
@@ -74,7 +74,12 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         }
 
         // Phase 3: Create Moving entities and build PlayerInfos
-        let mut player_infos: Vec<PlayerInfo> = Vec::new();
+        let mut player_infos = [PlayerInfo {
+            pos: Position { x: 0, y: 0 },
+            dir: Dir4::North,
+            moved: false,
+            player: Player::Player1,
+        }; 2];
         for (i, found) in players.iter().enumerate() {
             let dest = dests[i];
             let blocked = dest == found.pos;
@@ -89,16 +94,17 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 });
             }
 
-            player_infos.push(PlayerInfo {
+            player_infos[i] = PlayerInfo {
                 pos: dest,
                 dir: facing_dirs[i],
                 moved: move_dirs[i].is_some(),
                 player: found.player,
-            });
+            };
         }
 
-        self.move_cyborg_rats(&player_infos);
-        self.move_rats(&player_infos);
+        let player_infos = &player_infos[..players.len()];
+        self.move_cyborg_rats(player_infos);
+        self.move_rats(player_infos);
 
         // Don't actually perform the move yet.
         // The grid is useful for tracking what is blocked so that rat movement is resolved

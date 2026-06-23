@@ -114,6 +114,8 @@ pub(crate) struct MoveHandler<G = Grid> {
     pub(crate) pending_explosions: Vec<Position>,
     /// Original cells overwritten while building a movement phase.
     pub(crate) modified_cells: Vec<(Position, Cell)>,
+    /// Tracks modified cells without linearly scanning modified_cells.
+    modified_cell_bits: [u64; 16],
 }
 
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
@@ -127,6 +129,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             exploding: Vec::new(),
             pending_explosions: Vec::new(),
             modified_cells: Vec::new(),
+            modified_cell_bits: [0; 16],
         }
     }
 
@@ -140,11 +143,26 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
     }
 
     pub(crate) fn set_cell_for_movement(&mut self, pos: Position, cell: Cell) {
-        if !self
-            .modified_cells
-            .iter()
-            .any(|&(modified_pos, _)| modified_pos == pos)
-        {
+        let bit_index = {
+            let grid = self.grid.borrow();
+            let bounds = grid.bounds();
+            pos.in_bounds(bounds)
+                .then_some(pos.y as usize * bounds.0 + pos.x as usize)
+                .filter(|index| *index < self.modified_cell_bits.len() * u64::BITS as usize)
+        };
+        let already_modified = if let Some(index) = bit_index {
+            let word = index / u64::BITS as usize;
+            let mask = 1u64 << (index % u64::BITS as usize);
+            let already_modified = self.modified_cell_bits[word] & mask != 0;
+            self.modified_cell_bits[word] |= mask;
+            already_modified
+        } else {
+            self.modified_cells
+                .iter()
+                .any(|&(modified_pos, _)| modified_pos == pos)
+        };
+
+        if !already_modified {
             let original = self.grid.borrow().at(pos);
             self.modified_cells.push((pos, original));
         }
@@ -159,10 +177,9 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             }
         }
 
-        let moving_from: Vec<_> = self.moving.iter().map(|moving| moving.from).collect();
         let grid = self.grid.borrow_mut();
-        for pos in moving_from {
-            *grid.at_mut(pos) = Cell::Empty;
+        for moving in &self.moving {
+            *grid.at_mut(moving.from) = Cell::Empty;
         }
     }
 

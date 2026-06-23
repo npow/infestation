@@ -1090,6 +1090,7 @@ struct Node {
 
 struct LookupNode {
     grid: Grid,
+    hash: u64,
     parent: usize,
     action: ActionStep,
     depth: u32,
@@ -4481,14 +4482,16 @@ fn solve_lookup(
         return Some((Vec::new(), PlayState::Playing));
     }
 
+    let initial_hash = state_key(grid);
     let mut nodes = vec![LookupNode {
         grid: grid.clone(),
+        hash: initial_hash,
         parent: usize::MAX,
         action: ActionStep::empty(),
         depth: 0,
     }];
     let mut visited: HashMap<u64, u32> = HashMap::new();
-    visited.insert(state_key(grid), 0);
+    visited.insert(initial_hash, 0);
     let mut expansions = 0u64;
     let mut best_h = if order == LookupOrder::Bfs {
         lookup_bfs_progress_score(goal, grid, grid)
@@ -4607,18 +4610,6 @@ fn solve_lookup(
                 if !accepted_goal && visited.contains_key(&hash) {
                     continue;
                 }
-                let node_idx = nodes.len();
-                nodes.push(LookupNode {
-                    grid: next_grid.clone(),
-                    parent: idx,
-                    action: *actions,
-                    depth: cur_depth + 1,
-                });
-                if accepted_goal {
-                    return Some((reconstruct_lookup(&nodes, node_idx), play_state));
-                }
-
-                visited.insert(hash, cur_depth + 1);
                 let h = analysis.as_ref().map_or_else(
                     || lookup_bfs_progress_score(goal, grid, &next_grid),
                     |analysis| {
@@ -4629,6 +4620,19 @@ fn solve_lookup(
                         }
                     },
                 );
+                let node_idx = nodes.len();
+                nodes.push(LookupNode {
+                    grid: next_grid,
+                    hash,
+                    parent: idx,
+                    action: *actions,
+                    depth: cur_depth + 1,
+                });
+                if accepted_goal {
+                    return Some((reconstruct_lookup(&nodes, node_idx), play_state));
+                }
+
+                visited.insert(hash, cur_depth + 1);
                 if h < best_h {
                     best_h = h;
                     best_idx = node_idx;
@@ -4691,6 +4695,11 @@ fn solve_lookup(
 
         let idx = item.idx;
         let cur_depth = nodes[idx].depth;
+        if let Some(&best_depth) = visited.get(&nodes[idx].hash)
+            && best_depth < cur_depth
+        {
+            continue;
+        }
         if cur_depth as i64 > item.g || cur_depth as usize >= max_depth {
             continue;
         }
@@ -4741,25 +4750,26 @@ fn solve_lookup(
                 continue;
             }
 
+            let h = analysis.as_ref().map_or_else(
+                || lookup_goal_heuristic(goal, grid, &next_grid),
+                win_heuristic_from_analysis,
+            );
             let node_idx = nodes.len();
             nodes.push(LookupNode {
-                grid: next_grid.clone(),
+                grid: next_grid,
+                hash,
                 parent: idx,
                 action: *actions,
                 depth: next_depth,
             });
             if goal_reached
                 && (play_state == PlayState::Won
-                    || trap_constraints.accepts(&next_grid, play_state))
+                    || trap_constraints.accepts(&nodes[node_idx].grid, play_state))
             {
                 return Some((reconstruct_lookup(&nodes, node_idx), play_state));
             }
 
             visited.insert(hash, next_depth);
-            let h = analysis.as_ref().map_or_else(
-                || lookup_goal_heuristic(goal, grid, &next_grid),
-                win_heuristic_from_analysis,
-            );
             if h < best_h {
                 best_h = h;
                 best_idx = node_idx;
