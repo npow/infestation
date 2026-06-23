@@ -5262,6 +5262,7 @@ fn solve_ratdrop_chain(
     beam: usize,
     mop_depth: usize,
     mop_secs: f64,
+    mop_branch_limit: usize,
     mop_strategy: &str,
     mop_weight: i64,
 ) -> Option<Vec<Vec<Action>>> {
@@ -5274,8 +5275,9 @@ fn solve_ratdrop_chain(
 
     for step_idx in 0..steps {
         frontier.sort_by_key(|branch| branch.score);
-        if mop_secs > 0.0 {
-            for branch in frontier.iter().take(beam.min(frontier.len())) {
+        if mop_secs > 0.0 && mop_branch_limit > 0 {
+            let mop_limit = mop_branch_limit.min(beam).min(frontier.len());
+            for branch in frontier.iter().take(mop_limit) {
                 if let Some(mop) = solve_with_context(
                     &branch.grid,
                     mop_depth,
@@ -5388,8 +5390,9 @@ fn solve_ratdrop_chain(
     }
 
     frontier.sort_by_key(|branch| branch.score);
-    if mop_secs > 0.0 {
-        for branch in frontier {
+    if mop_secs > 0.0 && mop_branch_limit > 0 {
+        let mop_limit = mop_branch_limit.min(frontier.len());
+        for branch in frontier.into_iter().take(mop_limit) {
             if let Some(mop) = solve_with_context(
                 &branch.grid,
                 mop_depth,
@@ -5726,9 +5729,32 @@ struct BeamState {
 #[derive(Clone)]
 struct RouteBeamState {
     grid: Grid,
-    path: Vec<Vec<Action>>,
+    path_node: usize,
     deviations: usize,
     score: i64,
+}
+
+struct RoutePathNode {
+    parent: usize,
+    action: ActionStep,
+}
+
+struct RouteCandidate {
+    grid: Grid,
+    parent_path: usize,
+    action: ActionStep,
+    deviations: usize,
+    score: i64,
+}
+
+fn reconstruct_route(path_nodes: &[RoutePathNode], mut idx: usize) -> Vec<Vec<Action>> {
+    let mut acts = Vec::new();
+    while path_nodes[idx].parent != usize::MAX {
+        acts.push(path_nodes[idx].action.to_vec());
+        idx = path_nodes[idx].parent;
+    }
+    acts.reverse();
+    acts
 }
 
 fn feature_bucket_key(grid: &Grid) -> String {
@@ -8163,6 +8189,7 @@ fn solve_event_fess(
     trap_constraints: TrapConstraints,
     mop_depth: usize,
     mop_secs: f64,
+    mop_branch_limit: usize,
     mop_strategy: &str,
     mop_weight: i64,
 ) -> Option<Vec<Vec<Action>>> {
@@ -8185,8 +8212,9 @@ fn solve_event_fess(
         }
 
         frontier.sort_by_key(|branch| branch.score);
-        if mop_secs > 0.0 {
-            for branch in frontier.iter().take(width.min(frontier.len())) {
+        if mop_secs > 0.0 && mop_branch_limit > 0 {
+            let mop_limit = mop_branch_limit.min(width).min(frontier.len());
+            for branch in frontier.iter().take(mop_limit) {
                 let remaining_secs = (total_secs - started.elapsed().as_secs_f64()).max(0.0);
                 let this_mop_secs = mop_secs.min(remaining_secs);
                 if this_mop_secs <= 0.0 {
@@ -8591,17 +8619,25 @@ fn solve_routebeam(
     jitter: i64,
 ) -> Option<Vec<Vec<Action>>> {
     let nplayers = count_players(grid);
-    let tuples = all_action_tuples(nplayers);
+    let initial_had_rats = count_rats(grid) > 0;
+    let tuples = all_action_steps(nplayers);
     let start = Instant::now();
     let max_depth = reference.len() + extra_depth;
     let initial_score = lookup_bfs_progress_score(LookupGoal::Win, grid, grid);
+    let mut path_nodes = vec![RoutePathNode {
+        parent: usize::MAX,
+        action: ActionStep::empty(),
+    }];
     let mut frontier = vec![RouteBeamState {
         grid: grid.clone(),
-        path: Vec::new(),
+        path_node: 0,
         deviations: 0,
         score: initial_score,
     }];
-    let mut best = frontier[0].clone();
+    let mut best_score = initial_score;
+    let mut best_deviations = 0usize;
+    let mut best_path_node = 0usize;
+    let mut best_grid = grid.clone();
 
     for depth in 0..max_depth {
         if start.elapsed().as_secs_f64() > time_limit_secs {
@@ -8609,55 +8645,71 @@ fn solve_routebeam(
                 "  [routebeam timeout at depth={} frontier={} best_score={} deviations={}]",
                 depth,
                 frontier.len(),
-                best.score,
-                best.deviations
+                best_score,
+                best_deviations
             );
-            eprintln!("  BEST_ASCII {}", format_path_ascii(&best.path));
-            eprintln!("  BEST_STATE:\n{}", best.grid.to_csv());
+            let best_path = reconstruct_route(&path_nodes, best_path_node);
+            eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
+            eprintln!("  BEST_STATE:\n{}", best_grid.to_csv());
             return None;
         }
 
-        let mut by_state: HashMap<u64, RouteBeamState> = HashMap::new();
+        let mut by_state: HashMap<u64, RouteCandidate> = if nplayers > 1 {
+            let layer_capacity = frontier.len().saturating_mul(tuples.len()).min(1_200_000);
+            HashMap::with_capacity(layer_capacity)
+        } else {
+            HashMap::new()
+        };
         for state in &frontier {
             for actions in &tuples {
                 let reference_action = reference.get(depth);
-                let deviates = reference_action.is_some_and(|wanted| wanted != actions);
+                let deviates =
+                    reference_action.is_some_and(|wanted| wanted.as_slice() != actions.as_slice());
                 let deviations = state.deviations + usize::from(deviates);
                 if max_deviations.is_some_and(|limit| deviations > limit) {
                     continue;
                 }
 
-                let (next_grid, play_state) = step(&state.grid, actions);
+                let (next_grid, play_state) =
+                    step_search(&state.grid, actions.as_slice(), nplayers, initial_had_rats);
                 if play_state == PlayState::GameOver {
                     continue;
                 }
 
-                let mut path = state.path.clone();
-                path.push(actions.clone());
                 if play_state == PlayState::Won {
+                    let mut path = reconstruct_route(&path_nodes, state.path_node);
+                    path.push(actions.to_vec());
                     return Some(path);
                 }
 
                 let hash = next_grid.state_hash();
+                if nplayers > 1 {
+                    match by_state.get(&hash) {
+                        Some(existing) if existing.deviations <= deviations => continue,
+                        _ => {}
+                    }
+                }
                 let h = lookup_bfs_progress_score(LookupGoal::Win, grid, &next_grid);
                 let score = h
                     + deviations as i64 * deviation_penalty
-                    + path.len() as i64
+                    + (depth + 1) as i64
                     + jitter_for(hash, depth, seed, jitter);
-                let candidate = RouteBeamState {
+                let candidate = RouteCandidate {
                     grid: next_grid,
-                    path,
+                    parent_path: state.path_node,
+                    action: *actions,
                     deviations,
                     score,
                 };
-                if candidate.score < best.score {
-                    best = candidate.clone();
-                }
 
-                match by_state.get(&hash) {
-                    Some(existing) if existing.score <= candidate.score => {}
-                    _ => {
-                        by_state.insert(hash, candidate);
+                if nplayers > 1 {
+                    by_state.insert(hash, candidate);
+                } else {
+                    match by_state.get(&hash) {
+                        Some(existing) if existing.score <= candidate.score => {}
+                        _ => {
+                            by_state.insert(hash, candidate);
+                        }
                     }
                 }
             }
@@ -8666,16 +8718,38 @@ fn solve_routebeam(
         if by_state.is_empty() {
             eprintln!(
                 "  [routebeam exhausted at depth={} best_score={} deviations={}]",
-                depth, best.score, best.deviations
+                depth, best_score, best_deviations
             );
-            eprintln!("  BEST_ASCII {}", format_path_ascii(&best.path));
-            eprintln!("  BEST_STATE:\n{}", best.grid.to_csv());
+            let best_path = reconstruct_route(&path_nodes, best_path_node);
+            eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
+            eprintln!("  BEST_STATE:\n{}", best_grid.to_csv());
             return None;
         }
 
-        let mut next: Vec<RouteBeamState> = by_state.into_values().collect();
-        next.sort_by_key(|state| state.score);
-        next.truncate(width);
+        let mut next_candidates: Vec<RouteCandidate> = by_state.into_values().collect();
+        next_candidates.sort_by_key(|state| state.score);
+        next_candidates.truncate(width);
+        let mut next = Vec::with_capacity(next_candidates.len());
+        for candidate in next_candidates {
+            let path_node = path_nodes.len();
+            path_nodes.push(RoutePathNode {
+                parent: candidate.parent_path,
+                action: candidate.action,
+            });
+            let state = RouteBeamState {
+                grid: candidate.grid,
+                path_node,
+                deviations: candidate.deviations,
+                score: candidate.score,
+            };
+            if state.score < best_score {
+                best_score = state.score;
+                best_deviations = state.deviations;
+                best_path_node = path_node;
+                best_grid = state.grid.clone();
+            }
+            next.push(state);
+        }
         frontier = next;
 
         if depth % 25 == 24 || depth + 1 == reference.len() {
@@ -8683,18 +8757,19 @@ fn solve_routebeam(
                 "  [routebeam depth={} frontier={} best_score={} deviations={}]",
                 depth + 1,
                 frontier.len(),
-                best.score,
-                best.deviations
+                best_score,
+                best_deviations
             );
         }
     }
 
     eprintln!(
         "  [routebeam max-depth best_score={} deviations={}]",
-        best.score, best.deviations
+        best_score, best_deviations
     );
-    eprintln!("  BEST_ASCII {}", format_path_ascii(&best.path));
-    eprintln!("  BEST_STATE:\n{}", best.grid.to_csv());
+    let best_path = reconstruct_route(&path_nodes, best_path_node);
+    eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
+    eprintln!("  BEST_STATE:\n{}", best_grid.to_csv());
     None
 }
 
@@ -12554,6 +12629,7 @@ fn main() {
         let mut beam = 32usize;
         let mut mop_depth = 400usize;
         let mut mop_secs = 20.0;
+        let mut mop_branch_limit: Option<usize> = None;
         let mut mop_strategy = "gbfs".to_string();
         let mut mop_weight = 5i64;
         let mut i = 3;
@@ -12595,6 +12671,10 @@ fn main() {
                     mop_secs = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--mopbeam" => {
+                    mop_branch_limit = Some(args[i + 1].parse::<usize>().unwrap());
+                    i += 2;
+                }
                 "--mopstrat" => {
                     mop_strategy = args[i + 1].clone();
                     i += 2;
@@ -12616,8 +12696,9 @@ fn main() {
             );
             return;
         }
+        let mop_branch_limit = mop_branch_limit.unwrap_or(beam);
         eprintln!(
-            "dropchain solve: players={} prefix={} steps={} segdepth={} segsecs={} segnodes={} results={} beam={} mopdepth={} mopsecs={} mopstrat={} mopweight={}",
+            "dropchain solve: players={} prefix={} steps={} segdepth={} segsecs={} segnodes={} results={} beam={} mopdepth={} mopsecs={} mopbeam={} mopstrat={} mopweight={}",
             nplayers,
             prefix.len(),
             steps,
@@ -12628,6 +12709,7 @@ fn main() {
             beam,
             mop_depth,
             mop_secs,
+            mop_branch_limit,
             mop_strategy,
             mop_weight
         );
@@ -12642,6 +12724,7 @@ fn main() {
             beam,
             mop_depth,
             mop_secs,
+            mop_branch_limit,
             &mop_strategy,
             mop_weight,
         ) {
@@ -12681,6 +12764,7 @@ fn main() {
         let mut trap_constraints = TrapConstraints::default();
         let mut mop_depth = 400usize;
         let mut mop_secs = 0.0;
+        let mut mop_branch_limit: Option<usize> = None;
         let mut mop_strategy = "gbfs".to_string();
         let mut mop_weight = 5i64;
         let mut i = 3;
@@ -12734,6 +12818,10 @@ fn main() {
                     mop_secs = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--mopbeam" => {
+                    mop_branch_limit = Some(args[i + 1].parse::<usize>().unwrap());
+                    i += 2;
+                }
                 "--mopstrat" => {
                     mop_strategy = args[i + 1].clone();
                     i += 2;
@@ -12756,8 +12844,9 @@ fn main() {
             );
             return;
         }
+        let mop_branch_limit = mop_branch_limit.unwrap_or(width);
         eprintln!(
-            "fess solve: players={} prefix={} steps={} width={} per_bucket={} events={} segdepth={} segsecs={} secs={} min_rats={:?} trap={:?} mopdepth={} mopsecs={} mopstrat={} mopweight={}",
+            "fess solve: players={} prefix={} steps={} width={} per_bucket={} events={} segdepth={} segsecs={} secs={} min_rats={:?} trap={:?} mopdepth={} mopsecs={} mopbeam={} mopstrat={} mopweight={}",
             nplayers,
             prefix.len(),
             steps,
@@ -12771,6 +12860,7 @@ fn main() {
             trap_constraints,
             mop_depth,
             mop_secs,
+            mop_branch_limit,
             mop_strategy,
             mop_weight
         );
@@ -12788,6 +12878,7 @@ fn main() {
             trap_constraints,
             mop_depth,
             mop_secs,
+            mop_branch_limit,
             &mop_strategy,
             mop_weight,
         ) {

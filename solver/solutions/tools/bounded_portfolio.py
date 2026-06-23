@@ -73,6 +73,110 @@ HANDOFF_PRE_T1 = "v^ >^ >^ >^ >^ >^"
 TUG_PRE_T3_BAFFLE = "^v vv >< vv vv vv vv <> <> <> <>"
 BLOCKED_PRE_T5 = "vv v^ vv <^ <v <^ <."
 BLOCKED_POST_T5_PRE_T1 = "vv v^ vv <^ <v <^ <. <^ ^^ ^^"
+CHASE_OLD_ROUTE = (
+    "^>>>v^^^>^^>>>>>v>>vvvvv^^^^^^<<<<v<<<v^<^<^<<>>>>v>>>>>vvvv^^^^"
+    "<<<^<^<<^^^^^^^^<<<<<^^vvvvvvvvvvvvv>>>>>>>>vv^^<<vvvvv<>>>>>>>>>>>>>>"
+    "^^v<>^^^^^^^^^^^^^^^^^^<<<<>>vvvv<vvvvvvvvvvvv<vvv<<<<<<<<<<<<<<<"
+)
+HANDOFF_OLD_ROUTE = (
+    "vv >^ >^ >^ >^ >^ ^^ .v .v .> .> .> v> v< << ^< ^< ^> ^^ ^^ ^^ ^< "
+    "^< ^> <> >> .> v> >v >> >> >^ .^ >< ^< ^^ ^v >< ^^ ^^ ^^ ^v ^v ^> "
+    ">> vv vv <v <> <^ v^ <^ v^ v^ v^ ^< ^< ^. >^ ^> >^ >> v< v. v> <v "
+    "v< v. v^ <> <^ <> <v ^^ << <v <> << << ^< ^< << << ^> ^<"
+)
+BLOCKED_OLD_ROUTE = (
+    "vv v^ vv <^ <v <^ <. ^< ^^ ^^ ^^ ^< >v ^> >> >. >^ v> v> vv vv ^< "
+    "^^ ^^ ^^ ^^ ^^ <^ <^ <^ <^ <^ <^ <^ v^ v^ <^ <^ v^ v^ v^ v^ v^ <^ "
+    "v^ v^ <^ <^ <v v^ vv v> ^> ^> ^> ^v ^v ^> ^v ^v ^v ^< ^< ^< ^< ^< "
+    ">< >^ >v v. v. >. v. v^ vv <v <. <^ <. <v v> >> v> v^ v^ v^ <^ <^ v^"
+)
+
+
+def routebeam_extra_jobs() -> list[Job]:
+    specs = [
+        (
+            "chase",
+            "levels/chase.csv",
+            CHASE_OLD_ROUTE,
+            50_000,
+            [
+                (3, 40, 12_000, 3, 90),
+                (4, 45, 11_500, 4, 100),
+                (6, 50, 9_500, 5, 160),
+                (10, 65, 7_000, 6, 250),
+                (12, 75, 6_000, 7, 350),
+                (14, 85, 5_000, 8, 500),
+                (18, 95, 4_000, 9, 700),
+                (24, 110, 2_500, 10, 900),
+            ],
+        ),
+        (
+            "handoff",
+            "levels/cooperation/handoff.csv",
+            HANDOFF_OLD_ROUTE,
+            35_000,
+            [
+                (8, 45, 10_000, 3, 80),
+                (10, 50, 9_000, 4, 120),
+                (14, 60, 7_000, 5, 180),
+                (16, 65, 6_000, 6, 240),
+                (18, 70, 5_500, 7, 320),
+                (22, 80, 4_500, 8, 450),
+                (24, 90, 4_000, 9, 600),
+                (28, 100, 3_000, 10, 800),
+                (32, 115, 2_000, 11, 1_000),
+            ],
+        ),
+        (
+            "blocked",
+            "levels/cooperation/blocked_v2.csv",
+            BLOCKED_OLD_ROUTE,
+            35_000,
+            [
+                (8, 45, 10_000, 3, 80),
+                (10, 50, 9_000, 4, 120),
+                (14, 60, 7_000, 5, 180),
+                (16, 65, 6_000, 6, 240),
+                (18, 70, 5_500, 7, 320),
+                (22, 80, 4_500, 8, 450),
+                (24, 90, 4_000, 9, 600),
+                (28, 100, 3_000, 10, 800),
+                (32, 115, 2_000, 11, 1_000),
+            ],
+        ),
+    ]
+
+    jobs = []
+    for label, level, reference, width, configs in specs:
+        for max_dev, extra, penalty, seed, jitter in configs:
+            jobs.append(
+                Job(
+                    f"routebeam_{label}_old_dev{max_dev}_seed{seed}_extra",
+                    (
+                        "routebeam",
+                        level,
+                        "--reference",
+                        reference,
+                        "--width",
+                        str(width),
+                        "--extra",
+                        str(extra),
+                        "--secs",
+                        "110",
+                        "--dev-penalty",
+                        str(penalty),
+                        "--max-dev",
+                        str(max_dev),
+                        "--seed",
+                        str(seed),
+                        "--jitter",
+                        str(jitter),
+                    ),
+                    timeout_sec=125,
+                    mem_mb=2_500,
+                )
+            )
+    return jobs
 
 
 def current_jobs() -> list[Job]:
@@ -179,6 +283,56 @@ def current_jobs() -> list[Job]:
                 "0",
                 "--no-canonical",
             ),
+        ),
+        Job(
+            "routebeam_chase_old_dev5_seed1",
+            (
+                "routebeam",
+                "levels/chase.csv",
+                "--reference",
+                CHASE_OLD_ROUTE,
+                "--width",
+                "50000",
+                "--extra",
+                "45",
+                "--secs",
+                "110",
+                "--dev-penalty",
+                "10000",
+                "--max-dev",
+                "5",
+                "--seed",
+                "1",
+                "--jitter",
+                "100",
+            ),
+            timeout_sec=125,
+            mem_mb=2_500,
+        ),
+        Job(
+            "routebeam_chase_old_dev8_seed2",
+            (
+                "routebeam",
+                "levels/chase.csv",
+                "--reference",
+                CHASE_OLD_ROUTE,
+                "--width",
+                "50000",
+                "--extra",
+                "55",
+                "--secs",
+                "110",
+                "--dev-penalty",
+                "8500",
+                "--max-dev",
+                "8",
+                "--seed",
+                "2",
+                "--jitter",
+                "180",
+            ),
+            timeout_sec=125,
+            mem_mb=2_500,
         ),
         Job(
             "tinder_t106_rectsep",
@@ -495,6 +649,56 @@ def current_jobs() -> list[Job]:
             ),
         ),
         Job(
+            "routebeam_handoff_old_dev12_seed1",
+            (
+                "routebeam",
+                "levels/cooperation/handoff.csv",
+                "--reference",
+                HANDOFF_OLD_ROUTE,
+                "--width",
+                "35000",
+                "--extra",
+                "55",
+                "--secs",
+                "110",
+                "--dev-penalty",
+                "8000",
+                "--max-dev",
+                "12",
+                "--seed",
+                "1",
+                "--jitter",
+                "120",
+            ),
+            timeout_sec=125,
+            mem_mb=2_500,
+        ),
+        Job(
+            "routebeam_handoff_old_dev20_seed2",
+            (
+                "routebeam",
+                "levels/cooperation/handoff.csv",
+                "--reference",
+                HANDOFF_OLD_ROUTE,
+                "--width",
+                "35000",
+                "--extra",
+                "70",
+                "--secs",
+                "110",
+                "--dev-penalty",
+                "5000",
+                "--max-dev",
+                "20",
+                "--seed",
+                "2",
+                "--jitter",
+                "250",
+            ),
+            timeout_sec=125,
+            mem_mb=2_500,
+        ),
+        Job(
             "tug_t3_baffle_then_trigger1",
             (
                 "branchdump",
@@ -541,6 +745,56 @@ def current_jobs() -> list[Job]:
             ),
         ),
         Job(
+            "routebeam_blocked_old_dev12_seed1",
+            (
+                "routebeam",
+                "levels/cooperation/blocked_v2.csv",
+                "--reference",
+                BLOCKED_OLD_ROUTE,
+                "--width",
+                "35000",
+                "--extra",
+                "55",
+                "--secs",
+                "110",
+                "--dev-penalty",
+                "8000",
+                "--max-dev",
+                "12",
+                "--seed",
+                "1",
+                "--jitter",
+                "120",
+            ),
+            timeout_sec=125,
+            mem_mb=2_500,
+        ),
+        Job(
+            "routebeam_blocked_old_dev20_seed2",
+            (
+                "routebeam",
+                "levels/cooperation/blocked_v2.csv",
+                "--reference",
+                BLOCKED_OLD_ROUTE,
+                "--width",
+                "35000",
+                "--extra",
+                "70",
+                "--secs",
+                "110",
+                "--dev-penalty",
+                "5000",
+                "--max-dev",
+                "20",
+                "--seed",
+                "2",
+                "--jitter",
+                "250",
+            ),
+            timeout_sec=125,
+            mem_mb=2_500,
+        ),
+        Job(
             "blocked_post_t5_pre_t1_trigger2",
             (
                 "branchdump",
@@ -563,6 +817,7 @@ def current_jobs() -> list[Job]:
                 "21",
             ),
         ),
+        *routebeam_extra_jobs(),
     ]
 
 
