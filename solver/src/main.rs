@@ -8192,10 +8192,12 @@ fn solve_event_fess(
     mop_branch_limit: usize,
     mop_strategy: &str,
     mop_weight: i64,
+    jobs: usize,
 ) -> Option<Vec<Vec<Action>>> {
     let nplayers = count_players(grid);
     let tuples = all_action_tuples(nplayers);
     let started = Instant::now();
+    let jobs = jobs.max(1);
     let mut frontier = vec![Branch {
         grid: grid.clone(),
         path: Vec::new(),
@@ -8214,51 +8216,153 @@ fn solve_event_fess(
         frontier.sort_by_key(|branch| branch.score);
         if mop_secs > 0.0 && mop_branch_limit > 0 {
             let mop_limit = mop_branch_limit.min(width).min(frontier.len());
-            for branch in frontier.iter().take(mop_limit) {
+            if jobs > 1 && mop_limit > 1 {
                 let remaining_secs = (total_secs - started.elapsed().as_secs_f64()).max(0.0);
                 let this_mop_secs = mop_secs.min(remaining_secs);
-                if this_mop_secs <= 0.0 {
-                    break;
+                if this_mop_secs > 0.0 {
+                    let mop_branches: Vec<(usize, Branch)> = frontier
+                        .iter()
+                        .take(mop_limit)
+                        .cloned()
+                        .enumerate()
+                        .collect();
+                    let chunk_size = mop_branches.len().div_ceil(jobs.min(mop_branches.len()));
+                    let mut mop_results: Vec<(usize, Vec<Vec<Action>>)> =
+                        std::thread::scope(|scope| {
+                            let mut handles = Vec::new();
+                            for chunk in mop_branches.chunks(chunk_size) {
+                                let chunk = chunk.to_vec();
+                                handles.push(scope.spawn(move || {
+                                    let mut local_results = Vec::new();
+                                    for (index, branch) in chunk {
+                                        if let Some(mop) = solve_with_context(
+                                            &branch.grid,
+                                            mop_depth,
+                                            this_mop_secs,
+                                            mop_strategy,
+                                            mop_weight,
+                                            &branch.path,
+                                        ) {
+                                            let mut path = branch.path;
+                                            path.extend(mop);
+                                            local_results.push((index, path));
+                                        }
+                                    }
+                                    local_results
+                                }));
+                            }
+
+                            let mut merged = Vec::new();
+                            for handle in handles {
+                                merged.extend(handle.join().expect("fess mop worker panicked"));
+                            }
+                            merged
+                        });
+                    mop_results.sort_by_key(|(index, _)| *index);
+                    if let Some((_, path)) = mop_results.into_iter().next() {
+                        return Some(path);
+                    }
                 }
-                if let Some(mop) = solve_with_context(
-                    &branch.grid,
-                    mop_depth,
-                    this_mop_secs,
-                    mop_strategy,
-                    mop_weight,
-                    &branch.path,
-                ) {
-                    let mut path = branch.path.clone();
-                    path.extend(mop);
-                    return Some(path);
+            } else {
+                for branch in frontier.iter().take(mop_limit) {
+                    let remaining_secs = (total_secs - started.elapsed().as_secs_f64()).max(0.0);
+                    let this_mop_secs = mop_secs.min(remaining_secs);
+                    if this_mop_secs <= 0.0 {
+                        break;
+                    }
+                    if let Some(mop) = solve_with_context(
+                        &branch.grid,
+                        mop_depth,
+                        this_mop_secs,
+                        mop_strategy,
+                        mop_weight,
+                        &branch.path,
+                    ) {
+                        let mut path = branch.path.clone();
+                        path.extend(mop);
+                        return Some(path);
+                    }
                 }
             }
         }
 
         let mut candidates = Vec::new();
-        for branch in frontier.iter().take(width.min(frontier.len())) {
+        let branch_limit = width.min(frontier.len());
+        let remaining_secs = (total_secs - started.elapsed().as_secs_f64()).max(0.0);
+        let this_segment_secs = segment_secs.min(remaining_secs);
+        if this_segment_secs <= 0.0 {
+            break;
+        }
+
+        let branch_events: Vec<(usize, Branch, Features, Vec<EventSuccessor>)> =
+            if jobs > 1 && branch_limit > 1 {
+                let branches: Vec<(usize, Branch)> = frontier
+                    .iter()
+                    .take(branch_limit)
+                    .cloned()
+                    .enumerate()
+                    .collect();
+                let chunk_size = branches.len().div_ceil(jobs.min(branches.len()));
+                std::thread::scope(|scope| {
+                    let mut handles = Vec::new();
+                    for chunk in branches.chunks(chunk_size) {
+                        let chunk = chunk.to_vec();
+                        let tuples = &tuples;
+                        handles.push(scope.spawn(move || {
+                            let mut local = Vec::new();
+                            for (index, branch) in chunk {
+                                let before = Features::from_grid(&branch.grid);
+                                if let Some(events) = find_event_successors(
+                                    &branch.grid,
+                                    tuples,
+                                    segment_depth,
+                                    this_segment_secs,
+                                    events_per_state,
+                                    min_rats,
+                                    trap_constraints,
+                                    EventScoreMode::Fess,
+                                ) {
+                                    local.push((index, branch, before, events));
+                                }
+                            }
+                            local
+                        }));
+                    }
+
+                    let mut merged = Vec::new();
+                    for handle in handles {
+                        merged.extend(handle.join().expect("fess event worker panicked"));
+                    }
+                    merged.sort_by_key(|(index, _, _, _)| *index);
+                    merged
+                })
+            } else {
+                let mut local = Vec::new();
+                for (index, branch) in frontier.iter().take(branch_limit).cloned().enumerate() {
+                    if started.elapsed().as_secs_f64() > total_secs {
+                        break;
+                    }
+                    let before = Features::from_grid(&branch.grid);
+                    if let Some(events) = find_event_successors(
+                        &branch.grid,
+                        &tuples,
+                        segment_depth,
+                        this_segment_secs,
+                        events_per_state,
+                        min_rats,
+                        trap_constraints,
+                        EventScoreMode::Fess,
+                    ) {
+                        local.push((index, branch, before, events));
+                    }
+                }
+                local
+            };
+
+        for (_, branch, before, events) in branch_events {
             if started.elapsed().as_secs_f64() > total_secs {
                 break;
             }
-            let remaining_secs = (total_secs - started.elapsed().as_secs_f64()).max(0.0);
-            let this_segment_secs = segment_secs.min(remaining_secs);
-            if this_segment_secs <= 0.0 {
-                break;
-            }
-
-            let before = Features::from_grid(&branch.grid);
-            let Some(events) = find_event_successors(
-                &branch.grid,
-                &tuples,
-                segment_depth,
-                this_segment_secs,
-                events_per_state,
-                min_rats,
-                trap_constraints,
-                EventScoreMode::Fess,
-            ) else {
-                continue;
-            };
             if verbose_branches {
                 eprintln!(
                     "  fess step {} branch_path={} bucket={} features={:?} events={}",
@@ -12748,7 +12852,7 @@ fn main() {
         // solver fess <csv> [--prefix MOVES] [--steps N] [--width N]
         //                   [--per-bucket N] [--events N] [--segdepth N]
         //                   [--segsecs S] [--secs S] [--min-rats N]
-        //                   [--mopdepth N] [--mopsecs S]
+        //                   [--mopdepth N] [--mopsecs S] [--jobs N]
         //
         // Feature-space event search: keep diverse structural event states
         // instead of collapsing the frontier to the lowest rat-count branch.
@@ -12767,6 +12871,7 @@ fn main() {
         let mut mop_branch_limit: Option<usize> = None;
         let mut mop_strategy = "gbfs".to_string();
         let mut mop_weight = 5i64;
+        let mut jobs = 1usize;
         let mut i = 3;
         while i < args.len() {
             if let Some(next_i) = parse_trap_constraint_arg(&args, i, &mut trap_constraints) {
@@ -12830,6 +12935,10 @@ fn main() {
                     mop_weight = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--jobs" => {
+                    jobs = args[i + 1].parse::<usize>().unwrap().max(1);
+                    i += 2;
+                }
                 _ => i += 1,
             }
         }
@@ -12846,7 +12955,7 @@ fn main() {
         }
         let mop_branch_limit = mop_branch_limit.unwrap_or(width);
         eprintln!(
-            "fess solve: players={} prefix={} steps={} width={} per_bucket={} events={} segdepth={} segsecs={} secs={} min_rats={:?} trap={:?} mopdepth={} mopsecs={} mopbeam={} mopstrat={} mopweight={}",
+            "fess solve: players={} prefix={} steps={} width={} per_bucket={} events={} segdepth={} segsecs={} secs={} min_rats={:?} trap={:?} mopdepth={} mopsecs={} mopbeam={} mopstrat={} mopweight={} jobs={}",
             nplayers,
             prefix.len(),
             steps,
@@ -12862,7 +12971,8 @@ fn main() {
             mop_secs,
             mop_branch_limit,
             mop_strategy,
-            mop_weight
+            mop_weight,
+            jobs
         );
         let t0 = Instant::now();
         match solve_event_fess(
@@ -12881,6 +12991,7 @@ fn main() {
             mop_branch_limit,
             &mop_strategy,
             mop_weight,
+            jobs,
         ) {
             Some(suffix) => {
                 let mut path = prefix;

@@ -444,10 +444,37 @@ def jobs_for_candidate(
     lookup_maxnodes: int,
     lookup_weight: int,
     lookup_stagnation_secs: float,
+    fess_jobs: int,
 ) -> list[Job]:
     level = candidate.level
     prefix = candidate.prefix
     base = slug(f"{pathlib.Path(level).stem}_{candidate.source}_{prefix}")
+    fess_args = (
+        "fess",
+        level,
+        "--prefix",
+        prefix,
+        "--steps",
+        "7",
+        "--width",
+        "96",
+        "--per-bucket",
+        "2",
+        "--events",
+        "18",
+        "--segdepth",
+        "110",
+        "--segsecs",
+        "2.5",
+        "--secs",
+        str(timeout_sec - 10),
+        "--mopdepth",
+        "420",
+        "--mopsecs",
+        "2.0",
+    )
+    if fess_jobs > 1:
+        fess_args = (*fess_args, "--jobs", str(fess_jobs))
     jobs = [
         Job(
             f"{base}_novelty",
@@ -499,30 +526,7 @@ def jobs_for_candidate(
         ),
         Job(
             f"{base}_fess",
-            (
-                "fess",
-                level,
-                "--prefix",
-                prefix,
-                "--steps",
-                "7",
-                "--width",
-                "96",
-                "--per-bucket",
-                "2",
-                "--events",
-                "18",
-                "--segdepth",
-                "110",
-                "--segsecs",
-                "2.5",
-                "--secs",
-                str(timeout_sec - 10),
-                "--mopdepth",
-                "420",
-                "--mopsecs",
-                "2.0",
-            ),
+            fess_args,
             timeout_sec,
             mem_mb,
             prune_dead,
@@ -863,6 +867,12 @@ def parse_args() -> argparse.Namespace:
         help="stop speculative lookup_win jobs after this many seconds without heuristic improvement; 0 disables",
     )
     parser.add_argument(
+        "--fess-jobs",
+        type=int,
+        default=1,
+        help="threads per fess solver process; keep at 1 when running many fess processes concurrently",
+    )
+    parser.add_argument(
         "--expensive-filter",
         choices=["known-clean", "all"],
         default="known-clean",
@@ -990,6 +1000,7 @@ def main() -> int:
                 args.lookup_maxnodes,
                 args.lookup_weight,
                 args.lookup_stagnation_secs,
+                args.fess_jobs,
             ),
             candidate,
             args.expensive_filter,
