@@ -9377,19 +9377,22 @@ fn solve_tinderbox(
     safe_target: (i32, i32),
 ) -> Option<Vec<Vec<Action>>> {
     let nplayers = count_players(grid);
-    let tuples = all_action_tuples(nplayers);
+    let tuples = all_action_steps(nplayers);
     let start = Instant::now();
     let initial_rats = count_rats(grid);
+    let initial_had_rats = initial_rats > 0;
     let initial_explosives = count_explosives(grid);
 
-    let mut nodes: Vec<Node> = vec![Node {
+    let initial_hash = grid.state_hash();
+    let mut nodes: Vec<LookupNode> = vec![LookupNode {
         grid: grid.clone(),
+        hash: initial_hash,
         parent: usize::MAX,
-        action: Vec::new(),
+        action: ActionStep::empty(),
         depth: 0,
     }];
     let mut visited: HashMap<u64, u32> = HashMap::new();
-    visited.insert(grid.state_hash(), 0);
+    visited.insert(initial_hash, 0);
 
     let h0 = tinderbox_heuristic(
         grid,
@@ -9411,50 +9414,53 @@ fn solve_tinderbox(
     while let Some(item) = pq.pop() {
         expansions += 1;
         if expansions % 2_048 == 0 && start.elapsed().as_secs_f64() > time_limit_secs {
-            let best_path = reconstruct(&nodes, best_idx_seen);
+            let best_path = reconstruct_lookup(&nodes, best_idx_seen);
             eprintln!(
                 "  [tinder timeout after {expansions} expansions, best_h={best_h_seen}, nodes={}]",
                 nodes.len()
             );
             eprintln!("  BEST_ARROWS {}", format_path(&best_path));
-            let best_ascii: String = best_path.iter().map(|a| action_to_ch(a[0])).collect();
-            eprintln!("  BEST_ASCII {}", best_ascii);
+            eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
             eprintln!("  BEST_STATE:\n{}", nodes[best_idx_seen].grid.to_csv());
             return None;
         }
 
         let idx = item.idx;
-        let cur_grid = nodes[idx].grid.clone();
-        let cur_g = nodes[idx].depth as i64;
-        if cur_g > item.g || cur_g as usize >= max_depth {
+        let cur_depth = nodes[idx].depth;
+        if let Some(&best_depth) = visited.get(&nodes[idx].hash)
+            && best_depth < cur_depth
+        {
+            continue;
+        }
+        if cur_depth as i64 > item.g || cur_depth as usize >= max_depth {
             continue;
         }
 
-        if let Some(actions) = winning_action(&cur_grid, &tuples) {
-            let mut path = reconstruct(&nodes, idx);
-            path.push(actions);
-            return Some(path);
-        }
-
         for actions in &tuples {
-            let (next_grid, play_state) = step(&cur_grid, actions);
+            let (next_grid, play_state) = step_search(
+                &nodes[idx].grid,
+                actions.as_slice(),
+                nplayers,
+                initial_had_rats,
+            );
             if play_state == PlayState::GameOver {
                 continue;
             }
 
+            let next_depth = cur_depth + 1;
+            let hash = next_grid.state_hash();
             let node_idx = nodes.len();
-            let next_depth = nodes[idx].depth + 1;
-            nodes.push(Node {
-                grid: next_grid.clone(),
-                parent: idx,
-                action: actions.clone(),
-                depth: next_depth,
-            });
             if play_state == PlayState::Won {
-                return Some(reconstruct(&nodes, node_idx));
+                nodes.push(LookupNode {
+                    grid: next_grid,
+                    hash,
+                    parent: idx,
+                    action: *actions,
+                    depth: next_depth,
+                });
+                return Some(reconstruct_lookup(&nodes, node_idx));
             }
 
-            let hash = next_grid.state_hash();
             let better = match visited.get(&hash) {
                 None => true,
                 Some(&previous_depth) => next_depth < previous_depth,
@@ -9462,7 +9468,6 @@ fn solve_tinderbox(
             if !better {
                 continue;
             }
-            visited.insert(hash, next_depth);
 
             let h = tinderbox_heuristic(
                 &next_grid,
@@ -9471,17 +9476,25 @@ fn solve_tinderbox(
                 rat_target,
                 safe_target,
             );
+            nodes.push(LookupNode {
+                grid: next_grid,
+                hash,
+                parent: idx,
+                action: *actions,
+                depth: next_depth,
+            });
+            visited.insert(hash, next_depth);
             if h < best_h_seen {
                 best_h_seen = h;
                 best_idx_seen = node_idx;
             }
             let f = match strategy {
                 "gbfs" => h,
-                _ => cur_g + 1 + weight * h,
+                _ => next_depth as i64 + weight * h,
             };
             pq.push(PQItem {
                 f,
-                g: cur_g + 1,
+                g: next_depth as i64,
                 idx: node_idx,
             });
         }
