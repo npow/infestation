@@ -5,12 +5,11 @@ All move-strings below were **verified against the real game engine** (`solver v
 Keys: `^`=up `v`=down `<`=left `>`=right `.`=stall. Two-player turns are space-separated `P1P2` pairs.
 
 
-## Original levels (37 solved)
+## Original levels (36 solved)
 
 | Level | Players | Moves | Solution |
 |---|---|---|---|
 | `blackhole_v2.csv` | 1 | 77 | `↓↓↓→→→→→→←←←←←←↑↑↑↑↑↑↑↑↓↓↓↓↓↓↓↓→→→→→→→←←←←←←←↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑→→→→←←↓↓→→→→↓↓→` |
-| `chase.csv` | 1 | 199 | `^>>>v^^^>^^>>>>>v>>vvvvv^^^^^^<<<<v<<<v^<^<^<<>>>>v>>>>>vvvv^^^^<<<^<^<<^^^^^^^^<<<<<^^vvvvvvvvvvvvv>>>>>>>>vv^^<<vvvvv<>>>>>>>>>>>>>>^^v<>^^^^^^^^^^^^^^^^^^<<<<>>vvvv<vvvvvvvvvvvv<vvv<<<<<<<<<<<<<<<` |
 | `cooperation/coop_world_v3.csv` | 2 | 26 | `↑↑ ↑→ ↑↑ ↑↑ ↑↑ ↑↑ ↑↑ ↑→ ↑↑ ↓→ ←→ ↑→ ↑→ ↑→ ↑→ ↑→ ↑→ →↓ ←. ↑↓ →← ↓← .→ .↑ ↑↑ ↑↑` |
 | `cooperation/cooperation.csv` | 2 | 28 | `↑↑ ↑→ ↑↑ ↑↑ ↑← ←↑ ↑→ ↑→ ↑→ ←→ ←↓ ←→ ←→ ←→ ←→ ↑→ →→ →→ ←→ ←← .← ←↓ ↓↓ ↓↓ ↓← ↓← ↓↓ ↓↓` |
 | `cooperation/blocked_v2.csv` | 2 | 89 | `vv v^ vv <^ <v <^ <. ^< ^^ ^^ ^^ ^< >v ^> >> >. >^ v> v> vv vv ^< ^^ ^^ ^^ ^^ ^^ <^ <^ <^ <^ <^ <^ <^ v^ v^ <^ <^ v^ v^ v^ v^ v^ <^ v^ v^ <^ <^ <v v^ vv v> ^> ^> ^> ^v ^v ^> ^v ^v ^v ^< ^< ^< ^< ^< >< >^ >v v. v. >. v. v^ vv <v <. <^ <. <v v> >> v> v^ v^ v^ <^ <^ v^` |
