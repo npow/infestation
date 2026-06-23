@@ -24,7 +24,11 @@ paths; check before reusing those.
   remaining queued/running probes after a solution marker unless
   `--no-stop-on-solved` is passed.
   Use `--max-jobs` to run short, inspectable waves instead of the whole archive
-  queue.
+  queue. Seed-file records with the same structural `event.key` are deduped by
+  default before per-level selection; use `--no-dedupe-event-key` to compare
+  every route variant. Speculative `lookup win` jobs also stop after
+  `--lookup-stagnation-secs` seconds without heuristic improvement; pass `0` to
+  restore the older full-budget behavior.
 - `frontier_triage.py` — replays archive/static prefixes with the Rust oracle's
   `diag` mode, attaches structural warning flags, and emits compact seed JSONL.
   By default it ranks high-penalty dead-frontier flags below live mechanisms,

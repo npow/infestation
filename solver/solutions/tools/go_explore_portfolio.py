@@ -53,6 +53,7 @@ class Candidate:
     reachable_rats: int
     trapped: int
     score: int
+    event_key: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -299,6 +300,8 @@ def seed_file_candidates(seed_file: pathlib.Path) -> list[Candidate]:
         rank_score = record.get("rank_score")
         learned_score = record.get("learned_score")
         score = coerce_score(record.get("score"))
+        event = record.get("event") if isinstance(record.get("event"), dict) else {}
+        event_key = event.get("key") if isinstance(event.get("key"), str) else None
         if isinstance(rank_score, int | float):
             score = int(-1_000_000 * float(rank_score))
         elif isinstance(learned_score, int | float):
@@ -312,6 +315,7 @@ def seed_file_candidates(seed_file: pathlib.Path) -> list[Candidate]:
                 reachable_rats=int(record.get("reachable_rats", diag.get("reachable_rats", -1))),
                 trapped=int(record.get("trapped", diag.get("trapped", 999))),
                 score=score,
+                event_key=event_key,
             )
         )
     return candidates
@@ -334,10 +338,15 @@ def load_solved_levels(solutions_file: pathlib.Path) -> set[str]:
     return {canonical_level(level) for level in data if isinstance(level, str)}
 
 
-def unique_best(candidates: Iterable[Candidate], per_level: int, rank_key: str) -> list[Candidate]:
-    by_level: dict[str, dict[str, Candidate]] = defaultdict(dict)
+def unique_best(
+    candidates: Iterable[Candidate],
+    per_level: int,
+    rank_key: str,
+    dedupe_event_key: bool,
+) -> list[Candidate]:
+    by_level: dict[str, list[Candidate]] = defaultdict(list)
     for candidate in candidates:
-        by_level[candidate.level].setdefault(candidate.prefix, candidate)
+        by_level[candidate.level].append(candidate)
 
     def viability_bucket(candidate: Candidate) -> int:
         """Prefer frontiers where remaining rats are still actionable.
@@ -360,10 +369,10 @@ def unique_best(candidates: Iterable[Candidate], per_level: int, rank_key: str) 
         return 2
 
     selected = []
-    for level, by_prefix in sorted(by_level.items()):
+    for level, level_candidates in sorted(by_level.items()):
         if rank_key == "score":
             ranked = sorted(
-                by_prefix.values(),
+                level_candidates,
                 key=lambda c: (
                     viability_bucket(c),
                     c.score,
@@ -375,7 +384,7 @@ def unique_best(candidates: Iterable[Candidate], per_level: int, rank_key: str) 
             )
         else:
             ranked = sorted(
-                by_prefix.values(),
+                level_candidates,
                 key=lambda c: (
                     viability_bucket(c),
                     c.rats,
@@ -385,7 +394,17 @@ def unique_best(candidates: Iterable[Candidate], per_level: int, rank_key: str) 
                     c.score,
                 ),
             )
-        selected.extend(ranked[:per_level])
+        seen: set[str] = set()
+        deduped = []
+        for candidate in ranked:
+            dedupe_key = candidate.prefix
+            if dedupe_event_key and candidate.event_key:
+                dedupe_key = f"event:{candidate.event_key}"
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            deduped.append(candidate)
+        selected.extend(deduped[:per_level])
     return selected
 
 
@@ -405,11 +424,58 @@ def jobs_for_candidate(
     lookup_depth: int,
     lookup_maxnodes: int,
     lookup_weight: int,
+    lookup_stagnation_secs: float,
 ) -> list[Job]:
     level = candidate.level
     prefix = candidate.prefix
     base = slug(f"{pathlib.Path(level).stem}_{candidate.source}_{prefix}")
-    return [
+    jobs = [
+        Job(
+            f"{base}_novelty",
+            (
+                "novelty",
+                level,
+                "--prefix",
+                prefix,
+                "--k",
+                "2",
+                "--depth",
+                "220",
+                "--secs",
+                str(timeout_sec - 10),
+            ),
+            timeout_sec,
+            mem_mb,
+            prune_dead,
+            progress_h,
+            smart_h,
+        ),
+        Job(
+            f"{base}_lookup_win",
+            (
+                "lookup",
+                level,
+                "--prefix",
+                prefix,
+                "--goal",
+                "win",
+                "--order",
+                "astar",
+                "--depth",
+                str(lookup_depth),
+                "--secs",
+                str(timeout_sec - 10),
+                "--maxnodes",
+                str(lookup_maxnodes),
+                "--weight",
+                str(lookup_weight),
+            ),
+            timeout_sec,
+            mem_mb,
+            prune_dead,
+            progress_h,
+            smart_h,
+        ),
         Job(
             f"{base}_fess",
             (
@@ -472,53 +538,18 @@ def jobs_for_candidate(
             progress_h,
             smart_h,
         ),
-        Job(
-            f"{base}_lookup_win",
-            (
-                "lookup",
-                level,
-                "--prefix",
-                prefix,
-                "--goal",
-                "win",
-                "--order",
-                "astar",
-                "--depth",
-                str(lookup_depth),
-                "--secs",
-                str(timeout_sec - 10),
-                "--maxnodes",
-                str(lookup_maxnodes),
-                "--weight",
-                str(lookup_weight),
-            ),
-            timeout_sec,
-            mem_mb,
-            prune_dead,
-            progress_h,
-            smart_h,
-        ),
-        Job(
-            f"{base}_novelty",
-            (
-                "novelty",
-                level,
-                "--prefix",
-                prefix,
-                "--k",
-                "2",
-                "--depth",
-                "220",
-                "--secs",
-                str(timeout_sec - 10),
-            ),
-            timeout_sec,
-            mem_mb,
-            prune_dead,
-            progress_h,
-            smart_h,
-        ),
     ]
+    if lookup_stagnation_secs > 0.0:
+        lookup_job = jobs[1]
+        jobs[1] = dataclasses.replace(
+            lookup_job,
+            args=(
+                *lookup_job.args,
+                "--stagnation-secs",
+                str(lookup_stagnation_secs),
+            ),
+        )
+    return jobs
 
 
 def _limit_child_memory(mem_mb: int) -> None:
@@ -743,6 +774,18 @@ def parse_args() -> argparse.Namespace:
         help="A* heuristic weight for lookup_win jobs",
     )
     parser.add_argument(
+        "--lookup-stagnation-secs",
+        type=float,
+        default=18.0,
+        help="stop speculative lookup_win jobs after this many seconds without heuristic improvement; 0 disables",
+    )
+    parser.add_argument(
+        "--dedupe-event-key",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="collapse seed-file records with the same structural event key before per-level selection",
+    )
+    parser.add_argument(
         "--max-jobs",
         type=int,
         help="after interleaving, queue at most this many jobs; use --jobs for concurrency",
@@ -832,7 +875,7 @@ def main() -> int:
             if not any(token in candidate.level for token in args.skip_level)
         ]
         skipped_level = before - len(candidates)
-    candidates = unique_best(candidates, args.per_level, args.rank_key)
+    candidates = unique_best(candidates, args.per_level, args.rank_key, args.dedupe_event_key)
     jobs = [
         job
         for candidate in candidates
@@ -846,6 +889,7 @@ def main() -> int:
             args.lookup_depth,
             args.lookup_maxnodes,
             args.lookup_weight,
+            args.lookup_stagnation_secs,
         )
     ]
     if args.strategy:
@@ -873,6 +917,8 @@ def main() -> int:
         f"skipped_solved={skipped_solved} skipped_level={skipped_level} "
         f"queued_jobs={len(jobs)} concurrency={workers} requested_concurrency={args.jobs} "
         f"cpu_count={cpu_count} max_queued_jobs={args.max_jobs} "
+        f"dedupe_event_key={args.dedupe_event_key} "
+        f"lookup_stagnation_secs={args.lookup_stagnation_secs} "
         f"mem_available_mb={available_memory_mb()} logs={out_dir}",
         flush=True,
     )

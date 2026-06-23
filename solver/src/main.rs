@@ -4326,6 +4326,7 @@ fn solve_lookup(
     min_rats: Option<usize>,
     trap_constraints: TrapConstraints,
     progress_every: u64,
+    stagnation_limit_secs: f64,
 ) -> Option<(Vec<Vec<Action>>, PlayState)> {
     let nplayers = count_players(grid);
     let tuples = all_action_tuples(nplayers);
@@ -4363,6 +4364,11 @@ fn solve_lookup(
         lookup_goal_heuristic(goal, grid, grid)
     };
     let mut best_idx = 0usize;
+    let mut last_best_elapsed = 0.0f64;
+
+    let stagnated = |elapsed: f64, last_best: f64| -> bool {
+        stagnation_limit_secs > 0.0 && elapsed - last_best >= stagnation_limit_secs
+    };
 
     if order == LookupOrder::Bfs {
         let mut q = VecDeque::new();
@@ -4381,16 +4387,28 @@ fn solve_lookup(
                     start.elapsed().as_secs_f64()
                 );
             }
-            if start.elapsed().as_secs_f64() > time_limit_secs || nodes.len() >= max_nodes {
+            let elapsed = start.elapsed().as_secs_f64();
+            let stop_reason = if elapsed > time_limit_secs {
+                "time"
+            } else if nodes.len() >= max_nodes {
+                "nodes"
+            } else {
+                "stagnation"
+            };
+            if elapsed > time_limit_secs
+                || nodes.len() >= max_nodes
+                || stagnated(elapsed, last_best_elapsed)
+            {
                 let best_path = reconstruct(&nodes, best_idx);
                 eprintln!(
-                    "  [lookup stop expansions={} queue={} nodes={} visited={} best_h={} elapsed={:.1}s]",
+                    "  [lookup stop expansions={} queue={} nodes={} visited={} best_h={} elapsed={:.1}s reason={}]",
                     expansions,
                     q.len(),
                     nodes.len(),
                     visited.len(),
                     best_h,
-                    start.elapsed().as_secs_f64()
+                    elapsed,
+                    stop_reason
                 );
                 eprintln!("  BEST_ARROWS {}", format_path(&best_path));
                 eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
@@ -4443,6 +4461,7 @@ fn solve_lookup(
                 if h < best_h {
                     best_h = h;
                     best_idx = node_idx;
+                    last_best_elapsed = start.elapsed().as_secs_f64();
                 }
                 q.push_back(node_idx);
             }
@@ -4470,16 +4489,28 @@ fn solve_lookup(
                 start.elapsed().as_secs_f64()
             );
         }
-        if start.elapsed().as_secs_f64() > time_limit_secs || nodes.len() >= max_nodes {
+        let elapsed = start.elapsed().as_secs_f64();
+        let stop_reason = if elapsed > time_limit_secs {
+            "time"
+        } else if nodes.len() >= max_nodes {
+            "nodes"
+        } else {
+            "stagnation"
+        };
+        if elapsed > time_limit_secs
+            || nodes.len() >= max_nodes
+            || stagnated(elapsed, last_best_elapsed)
+        {
             let best_path = reconstruct(&nodes, best_idx);
             eprintln!(
-                "  [lookup stop expansions={} open={} nodes={} visited={} best_h={} elapsed={:.1}s]",
+                "  [lookup stop expansions={} open={} nodes={} visited={} best_h={} elapsed={:.1}s reason={}]",
                 expansions,
                 pq.len(),
                 nodes.len(),
                 visited.len(),
                 best_h,
-                start.elapsed().as_secs_f64()
+                elapsed,
+                stop_reason
             );
             eprintln!("  BEST_ARROWS {}", format_path(&best_path));
             eprintln!("  BEST_ASCII {}", format_path_ascii(&best_path));
@@ -4537,6 +4568,7 @@ fn solve_lookup(
             if h < best_h {
                 best_h = h;
                 best_idx = node_idx;
+                last_best_elapsed = start.elapsed().as_secs_f64();
             }
             let f = match order {
                 LookupOrder::Gbfs => h,
@@ -11502,6 +11534,7 @@ fn main() {
         let mut min_rats: Option<usize> = None;
         let mut trap_constraints = TrapConstraints::default();
         let mut progress_every = 100_000u64;
+        let mut stagnation_secs = 0.0f64;
         let mut i = 3;
         while i < args.len() {
             if let Some(next_i) = parse_trap_constraint_arg(&args, i, &mut trap_constraints) {
@@ -11565,6 +11598,10 @@ fn main() {
                     progress_every = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--stagnation-secs" => {
+                    stagnation_secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
                 "--no-canonical" => {
                     canonical = false;
                     i += 1;
@@ -11585,7 +11622,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "lookup solve: players={} prefix={} order={} depth={} secs={} maxnodes={} canonical={} weight={} goal={:?} min_rats={:?} trap={:?}",
+            "lookup solve: players={} prefix={} order={} depth={} secs={} maxnodes={} canonical={} weight={} goal={:?} min_rats={:?} trap={:?} stagnation_secs={}",
             nplayers,
             prefix.len(),
             match order {
@@ -11600,7 +11637,8 @@ fn main() {
             weight,
             goal,
             min_rats,
-            trap_constraints
+            trap_constraints,
+            stagnation_secs
         );
         let t0 = Instant::now();
         match solve_lookup(
@@ -11615,6 +11653,7 @@ fn main() {
             min_rats,
             trap_constraints,
             progress_every,
+            stagnation_secs,
         ) {
             Some((suffix, play_state)) => {
                 let mut path = prefix;
