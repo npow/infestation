@@ -5225,6 +5225,17 @@ fn solve_lookup_goal_branches(
         }
     }
 
+    select_diverse_branches(results, max_results)
+}
+
+#[derive(Clone)]
+struct BranchSeed {
+    grid: Grid,
+    path: Vec<Vec<Action>>,
+    depth: usize,
+}
+
+fn select_diverse_branches(mut results: Vec<Branch>, max_results: usize) -> Vec<Branch> {
     results.sort_by_key(|branch| branch.score);
     let mut diversity_seen = HashSet::new();
     let mut diverse = Vec::new();
@@ -5249,6 +5260,236 @@ fn solve_lookup_goal_branches(
         }
     }
     diverse
+}
+
+fn branch_seed_frontier(
+    grid: &Grid,
+    split_depth: usize,
+    goal: LookupGoal,
+    min_rats: Option<usize>,
+    trap_constraints: TrapConstraints,
+    canonical: bool,
+) -> (Vec<Branch>, Vec<BranchSeed>) {
+    let nplayers = count_players(grid);
+    let initial_had_rats = count_rats(grid) > 0;
+    let tuples = all_action_steps(nplayers);
+    let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
+    let prune_stranded = std::env::var("PRUNE_STRANDED").is_ok();
+    let state_key = |state: &Grid| {
+        if canonical {
+            state.search_hash()
+        } else {
+            state.state_hash()
+        }
+    };
+    let mut nodes = vec![BranchSearchNode {
+        grid: Some(grid.clone()),
+        parent: usize::MAX,
+        action: ActionStep::empty(),
+        depth: 0,
+    }];
+    let mut visited = HashSet::new();
+    visited.insert(state_key(grid));
+    let mut reached = HashSet::new();
+    let mut q = VecDeque::new();
+    q.push_back(0usize);
+    let mut results = Vec::new();
+    let mut seeds = Vec::new();
+
+    while let Some(idx) = q.pop_front() {
+        let cur_depth = nodes[idx].depth as usize;
+        if cur_depth >= split_depth {
+            let seed_grid = nodes[idx]
+                .grid
+                .take()
+                .expect("branch seed should have grid before split");
+            seeds.push(BranchSeed {
+                grid: seed_grid,
+                path: reconstruct_branch(&nodes, idx),
+                depth: cur_depth,
+            });
+            continue;
+        }
+
+        let cur_grid = nodes[idx]
+            .grid
+            .take()
+            .expect("branch seed node should have grid before expansion");
+        for actions in &tuples {
+            let (next_grid, play_state) =
+                step_search(&cur_grid, actions.as_slice(), nplayers, initial_had_rats);
+            if play_state == PlayState::GameOver {
+                continue;
+            }
+            let goal_reached = play_state == PlayState::Won
+                || lookup_goal_reached(goal, grid, &next_grid, play_state);
+            let hash = state_key(&next_grid);
+            if !goal_reached && visited.contains(&hash) {
+                continue;
+            }
+            if prune_dead
+                && play_state == PlayState::Playing
+                && !goal_reached
+                && lookup_dead_state(&next_grid)
+            {
+                continue;
+            }
+            if prune_stranded
+                && play_state == PlayState::Playing
+                && !goal_reached
+                && lookup_stranded_state(&next_grid)
+            {
+                continue;
+            }
+            if goal_reached && trap_constraints.accepts(&next_grid, play_state) {
+                if play_state != PlayState::Won
+                    && min_rats.is_some_and(|min_rats| count_rats(&next_grid) < min_rats)
+                {
+                    // Keep exploring this branch: the irreversible event may be useful only
+                    // after a short stabilization sequence.
+                } else {
+                    if reached.insert(hash) {
+                        let path = reconstruct_branch_child(&nodes, idx, *actions);
+                        let score = lookup_branch_score(&next_grid, path.len());
+                        results.push(Branch {
+                            grid: next_grid,
+                            score,
+                            path,
+                        });
+                    }
+                    continue;
+                }
+            }
+
+            if visited.insert(hash) {
+                let node_idx = nodes.len();
+                nodes.push(BranchSearchNode {
+                    grid: Some(next_grid),
+                    parent: idx,
+                    action: *actions,
+                    depth: cur_depth as u32 + 1,
+                });
+                q.push_back(node_idx);
+            }
+        }
+    }
+
+    (results, seeds)
+}
+
+fn branch_split_depth(nplayers: usize, jobs: usize, max_depth: usize) -> usize {
+    if jobs <= 1 || max_depth <= 1 {
+        return 0;
+    }
+    let branch_factor = all_action_steps(nplayers).len().max(1);
+    let mut split_depth = 1usize;
+    let mut frontier_capacity = branch_factor;
+    let max_split_depth = max_depth.min(3);
+    while frontier_capacity < jobs.saturating_mul(2) && split_depth < max_split_depth {
+        split_depth += 1;
+        frontier_capacity = frontier_capacity.saturating_mul(branch_factor);
+    }
+    split_depth
+}
+
+#[must_use]
+fn solve_lookup_goal_branches_parallel(
+    grid: &Grid,
+    max_depth: usize,
+    time_limit_secs: f64,
+    max_nodes: usize,
+    goal: LookupGoal,
+    max_results: usize,
+    min_rats: Option<usize>,
+    trap_constraints: TrapConstraints,
+    canonical: bool,
+    jobs: usize,
+) -> Vec<Branch> {
+    let jobs = jobs.max(1);
+    let split_depth = branch_split_depth(count_players(grid), jobs, max_depth);
+    if jobs == 1 || split_depth == 0 {
+        return solve_lookup_goal_branches(
+            grid,
+            max_depth,
+            time_limit_secs,
+            max_nodes,
+            goal,
+            max_results,
+            min_rats,
+            trap_constraints,
+            canonical,
+        );
+    }
+
+    let (mut results, seeds) = branch_seed_frontier(
+        grid,
+        split_depth,
+        goal,
+        min_rats,
+        trap_constraints,
+        canonical,
+    );
+    if seeds.is_empty() {
+        return select_diverse_branches(results, max_results);
+    }
+
+    eprintln!(
+        "  [branch parallel split_depth={} seeds={} jobs={} per_seed_depth={} per_seed_maxnodes={}]",
+        split_depth,
+        seeds.len(),
+        jobs.min(seeds.len()),
+        max_depth.saturating_sub(split_depth),
+        max_nodes
+    );
+
+    let chunk_size = seeds.len().div_ceil(jobs.min(seeds.len()));
+    let mut worker_results: Vec<Branch> = std::thread::scope(|scope| {
+        let mut handles = Vec::new();
+        for chunk in seeds.chunks(chunk_size) {
+            let chunk = chunk.to_vec();
+            handles.push(scope.spawn(move || {
+                let mut local = Vec::new();
+                let worker_started = Instant::now();
+                for seed in chunk {
+                    let remaining_secs =
+                        (time_limit_secs - worker_started.elapsed().as_secs_f64()).max(0.0);
+                    if remaining_secs <= 0.0 {
+                        break;
+                    }
+                    let branches = solve_lookup_goal_branches(
+                        &seed.grid,
+                        max_depth.saturating_sub(seed.depth),
+                        remaining_secs,
+                        max_nodes,
+                        goal,
+                        max_results,
+                        min_rats,
+                        trap_constraints,
+                        canonical,
+                    );
+                    for branch in branches {
+                        let mut path = seed.path.clone();
+                        path.extend(branch.path);
+                        let score = lookup_branch_score(&branch.grid, path.len());
+                        local.push(Branch {
+                            grid: branch.grid,
+                            path,
+                            score,
+                        });
+                    }
+                }
+                local
+            }));
+        }
+
+        let mut merged = Vec::new();
+        for handle in handles {
+            merged.extend(handle.join().expect("branchdump worker panicked"));
+        }
+        merged
+    });
+    results.append(&mut worker_results);
+    select_diverse_branches(results, max_results)
 }
 
 #[must_use]
@@ -12369,7 +12610,7 @@ fn main() {
 
     if mode == "branchdump" {
         // solver branchdump <csv> [--prefix MOVES] [--goal win|trigger:n|ratat:x,y|ratgone:x,y]
-        //                         [--depth N] [--secs S] [--maxnodes N] [--results N]
+        //                         [--depth N] [--secs S] [--maxnodes N] [--results N] [--jobs N]
         //                         [--min-rats N] [--eval x,y] [--states]
         let mut prefix_str = String::new();
         let mut goal = LookupGoal::Win;
@@ -12382,6 +12623,7 @@ fn main() {
         let mut eval_point: Option<(i32, i32)> = None;
         let mut print_states = false;
         let mut canonical = true;
+        let mut jobs = 1usize;
         let mut i = 3;
         while i < args.len() {
             if let Some(next_i) = parse_trap_constraint_arg(&args, i, &mut trap_constraints) {
@@ -12411,6 +12653,10 @@ fn main() {
                 }
                 "--results" => {
                     results = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--jobs" => {
+                    jobs = args[i + 1].parse::<usize>().unwrap().max(1);
                     i += 2;
                 }
                 "--min-rats" => {
@@ -12466,7 +12712,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "branchdump: players={} prefix={} goal={:?} depth={} secs={} maxnodes={} results={} min_rats={:?} trap={:?} canonical={}",
+            "branchdump: players={} prefix={} goal={:?} depth={} secs={} maxnodes={} results={} min_rats={:?} trap={:?} canonical={} jobs={}",
             nplayers,
             prefix.len(),
             goal,
@@ -12476,9 +12722,10 @@ fn main() {
             results,
             min_rats,
             trap_constraints,
-            canonical
+            canonical,
+            jobs
         );
-        let branches = solve_lookup_goal_branches(
+        let branches = solve_lookup_goal_branches_parallel(
             &start_grid,
             depth,
             secs,
@@ -12488,6 +12735,7 @@ fn main() {
             min_rats,
             trap_constraints,
             canonical,
+            jobs,
         );
         for (idx, branch) in branches.iter().enumerate() {
             let mut full_path = prefix.clone();
