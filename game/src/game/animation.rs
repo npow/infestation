@@ -1,8 +1,41 @@
 use std::borrow::BorrowMut;
 
 use crate::grid::{Cell, Grid};
+use crate::position::Position;
 
 use super::{Game, MOVE_SPEED, MoveHandler};
+
+enum EnteredCell {
+    KeepEnteringEntity,
+    RemoveEnteringEntity,
+}
+
+impl Grid {
+    #[must_use]
+    fn resolve_entered_cell(
+        &self,
+        pos: Position,
+        pending_explosions: &mut Vec<Position>,
+        triggered_numbers: &mut Vec<u8>,
+    ) -> EnteredCell {
+        match self.at(pos) {
+            Cell::BlackHole => EnteredCell::RemoveEnteringEntity,
+            Cell::Explosive => {
+                if !pending_explosions.contains(&pos) {
+                    pending_explosions.push(pos);
+                }
+                EnteredCell::KeepEnteringEntity
+            }
+            Cell::Trigger(n) => {
+                if !triggered_numbers.contains(&n) {
+                    triggered_numbers.push(n);
+                }
+                EnteredCell::KeepEnteringEntity
+            }
+            _ => EnteredCell::KeepEnteringEntity,
+        }
+    }
+}
 
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
     /// Resolve all pending animations immediately.
@@ -100,43 +133,30 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         let grid = self.grid.borrow_mut();
         // Update grid: place entities at destination (if they survived)
         for m in self.moving.drain(..) {
-            match grid.at(m.to) {
-                Cell::BlackHole => {
-                    // Black holes swallow entities - don't modify the cell
-                    continue;
-                }
-                Cell::Explosive => {
-                    // Moving onto an explosive triggers it
-                    if !self.pending_explosions.contains(&m.to) {
-                        self.pending_explosions.push(m.to);
-                    }
-                }
-                Cell::Trigger(n) => {
-                    // Moving onto a trigger activates it
-                    if !self.triggered_numbers.contains(&n) {
-                        self.triggered_numbers.push(n);
-                    }
-                }
-                _ => {}
+            if matches!(
+                grid.resolve_entered_cell(
+                    m.to,
+                    &mut self.pending_explosions,
+                    &mut self.triggered_numbers
+                ),
+                EnteredCell::RemoveEnteringEntity
+            ) {
+                continue;
             }
             // Place entity (overwrites whatever was there)
             *grid.at_mut(m.to) = m.cell;
         }
         if let Some(pos) = self.contested_cell.take() {
-            match grid.at(pos) {
-                Cell::Explosive => {
-                    if !self.pending_explosions.contains(&pos) {
-                        self.pending_explosions.push(pos);
-                    }
-                }
-                Cell::Trigger(n) => {
-                    if !self.triggered_numbers.contains(&n) {
-                        self.triggered_numbers.push(n);
-                    }
-                }
-                _ => {}
+            if matches!(
+                grid.resolve_entered_cell(
+                    pos,
+                    &mut self.pending_explosions,
+                    &mut self.triggered_numbers
+                ),
+                EnteredCell::KeepEnteringEntity
+            ) {
+                *grid.at_mut(pos) = Cell::Empty;
             }
-            *grid.at_mut(pos) = Cell::Empty;
         }
     }
 }
