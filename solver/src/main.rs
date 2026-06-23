@@ -771,9 +771,14 @@ fn adjacent_trigger_count(grid: &Grid, x: usize, y: usize) -> usize {
 /// nearest "actionable" cell (a rat reachable to be killed, or an explosive).
 /// This provides a gradient even in levels where rats only die at the end.
 fn heuristic(grid: &Grid) -> i64 {
-    let use_progress = progress_h_enabled();
     let use_smart = smart_h_enabled();
     let analysis = SearchAnalysis::from_grid(grid, use_smart);
+    win_heuristic_from_analysis(&analysis)
+}
+
+fn win_heuristic_from_analysis(analysis: &SearchAnalysis) -> i64 {
+    let use_progress = progress_h_enabled();
+    let use_smart = smart_h_enabled();
     let rats = analysis.features.rats as i64;
     if rats == 0 {
         return 0;
@@ -3099,24 +3104,10 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
                 || Features::from_grid(current),
                 |analysis| analysis.features,
             );
-            let rats = features.rats as i64;
-            let mut score = rats * 1_000_000
-                + features.triggers as i64 * 1_000
-                + features.explosives as i64 * 100;
-            if let Some(analysis) = analysis {
-                let reachable_rats = analysis.reachable_rats as i64;
-                let unreachable_rats = rats.saturating_sub(reachable_rats);
-                let reachable_triggers = analysis.reachable_triggers as i64;
-                let trapped = analysis.trapped_unreachable_rats as i64;
-                score += unreachable_rats * 25_000_000 + trapped * 100_000_000;
-                if rats > 0 && reachable_rats == 0 && reachable_triggers == 0 {
-                    score += rats * 250_000_000;
-                }
-                if features.triggers > 0 && reachable_triggers == 0 {
-                    score += 50_000_000;
-                }
-            }
-            score
+            analysis.as_ref().map_or_else(
+                || win_bfs_progress_score_from_features(features),
+                win_bfs_progress_score_from_analysis,
+            )
         }
         LookupGoal::WinReady => {
             count_rats(current) as i64 * 1_000_000
@@ -3509,8 +3500,42 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
     }
 }
 
+fn win_bfs_progress_score_from_features(features: Features) -> i64 {
+    features.rats as i64 * 1_000_000
+        + features.triggers as i64 * 1_000
+        + features.explosives as i64 * 100
+}
+
+fn win_bfs_progress_score_from_analysis(analysis: &SearchAnalysis) -> i64 {
+    let features = analysis.features;
+    let rats = features.rats as i64;
+    let reachable_rats = analysis.reachable_rats as i64;
+    let unreachable_rats = rats.saturating_sub(reachable_rats);
+    let reachable_triggers = analysis.reachable_triggers as i64;
+    let trapped = analysis.trapped_unreachable_rats as i64;
+    let mut score = win_bfs_progress_score_from_features(features)
+        + unreachable_rats * 25_000_000
+        + trapped * 100_000_000;
+    if rats > 0 && reachable_rats == 0 && reachable_triggers == 0 {
+        score += rats * 250_000_000;
+    }
+    if features.triggers > 0 && reachable_triggers == 0 {
+        score += 50_000_000;
+    }
+    score
+}
+
 fn lookup_dead_state(grid: &Grid) -> bool {
     let analysis = SearchAnalysis::from_grid(grid, false);
+    lookup_dead_state_from_analysis(&analysis)
+}
+
+fn lookup_stranded_state(grid: &Grid) -> bool {
+    let analysis = SearchAnalysis::from_grid(grid, true);
+    lookup_stranded_state_from_analysis(&analysis)
+}
+
+fn lookup_dead_state_from_analysis(analysis: &SearchAnalysis) -> bool {
     let features = analysis.features;
     features.rats > 0
         && features.explosives == 0
@@ -3518,8 +3543,7 @@ fn lookup_dead_state(grid: &Grid) -> bool {
         && analysis.reachable_triggers == 0
 }
 
-fn lookup_stranded_state(grid: &Grid) -> bool {
-    let analysis = SearchAnalysis::from_grid(grid, true);
+fn lookup_stranded_state_from_analysis(analysis: &SearchAnalysis) -> bool {
     let features = analysis.features;
     features.rats > 0
         && features.explosives == 0
@@ -4348,6 +4372,9 @@ fn solve_lookup(
     let start = Instant::now();
     let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
     let prune_stranded = std::env::var("PRUNE_STRANDED").is_ok();
+    let use_progress_h = progress_h_enabled();
+    let use_smart_h = smart_h_enabled();
+    let is_win_goal = matches!(goal, LookupGoal::Win);
     let state_key = |state: &Grid| {
         if canonical {
             state.search_hash()
@@ -4453,17 +4480,31 @@ fn solve_lookup(
                 if !goal_reached && visited.contains_key(&hash) {
                     continue;
                 }
+                let analysis = (is_win_goal
+                    && (prune_dead || prune_stranded || use_progress_h || use_smart_h))
+                    .then(|| {
+                        SearchAnalysis::from_grid(
+                            &next_grid,
+                            prune_stranded || use_progress_h || use_smart_h,
+                        )
+                    });
                 if prune_dead
                     && play_state == PlayState::Playing
                     && !goal_reached
-                    && lookup_dead_state(&next_grid)
+                    && analysis.as_ref().map_or_else(
+                        || lookup_dead_state(&next_grid),
+                        lookup_dead_state_from_analysis,
+                    )
                 {
                     continue;
                 }
                 if prune_stranded
                     && play_state == PlayState::Playing
                     && !goal_reached
-                    && lookup_stranded_state(&next_grid)
+                    && analysis.as_ref().map_or_else(
+                        || lookup_stranded_state(&next_grid),
+                        lookup_stranded_state_from_analysis,
+                    )
                 {
                     continue;
                 }
@@ -4485,7 +4526,16 @@ fn solve_lookup(
                 }
 
                 visited.insert(hash, cur_depth + 1);
-                let h = lookup_bfs_progress_score(goal, grid, &next_grid);
+                let h = analysis.as_ref().map_or_else(
+                    || lookup_bfs_progress_score(goal, grid, &next_grid),
+                    |analysis| {
+                        if use_progress_h || use_smart_h {
+                            win_bfs_progress_score_from_analysis(analysis)
+                        } else {
+                            win_bfs_progress_score_from_features(analysis.features)
+                        }
+                    },
+                );
                 if h < best_h {
                     best_h = h;
                     best_idx = node_idx;
@@ -4571,17 +4621,25 @@ fn solve_lookup(
             }
             let goal_reached = play_state == PlayState::Won
                 || lookup_goal_reached(goal, grid, &next_grid, play_state);
+            let analysis = is_win_goal
+                .then(|| SearchAnalysis::from_grid(&next_grid, prune_stranded || use_smart_h));
             if prune_dead
                 && play_state == PlayState::Playing
                 && !goal_reached
-                && lookup_dead_state(&next_grid)
+                && analysis.as_ref().map_or_else(
+                    || lookup_dead_state(&next_grid),
+                    lookup_dead_state_from_analysis,
+                )
             {
                 continue;
             }
             if prune_stranded
                 && play_state == PlayState::Playing
                 && !goal_reached
-                && lookup_stranded_state(&next_grid)
+                && analysis.as_ref().map_or_else(
+                    || lookup_stranded_state(&next_grid),
+                    lookup_stranded_state_from_analysis,
+                )
             {
                 continue;
             }
@@ -4601,7 +4659,10 @@ fn solve_lookup(
             }
 
             visited.insert(hash, next_depth);
-            let h = lookup_goal_heuristic(goal, grid, &next_grid);
+            let h = analysis.as_ref().map_or_else(
+                || lookup_goal_heuristic(goal, grid, &next_grid),
+                win_heuristic_from_analysis,
+            );
             if h < best_h {
                 best_h = h;
                 best_idx = node_idx;
@@ -4697,6 +4758,108 @@ fn rat_can_step_on(cell: CellKind) -> bool {
         cell,
         CellKind::Wall | CellKind::Rat | CellKind::CyborgRat | CellKind::Spiderweb
     )
+}
+
+struct RatDeathComponents {
+    component_by_cell: Vec<i32>,
+    has_death: Vec<bool>,
+    width: usize,
+    height: usize,
+}
+
+impl RatDeathComponents {
+    fn index(&self, x: usize, y: usize) -> usize {
+        y * self.width + x
+    }
+
+    fn component_at(&self, x: usize, y: usize) -> Option<usize> {
+        if x >= self.width || y >= self.height {
+            return None;
+        }
+        let component = self.component_by_cell[self.index(x, y)];
+        (component >= 0).then_some(component as usize)
+    }
+
+    fn has_local_rat_death(&self, grid: &Grid, start: (usize, usize)) -> bool {
+        let dirs = [(0i32, -1i32), (0, 1), (1, 0), (-1, 0)];
+        for (dx, dy) in dirs {
+            let nx = start.0 as i32 + dx;
+            let ny = start.1 as i32 + dy;
+            if nx < 0 || ny < 0 || nx as usize >= self.width || ny as usize >= self.height {
+                continue;
+            }
+            let (nx, ny) = (nx as usize, ny as usize);
+            let next_cell = grid.cell_kind_at(nx, ny);
+            if next_cell == CellKind::Explosive {
+                return true;
+            }
+            if rat_can_step_on(next_cell)
+                && self
+                    .component_at(nx, ny)
+                    .is_some_and(|component| self.has_death[component])
+            {
+                return true;
+            }
+        }
+
+        false
+    }
+}
+
+fn rat_death_components(grid: &Grid) -> RatDeathComponents {
+    let width = grid.width();
+    let height = grid.height();
+    let mut component_by_cell = vec![-1; width * height];
+    let mut has_death = Vec::new();
+    let dirs = [(0i32, -1i32), (0, 1), (1, 0), (-1, 0)];
+
+    for y in 0..height {
+        for x in 0..width {
+            let idx = y * width + x;
+            if component_by_cell[idx] >= 0 || !rat_can_step_on(grid.cell_kind_at(x, y)) {
+                continue;
+            }
+
+            let component = has_death.len() as i32;
+            let mut component_has_death = false;
+            let mut q = VecDeque::new();
+            component_by_cell[idx] = component;
+            q.push_back((x, y));
+
+            while let Some((cx, cy)) = q.pop_front() {
+                let cell = grid.cell_kind_at(cx, cy);
+                if matches!(cell, CellKind::Explosive | CellKind::BlackHole) {
+                    component_has_death = true;
+                }
+
+                for (dx, dy) in dirs {
+                    let nx = cx as i32 + dx;
+                    let ny = cy as i32 + dy;
+                    if nx < 0 || ny < 0 || nx as usize >= width || ny as usize >= height {
+                        continue;
+                    }
+                    let (nx, ny) = (nx as usize, ny as usize);
+                    let next_idx = ny * width + nx;
+                    if component_by_cell[next_idx] >= 0
+                        || !rat_can_step_on(grid.cell_kind_at(nx, ny))
+                    {
+                        continue;
+                    }
+                    component_by_cell[next_idx] = component;
+                    q.push_back((nx, ny));
+                }
+            }
+
+            has_death.push(component_has_death);
+        }
+    }
+
+    RatDeathComponents {
+        component_by_cell,
+        has_death,
+        width,
+        height,
+    }
 }
 
 fn component_has_local_rat_death(grid: &Grid, start: (usize, usize)) -> bool {
@@ -5222,6 +5385,7 @@ struct SearchAnalysis {
 impl SearchAnalysis {
     fn from_grid(grid: &Grid, include_trapped: bool) -> Self {
         let dist = player_dist_map(grid);
+        let rat_death_components = include_trapped.then(|| rat_death_components(grid));
         let mut features = Features {
             rats: 0,
             explosives: 0,
@@ -5254,7 +5418,10 @@ impl SearchAnalysis {
                                 nearest_reachable_rat
                                     .map_or(dist[y][x], |best| best.min(dist[y][x])),
                             );
-                        } else if include_trapped && !component_has_local_rat_death(grid, (x, y)) {
+                        } else if rat_death_components
+                            .as_ref()
+                            .is_some_and(|components| !components.has_local_rat_death(grid, (x, y)))
+                        {
                             trapped_unreachable_rats += 1;
                         }
                     }

@@ -112,6 +112,8 @@ pub(crate) struct MoveHandler<G = Grid> {
     pub(crate) exploding: Vec<Exploding>,
     /// Explosions queued for the next wave.
     pub(crate) pending_explosions: Vec<Position>,
+    /// Original cells overwritten while building a movement phase.
+    pub(crate) modified_cells: Vec<(Position, Cell)>,
 }
 
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
@@ -124,6 +126,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             triggered_numbers: Vec::new(),
             exploding: Vec::new(),
             pending_explosions: Vec::new(),
+            modified_cells: Vec::new(),
         }
     }
 
@@ -136,15 +139,40 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             && self.pending_explosions.is_empty()
     }
 
-    fn begin_move(&mut self, moving: Moving) {
+    pub(crate) fn set_cell_for_movement(&mut self, pos: Position, cell: Cell) {
+        if !self
+            .modified_cells
+            .iter()
+            .any(|&(modified_pos, _)| modified_pos == pos)
+        {
+            let original = self.grid.borrow().at(pos);
+            self.modified_cells.push((pos, original));
+        }
+        *self.grid.borrow_mut().at_mut(pos) = cell;
+    }
+
+    pub(crate) fn restore_movement_grid(&mut self) {
+        {
+            let grid = self.grid.borrow_mut();
+            for (pos, cell) in self.modified_cells.drain(..) {
+                *grid.at_mut(pos) = cell;
+            }
+        }
+
+        let moving_from: Vec<_> = self.moving.iter().map(|moving| moving.from).collect();
         let grid = self.grid.borrow_mut();
-        *grid.at_mut(moving.from) = Cell::Empty;
+        for pos in moving_from {
+            *grid.at_mut(pos) = Cell::Empty;
+        }
+    }
+
+    fn begin_move(&mut self, moving: Moving) {
+        self.set_cell_for_movement(moving.from, Cell::Empty);
         self.moving.push(moving);
-        let dest_entity = grid.at_mut(moving.to);
-        if !matches!(*dest_entity, Cell::BlackHole) {
+        if !matches!(self.grid.borrow().at(moving.to), Cell::BlackHole) {
             // The grid changes will get overwritten when we replace the grid with the previous one.
             // This is just for sequential blocking checks.
-            *dest_entity = moving.cell;
+            self.set_cell_for_movement(moving.to, moving.cell);
         }
     }
 }
