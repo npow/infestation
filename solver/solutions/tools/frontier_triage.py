@@ -216,20 +216,20 @@ def warning_flags(level: str, diag: Diag) -> tuple[str, ...]:
 
 
 def oracle_score(candidate: Candidate, diag: Diag, flags: tuple[str, ...]) -> tuple[int, ...]:
-    hard_flag_penalty = sum(
-        1
-        for flag in flags
-        if flag.endswith("-sealed")
-        or flag in {
-            "no-reachable-rats",
-            "no-remaining-mechanism",
-            "chase-unreachable-rat",
-            "tinder-unreachable-rat",
-            "release-trigger2-unreachable",
-            "reload-trigger2-unreachable",
-            "tug-low-reachability",
-        }
-    )
+    flag_weights = {
+        # These are usually post-failure frontiers. Ranking them below states
+        # with live mechanisms saves full solver timeouts on already sealed
+        # continuations.
+        "no-reachable-rats": 8,
+        "no-remaining-mechanism": 8,
+        "chase-unreachable-rat": 3,
+        "tinder-unreachable-rat": 3,
+        "release-trigger2-unreachable": 3,
+        "reload-trigger2-unreachable": 3,
+        "tug-low-reachability": 3,
+    }
+    hard_flag_penalty = sum(flag_weights.get(flag, 0) for flag in flags)
+    hard_flag_penalty += sum(2 for flag in flags if flag.endswith("-sealed"))
     return (
         hard_flag_penalty,
         diag.total_rats,
@@ -279,6 +279,41 @@ def record_json(record: TriageRecord) -> dict[str, Any]:
     }
 
 
+def diagnostic_signature(record: TriageRecord) -> tuple[Any, ...]:
+    diag = record.diag
+    features = diag.features
+    return (
+        record.flags,
+        diag.total_rats,
+        diag.reachable_rats,
+        diag.reachable_triggers,
+        diag.total_triggers,
+        diag.trapped,
+        features["explosives"],
+        features["webs"],
+        features["triggers"],
+        features["planks"],
+    )
+
+
+def select_diverse_records(
+    records: list[TriageRecord],
+    limit: int,
+    per_signature: int,
+) -> list[TriageRecord]:
+    selected: list[TriageRecord] = []
+    signature_counts: dict[tuple[Any, ...], int] = defaultdict(int)
+
+    for record in records:
+        signature = diagnostic_signature(record)
+        if per_signature <= 0 or signature_counts[signature] < per_signature:
+            selected.append(record)
+            signature_counts[signature] += 1
+            if len(selected) >= limit:
+                return selected
+    return selected
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("archives", nargs="*", type=pathlib.Path)
@@ -298,6 +333,18 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--per-level-before-diag", type=int, default=24)
     parser.add_argument("--per-level", type=int, default=8)
+    parser.add_argument(
+        "--per-signature",
+        type=int,
+        default=2,
+        help="select at most this many records with the same diagnostic signature per level; 0 disables the cap",
+    )
+    parser.add_argument(
+        "--max-flag-penalty",
+        type=int,
+        default=7,
+        help="drop records whose weighted hard-flag penalty is above this value when lower-penalty records exist; negative disables the filter",
+    )
     parser.add_argument("--diag-timeout-sec", type=float, default=3.0)
     parser.add_argument("--jsonl-out", type=pathlib.Path)
     parser.add_argument("--seeds-out", type=pathlib.Path)
@@ -348,9 +395,17 @@ def main() -> int:
     final: list[TriageRecord] = []
     for level, level_records in sorted(by_level.items()):
         ranked = sorted(level_records, key=lambda record: record.score)
-        final.extend(ranked[: args.per_level])
+        eligible = ranked
+        if args.max_flag_penalty >= 0:
+            eligible = [
+                record for record in ranked if record.score[0] <= args.max_flag_penalty
+            ]
+            if not eligible and ranked:
+                eligible = ranked[:1]
+        selected = select_diverse_records(eligible, args.per_level, args.per_signature)
+        final.extend(selected)
         print(f"\n== {level} ==")
-        for record in ranked[: args.per_level]:
+        for record in selected:
             diag = record.diag
             flags = ",".join(record.flags) if record.flags else "-"
             print(

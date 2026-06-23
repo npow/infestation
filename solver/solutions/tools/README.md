@@ -25,6 +25,10 @@ paths; check before reusing those.
   queue.
 - `frontier_triage.py` — replays archive/static prefixes with the Rust oracle's
   `diag` mode, attaches structural warning flags, and emits compact seed JSONL.
+  By default it ranks high-penalty dead-frontier flags below live mechanisms,
+  caps repeated diagnostic signatures, and drops high-penalty records when a
+  level has lower-penalty alternatives. Use `--per-signature 0` and
+  `--max-flag-penalty -1` to preserve the older exhaustive ranking behavior.
   Use this before learned ranking so known dead basins become labeled examples.
 - `event_seed_builder.py` — macro-expands ranked/static return cells by one
   Rust-oracle `events --families` layer and writes transfer-rankable JSONL
