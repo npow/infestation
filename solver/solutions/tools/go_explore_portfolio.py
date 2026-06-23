@@ -76,6 +76,9 @@ class ActiveJob:
 
 
 STATIC_SEEDS: dict[str, list[tuple[str, str]]] = {
+    "levels/chase.csv": [
+        ("initial", ""),
+    ],
     "levels/tinderrectangle.csv": [
         ("initial", ""),
         (

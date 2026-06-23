@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import pathlib
 import re
 import resource
@@ -22,6 +23,7 @@ import subprocess
 import sys
 from collections import defaultdict
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from go_explore_portfolio import (
@@ -146,9 +148,10 @@ def run_events(
     max_events: int,
     mem_mb: int,
     extra_args: tuple[str, ...],
+    use_level_guards: bool,
 ) -> str | None:
     level = canonical_level(candidate.level)
-    guards = LEVEL_GUARDS.get(level, ())
+    guards = LEVEL_GUARDS.get(level, ()) if use_level_guards else ()
     cmd = [
         str(SOLVER),
         "events",
@@ -480,7 +483,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--secs", type=float, default=12.0)
     parser.add_argument("--max-events", type=int, default=12)
     parser.add_argument("--mem-mb", type=int, default=850)
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=0,
+        help="parallel event-expansion jobs; 0 chooses a CPU/memory-aware default",
+    )
     parser.add_argument("--event-arg", action="append", default=[])
+    parser.add_argument(
+        "--level-guards",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="apply built-in per-level resource/reachability guards to event expansion",
+    )
     parser.add_argument("--no-snapshots", action="store_true")
     parser.add_argument("--snapshot-timeout-sec", type=float, default=4.0)
     parser.add_argument(
@@ -519,6 +534,65 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def available_memory_mb() -> int | None:
+    try:
+        for line in pathlib.Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) // 1024
+    except OSError:
+        return None
+    return None
+
+
+def auto_jobs(requested: int, candidate_count: int, mem_mb: int) -> int:
+    if requested > 0:
+        return max(1, min(requested, candidate_count))
+    cpu_count = os.cpu_count() or 1
+    if mem_mb <= 0:
+        return max(1, min(cpu_count, candidate_count))
+    mem_available = available_memory_mb()
+    if mem_available is None:
+        return max(1, min(cpu_count, candidate_count))
+    reserve_mb = 4096
+    memory_workers = max(1, (mem_available - reserve_mb) // mem_mb)
+    return max(1, min(cpu_count, memory_workers, candidate_count))
+
+
+def expand_candidate(
+    candidate: Candidate,
+    index: int,
+    total: int,
+    args: argparse.Namespace,
+    extra_args: tuple[str, ...],
+    include_csv: bool,
+) -> list[EventSeed]:
+    print(
+        f"[{index}/{total}] events {canonical_level(candidate.level)} "
+        f"prefix_len={len(candidate.prefix.split()) if ' ' in candidate.prefix else len(candidate.prefix)} "
+        f"source={candidate.source}",
+        file=sys.stderr,
+        flush=True,
+    )
+    text = run_events(
+        candidate,
+        depth=args.depth,
+        secs=args.secs,
+        max_events=args.max_events,
+        mem_mb=args.mem_mb,
+        extra_args=extra_args,
+        use_level_guards=args.level_guards,
+    )
+    if text is None:
+        return []
+    return parse_events(
+        candidate,
+        text,
+        with_snapshots=not args.no_snapshots,
+        snapshot_timeout=args.snapshot_timeout_sec,
+        include_csv=include_csv,
+    )
+
+
 def main() -> int:
     args = parse_args()
     if not SOLVER.exists():
@@ -529,35 +603,36 @@ def main() -> int:
     if not candidates:
         raise SystemExit("no candidates to expand")
 
-    all_events: list[EventSeed] = []
     extra_args = tuple(str(arg) for item in args.event_arg for arg in item.split())
-    for index, candidate in enumerate(candidates, start=1):
-        print(
-            f"[{index}/{len(candidates)}] events {canonical_level(candidate.level)} "
-            f"prefix_len={len(candidate.prefix.split()) if ' ' in candidate.prefix else len(candidate.prefix)} "
-            f"source={candidate.source}",
-            file=sys.stderr,
-            flush=True,
-        )
-        text = run_events(
-            candidate,
-            depth=args.depth,
-            secs=args.secs,
-            max_events=args.max_events,
-            mem_mb=args.mem_mb,
-            extra_args=extra_args,
-        )
-        if text is None:
-            continue
-        all_events.extend(
-            parse_events(
-                candidate,
-                text,
-                with_snapshots=not args.no_snapshots,
-                snapshot_timeout=args.snapshot_timeout_sec,
-                include_csv=include_csv,
+    all_events: list[EventSeed] = []
+    jobs = auto_jobs(args.jobs, len(candidates), args.mem_mb)
+    print(
+        f"expanding parents={len(candidates)} jobs={jobs} requested_jobs={args.jobs} "
+        f"mem_available_mb={available_memory_mb()} level_guards={args.level_guards}",
+        file=sys.stderr,
+        flush=True,
+    )
+    if jobs == 1:
+        for index, candidate in enumerate(candidates, start=1):
+            all_events.extend(
+                expand_candidate(candidate, index, len(candidates), args, extra_args, include_csv)
             )
-        )
+    else:
+        with ThreadPoolExecutor(max_workers=jobs) as executor:
+            futures = [
+                executor.submit(
+                    expand_candidate,
+                    candidate,
+                    index,
+                    len(candidates),
+                    args,
+                    extra_args,
+                    include_csv,
+                )
+                for index, candidate in enumerate(candidates, start=1)
+            ]
+            for future in as_completed(futures):
+                all_events.extend(future.result())
 
     selected = dedupe_events(all_events)
     learned_scores = transfer_scores(args, selected)
