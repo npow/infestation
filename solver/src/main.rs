@@ -6816,6 +6816,10 @@ fn geom_lure_heuristic(
     }
 }
 
+fn geom_lure_reached(grid: &Grid, rat_targets: &[(i32, i32)], safe_targets: &[(i32, i32)]) -> bool {
+    rat_at_any(grid, rat_targets) && player_at_any(grid, safe_targets)
+}
+
 fn print_best_search_state(
     label: &str,
     reason: &str,
@@ -7080,6 +7084,7 @@ fn solve_geom_lure(
                 initial_explosives,
                 preserve_rats,
             );
+            let reached = geom_lure_reached(&next_grid, rat_targets, safe_targets);
             let node_idx = nodes.len();
             nodes.push(Node {
                 grid: next_grid,
@@ -7087,6 +7092,9 @@ fn solve_geom_lure(
                 action: actions.clone(),
                 depth: next_depth,
             });
+            if reached {
+                return Some(reconstruct(&nodes, node_idx));
+            }
             visited.insert(hash, next_depth);
             if h < best_h_seen {
                 best_h_seen = h;
