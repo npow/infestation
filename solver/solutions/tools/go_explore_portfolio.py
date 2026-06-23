@@ -373,6 +373,9 @@ def jobs_for_candidate(
     timeout_sec: int,
     mem_mb: int,
     prune_dead: bool,
+    lookup_depth: int,
+    lookup_maxnodes: int,
+    lookup_weight: int,
 ) -> list[Job]:
     level = candidate.level
     prefix = candidate.prefix
@@ -448,13 +451,13 @@ def jobs_for_candidate(
                 "--order",
                 "astar",
                 "--depth",
-                "220",
+                str(lookup_depth),
                 "--secs",
                 str(timeout_sec - 10),
                 "--maxnodes",
-                "1000000",
+                str(lookup_maxnodes),
                 "--weight",
-                "2",
+                str(lookup_weight),
             ),
             timeout_sec,
             mem_mb,
@@ -643,6 +646,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout-sec", type=int, default=180)
     parser.add_argument("--mem-mb", type=int, default=1600)
     parser.add_argument(
+        "--lookup-depth",
+        type=int,
+        default=220,
+        help="depth for lookup_win jobs",
+    )
+    parser.add_argument(
+        "--lookup-maxnodes",
+        type=int,
+        default=1_000_000,
+        help="max node budget for lookup_win jobs",
+    )
+    parser.add_argument(
+        "--lookup-weight",
+        type=int,
+        default=2,
+        help="A* heuristic weight for lookup_win jobs",
+    )
+    parser.add_argument(
         "--max-jobs",
         type=int,
         help="after interleaving, queue at most this many jobs; use --jobs for concurrency",
@@ -723,6 +744,9 @@ def main() -> int:
             args.timeout_sec,
             args.mem_mb,
             args.prune_dead,
+            args.lookup_depth,
+            args.lookup_maxnodes,
+            args.lookup_weight,
         )
     ]
     if args.strategy:
