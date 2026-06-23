@@ -6850,6 +6850,7 @@ fn solve_lure(
     let nplayers = count_players(grid);
     let tuples = all_action_tuples(nplayers);
     let initial_rats = count_rats(grid);
+    let initial_had_rats = initial_rats > 0;
     let start = Instant::now();
     let mut nodes: Vec<Node> = vec![Node {
         grid: grid.clone(),
@@ -6885,14 +6886,14 @@ fn solve_lure(
         }
 
         let idx = item.idx;
-        let cur_grid = nodes[idx].grid.clone();
         let cur_g = nodes[idx].depth as i64;
         if cur_g > item.g || cur_g as usize >= max_depth {
             continue;
         }
 
         for actions in &tuples {
-            let (next_grid, play_state) = step(&cur_grid, actions);
+            let (next_grid, play_state) =
+                step_search(&nodes[idx].grid, actions, nplayers, initial_had_rats);
             if play_state == PlayState::GameOver {
                 continue;
             }
@@ -6953,11 +6954,11 @@ fn solve_lure(
             }
             let f = match strategy {
                 "gbfs" => h,
-                _ => cur_g + 1 + weight * h,
+                _ => next_depth as i64 + weight * h,
             };
             pq.push(PQItem {
                 f,
-                g: cur_g + 1,
+                g: next_depth as i64,
                 idx: node_idx,
             });
         }
@@ -6981,6 +6982,7 @@ fn solve_geom_lure(
     let nplayers = count_players(grid);
     let tuples = all_action_tuples(nplayers);
     let initial_rats = count_rats(grid);
+    let initial_had_rats = initial_rats > 0;
     let initial_explosives = count_explosives(grid);
     let start = Instant::now();
     let mut nodes: Vec<Node> = vec![Node {
@@ -7024,43 +7026,26 @@ fn solve_geom_lure(
         }
 
         let idx = item.idx;
-        let cur_grid = nodes[idx].grid.clone();
         let cur_g = nodes[idx].depth as i64;
         if cur_g > item.g || cur_g as usize >= max_depth {
             continue;
         }
 
-        if let Some(actions) = winning_action(&cur_grid, &tuples) {
-            let mut path = reconstruct(&nodes, idx);
-            path.push(actions);
-            return Some(path);
-        }
-
         for actions in &tuples {
-            let (next_grid, play_state) = step(&cur_grid, actions);
+            let (next_grid, play_state) =
+                step_search(&nodes[idx].grid, actions, nplayers, initial_had_rats);
             if play_state == PlayState::GameOver {
                 continue;
             }
-            if nodes.len() >= max_nodes {
-                print_best_search_state(
-                    "geomlure",
-                    "node-limit",
-                    expansions,
-                    best_h_seen,
-                    &nodes,
-                    best_idx_seen,
-                );
-                return None;
-            }
-            let node_idx = nodes.len();
             let next_depth = nodes[idx].depth + 1;
-            nodes.push(Node {
-                grid: next_grid.clone(),
-                parent: idx,
-                action: actions.clone(),
-                depth: next_depth,
-            });
             if play_state == PlayState::Won {
+                let node_idx = nodes.len();
+                nodes.push(Node {
+                    grid: next_grid,
+                    parent: idx,
+                    action: actions.clone(),
+                    depth: next_depth,
+                });
                 return Some(reconstruct(&nodes, node_idx));
             }
             if preserve_rats && count_rats(&next_grid) < initial_rats {
@@ -7075,7 +7060,17 @@ fn solve_geom_lure(
             if !better {
                 continue;
             }
-            visited.insert(hash, next_depth);
+            if nodes.len() >= max_nodes {
+                print_best_search_state(
+                    "geomlure",
+                    "node-limit",
+                    expansions,
+                    best_h_seen,
+                    &nodes,
+                    best_idx_seen,
+                );
+                return None;
+            }
 
             let h = geom_lure_heuristic(
                 &next_grid,
@@ -7085,17 +7080,25 @@ fn solve_geom_lure(
                 initial_explosives,
                 preserve_rats,
             );
+            let node_idx = nodes.len();
+            nodes.push(Node {
+                grid: next_grid,
+                parent: idx,
+                action: actions.clone(),
+                depth: next_depth,
+            });
+            visited.insert(hash, next_depth);
             if h < best_h_seen {
                 best_h_seen = h;
                 best_idx_seen = node_idx;
             }
             let f = match strategy {
                 "gbfs" => h,
-                _ => cur_g + 1 + weight * h,
+                _ => next_depth as i64 + weight * h,
             };
             pq.push(PQItem {
                 f,
-                g: cur_g + 1,
+                g: next_depth as i64,
                 idx: node_idx,
             });
         }
