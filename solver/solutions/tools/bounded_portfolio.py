@@ -631,6 +631,7 @@ def start_job(
     job: Job,
     out_dir: pathlib.Path,
     prune_dead: bool,
+    prune_stranded: bool,
     progress_h: bool,
     smart_h: bool,
     mem_mb: int | None,
@@ -639,10 +640,12 @@ def start_job(
     command = [str(SOLVER), *job.args]
     effective_mem_mb = mem_mb or job.mem_mb
     env = None
-    if prune_dead or progress_h or smart_h:
+    if prune_dead or prune_stranded or progress_h or smart_h:
         env = dict(os.environ)
     if prune_dead:
         env["PRUNE_DEAD"] = "1"
+    if prune_stranded:
+        env["PRUNE_STRANDED"] = "1"
     if progress_h:
         env["PROGRESS_H"] = "1"
     if smart_h:
@@ -652,6 +655,8 @@ def start_job(
     log.write("$ " + shlex.join(command) + "\n")
     if prune_dead:
         log.write("# env PRUNE_DEAD=1\n")
+    if prune_stranded:
+        log.write("# env PRUNE_STRANDED=1\n")
     if progress_h:
         log.write("# env PROGRESS_H=1\n")
     if smart_h:
@@ -708,6 +713,7 @@ def run_jobs(
     jobs: list[Job],
     out_dir: pathlib.Path,
     prune_dead: bool,
+    prune_stranded: bool,
     progress_h: bool,
     smart_h: bool,
     mem_mb: int | None,
@@ -720,7 +726,15 @@ def run_jobs(
     def launch_ready() -> None:
         while pending and len(active) < workers:
             job = pending.popleft()
-            active_job = start_job(job, out_dir, prune_dead, progress_h, smart_h, mem_mb)
+            active_job = start_job(
+                job,
+                out_dir,
+                prune_dead,
+                prune_stranded,
+                progress_h,
+                smart_h,
+                mem_mb,
+            )
             active.append(active_job)
             print(
                 f"start {job.name} pid={active_job.process.pid} "
@@ -795,6 +809,12 @@ def parse_args() -> argparse.Namespace:
         help="set PRUNE_DEAD=1 for solver children",
     )
     parser.add_argument(
+        "--prune-stranded",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="set PRUNE_STRANDED=1 for solver children to prune mechanism-free trapped-rat basins",
+    )
+    parser.add_argument(
         "--progress-h",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -841,6 +861,7 @@ def main() -> int:
         jobs,
         out_dir,
         args.prune_dead,
+        args.prune_stranded,
         args.progress_h,
         args.smart_h,
         args.mem_mb,

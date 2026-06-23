@@ -3515,6 +3515,15 @@ fn lookup_dead_state(grid: &Grid) -> bool {
         && reachable_trigger_count(grid) == 0
 }
 
+fn lookup_stranded_state(grid: &Grid) -> bool {
+    let features = Features::from_grid(grid);
+    features.rats > 0
+        && features.explosives == 0
+        && features.triggers == 0
+        && features.planks == 0
+        && trapped_unreachable_rat_count(grid) > 0
+}
+
 struct PQItem {
     f: i64,
     g: i64,
@@ -4332,6 +4341,7 @@ fn solve_lookup(
     let tuples = all_action_tuples(nplayers);
     let start = Instant::now();
     let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
+    let prune_stranded = std::env::var("PRUNE_STRANDED").is_ok();
     let state_key = |state: &Grid| {
         if canonical {
             state.search_hash()
@@ -4438,6 +4448,13 @@ fn solve_lookup(
                 {
                     continue;
                 }
+                if prune_stranded
+                    && play_state == PlayState::Playing
+                    && !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                    && lookup_stranded_state(&next_grid)
+                {
+                    continue;
+                }
                 let hash = state_key(&next_grid);
                 let accepted_goal = play_state == PlayState::Won
                     || (lookup_goal_reached(goal, grid, &next_grid, play_state)
@@ -4538,6 +4555,13 @@ fn solve_lookup(
                 && play_state == PlayState::Playing
                 && !lookup_goal_reached(goal, grid, &next_grid, play_state)
                 && lookup_dead_state(&next_grid)
+            {
+                continue;
+            }
+            if prune_stranded
+                && play_state == PlayState::Playing
+                && !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                && lookup_stranded_state(&next_grid)
             {
                 continue;
             }
@@ -4778,6 +4802,7 @@ fn solve_lookup_goal_branches(
     let tuples = all_action_tuples(nplayers);
     let start = Instant::now();
     let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
+    let prune_stranded = std::env::var("PRUNE_STRANDED").is_ok();
     let state_key = |state: &Grid| {
         if canonical {
             state.search_hash()
@@ -4829,6 +4854,13 @@ fn solve_lookup_goal_branches(
                 && play_state == PlayState::Playing
                 && !lookup_goal_reached(goal, grid, &next_grid, play_state)
                 && lookup_dead_state(&next_grid)
+            {
+                continue;
+            }
+            if prune_stranded
+                && play_state == PlayState::Playing
+                && !lookup_goal_reached(goal, grid, &next_grid, play_state)
+                && lookup_stranded_state(&next_grid)
             {
                 continue;
             }
@@ -7474,6 +7506,7 @@ fn find_event_successors(
     let mut event_hashes = HashSet::new();
     let mut expansions = 0u64;
     let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
+    let prune_stranded = std::env::var("PRUNE_STRANDED").is_ok();
 
     while let Some(idx) = q.pop_front() {
         expansions += 1;
@@ -7492,6 +7525,12 @@ fn find_event_successors(
                 continue;
             }
             if prune_dead && play_state == PlayState::Playing && lookup_dead_state(&next_grid) {
+                continue;
+            }
+            if prune_stranded
+                && play_state == PlayState::Playing
+                && lookup_stranded_state(&next_grid)
+            {
                 continue;
             }
 

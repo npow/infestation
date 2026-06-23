@@ -13,15 +13,16 @@ paths; check before reusing those.
 - `bounded_portfolio.py` — current hard-level mechanism portfolio runner. It
   caps concurrency, wall time, and virtual memory per solver process, and
   records one log per job under `/tmp/infestation-runs/`. Jobs are submitted
-  round-robin by level and set `PRUNE_DEAD=1` by default.
+  round-robin by level and set `PRUNE_DEAD=1` plus `PRUNE_STRANDED=1` by
+  default.
 - `archive_logs.py` — parse bounded-run logs into JSONL mechanism/frontier
   records, so follow-up passes can dedupe event families and mark dead basins
   without rereading every raw log.
 - `go_explore_portfolio.py` — archive-seeded portfolio runner. It treats saved
   frontier prefixes as return cells, then launches capped `fess`, `dropchain`,
   `lookup win`, and `novelty` probes from the best diverse prefixes per level.
-  It also interleaves levels, enables `PRUNE_DEAD=1` by default, and stops
-  remaining queued/running probes after a solution marker unless
+  It also interleaves levels, enables `PRUNE_DEAD=1` and `PRUNE_STRANDED=1` by
+  default, and stops remaining queued/running probes after a solution marker unless
   `--no-stop-on-solved` is passed.
   Use `--max-jobs` to run short, inspectable waves instead of the whole archive
   queue. Seed-file records with the same structural `event.key` are deduped by
@@ -31,7 +32,9 @@ paths; check before reusing those.
   restore the older full-budget behavior. By default, expensive `fess` and
   `dropchain` jobs run only for seed records with known clean diagnostics
   (`--expensive-filter known-clean`); pass `--expensive-filter all` to restore
-  the older exhaustive queue.
+  the older exhaustive queue. `PRUNE_STRANDED=1` cuts off mechanism-free states
+  with trapped unreachable rats, which avoids late cleanup basins that cannot
+  still become wins.
 - `frontier_triage.py` — replays archive/static prefixes with the Rust oracle's
   `diag` mode, attaches structural warning flags, and emits rich seed JSONL.
   By default it ranks high-penalty dead-frontier flags below live mechanisms,

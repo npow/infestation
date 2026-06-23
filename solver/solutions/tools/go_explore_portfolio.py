@@ -65,6 +65,7 @@ class Job:
     timeout_sec: int
     mem_mb: int
     prune_dead: bool
+    prune_stranded: bool
     progress_h: bool
     smart_h: bool
 
@@ -436,6 +437,7 @@ def jobs_for_candidate(
     timeout_sec: int,
     mem_mb: int,
     prune_dead: bool,
+    prune_stranded: bool,
     progress_h: bool,
     smart_h: bool,
     lookup_depth: int,
@@ -464,6 +466,7 @@ def jobs_for_candidate(
             timeout_sec,
             mem_mb,
             prune_dead,
+            prune_stranded,
             progress_h,
             smart_h,
         ),
@@ -490,6 +493,7 @@ def jobs_for_candidate(
             timeout_sec,
             mem_mb,
             prune_dead,
+            prune_stranded,
             progress_h,
             smart_h,
         ),
@@ -522,6 +526,7 @@ def jobs_for_candidate(
             timeout_sec,
             mem_mb,
             prune_dead,
+            prune_stranded,
             progress_h,
             smart_h,
         ),
@@ -552,6 +557,7 @@ def jobs_for_candidate(
             timeout_sec,
             mem_mb,
             prune_dead,
+            prune_stranded,
             progress_h,
             smart_h,
         ),
@@ -658,10 +664,12 @@ def start_job(job: Job, out_dir: pathlib.Path) -> ActiveJob:
     log_path = out_dir / f"{job.name}.log"
     command = [str(SOLVER), *job.args]
     env = None
-    if job.prune_dead or job.progress_h or job.smart_h:
+    if job.prune_dead or job.prune_stranded or job.progress_h or job.smart_h:
         env = dict(os.environ)
     if job.prune_dead:
         env["PRUNE_DEAD"] = "1"
+    if job.prune_stranded:
+        env["PRUNE_STRANDED"] = "1"
     if job.progress_h:
         env["PROGRESS_H"] = "1"
     if job.smart_h:
@@ -671,6 +679,8 @@ def start_job(job: Job, out_dir: pathlib.Path) -> ActiveJob:
     log.write("$ " + shlex.join(command) + "\n")
     if job.prune_dead:
         log.write("# env PRUNE_DEAD=1\n")
+    if job.prune_stranded:
+        log.write("# env PRUNE_STRANDED=1\n")
     if job.progress_h:
         log.write("# env PROGRESS_H=1\n")
     if job.smart_h:
@@ -879,6 +889,12 @@ def parse_args() -> argparse.Namespace:
         help="set PRUNE_DEAD=1 for solver children",
     )
     parser.add_argument(
+        "--prune-stranded",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="set PRUNE_STRANDED=1 for solver children to prune mechanism-free trapped-rat basins",
+    )
+    parser.add_argument(
         "--progress-h",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -967,6 +983,7 @@ def main() -> int:
                 args.timeout_sec,
                 args.mem_mb,
                 args.prune_dead,
+                args.prune_stranded,
                 args.progress_h,
                 args.smart_h,
                 args.lookup_depth,
