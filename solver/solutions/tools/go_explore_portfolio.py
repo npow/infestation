@@ -32,6 +32,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 SOLVER = ROOT / "target" / "release" / "solver"
 RUN_ROOT = pathlib.Path("/tmp/infestation-runs")
 DEFAULT_ARCHIVE = RUN_ROOT / "archive_20260614_full.jsonl"
+FINAL_SOLUTIONS = ROOT / "solver" / "solutions" / "final_solutions.json"
 
 LEVEL_RE = re.compile(r"\blevels/[^\s'\"]+?\.csv\b")
 
@@ -265,6 +266,18 @@ def seed_file_candidates(seed_file: pathlib.Path) -> list[Candidate]:
     candidates: list[Candidate] = []
     if not seed_file.exists():
         raise SystemExit(f"missing seed file: {seed_file}")
+
+    def coerce_score(value: Any, fallback: int = 0) -> int:
+        if isinstance(value, int | float):
+            return int(value)
+        if isinstance(value, list) and all(isinstance(item, int | float) for item in value):
+            score = 0
+            # Preserve lexicographic ordering for frontier_triage score arrays.
+            for item in value:
+                score = score * 1_000_000 + int(item) + 500_000
+            return score
+        return fallback
+
     for line_number, line in enumerate(seed_file.read_text(encoding="utf-8").splitlines(), start=1):
         if not line.strip():
             continue
@@ -280,7 +293,7 @@ def seed_file_candidates(seed_file: pathlib.Path) -> list[Candidate]:
         features = diag.get("features") if isinstance(diag.get("features"), dict) else {}
         rank_score = record.get("rank_score")
         learned_score = record.get("learned_score")
-        score = int(record.get("score", 0))
+        score = coerce_score(record.get("score"))
         if isinstance(rank_score, int | float):
             score = int(-1_000_000 * float(rank_score))
         elif isinstance(learned_score, int | float):
@@ -297,6 +310,23 @@ def seed_file_candidates(seed_file: pathlib.Path) -> list[Candidate]:
             )
         )
     return candidates
+
+
+def canonical_level(level: str) -> str:
+    level = level.replace("\\", "/")
+    if level.startswith("levels/"):
+        return level.removeprefix("levels/")
+    return level
+
+
+def load_solved_levels(solutions_file: pathlib.Path) -> set[str]:
+    try:
+        data = json.loads(solutions_file.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return set()
+    if not isinstance(data, dict):
+        return set()
+    return {canonical_level(level) for level in data if isinstance(level, str)}
 
 
 def unique_best(candidates: Iterable[Candidate], per_level: int, rank_key: str) -> list[Candidate]:
@@ -615,7 +645,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--max-jobs",
         type=int,
-        help="after interleaving, run at most this many jobs",
+        help="after interleaving, queue at most this many jobs; use --jobs for concurrency",
     )
     parser.add_argument(
         "--prune-dead",
@@ -624,7 +654,25 @@ def parse_args() -> argparse.Namespace:
         help="set PRUNE_DEAD=1 for solver children",
     )
     parser.add_argument("--out-dir", type=pathlib.Path)
+    parser.add_argument(
+        "--solutions-file",
+        type=pathlib.Path,
+        default=FINAL_SOLUTIONS,
+        help="final_solutions.json used by --skip-solved",
+    )
+    parser.add_argument(
+        "--skip-solved",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="skip candidates whose level is already present in final_solutions.json",
+    )
     parser.add_argument("--only", action="append", default=[])
+    parser.add_argument(
+        "--skip-level",
+        action="append",
+        default=[],
+        help="skip candidates whose level contains this token; repeatable",
+    )
     parser.add_argument("--strategy", action="append", default=[])
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -640,12 +688,32 @@ def main() -> int:
         candidates.extend(static_candidates())
     for seed_file in args.seed_file:
         candidates.extend(seed_file_candidates(seed_file))
+    raw_candidate_count = len(candidates)
+    skipped_solved = 0
+    if args.skip_solved:
+        solved_levels = load_solved_levels(args.solutions_file)
+        before = len(candidates)
+        candidates = [
+            candidate
+            for candidate in candidates
+            if canonical_level(candidate.level) not in solved_levels
+        ]
+        skipped_solved = before - len(candidates)
     if args.only:
         candidates = [
             candidate
             for candidate in candidates
             if any(token in candidate.level or token in candidate.source for token in args.only)
         ]
+    skipped_level = 0
+    if args.skip_level:
+        before = len(candidates)
+        candidates = [
+            candidate
+            for candidate in candidates
+            if not any(token in candidate.level for token in args.skip_level)
+        ]
+        skipped_level = before - len(candidates)
     candidates = unique_best(candidates, args.per_level, args.rank_key)
     jobs = [
         job
@@ -676,9 +744,13 @@ def main() -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     workers = auto_jobs(args.jobs, len(jobs), args.mem_mb)
+    cpu_count = os.cpu_count() or 1
     print(
-        f"candidates={len(candidates)} jobs={len(jobs)} concurrency={workers} "
-        f"requested_jobs={args.jobs} mem_available_mb={available_memory_mb()} logs={out_dir}",
+        f"raw_candidates={raw_candidate_count} selected_candidates={len(candidates)} "
+        f"skipped_solved={skipped_solved} skipped_level={skipped_level} "
+        f"queued_jobs={len(jobs)} concurrency={workers} requested_concurrency={args.jobs} "
+        f"cpu_count={cpu_count} max_queued_jobs={args.max_jobs} "
+        f"mem_available_mb={available_memory_mb()} logs={out_dir}",
         flush=True,
     )
     for candidate in candidates:

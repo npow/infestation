@@ -21,7 +21,15 @@ from collections import defaultdict
 from collections.abc import Iterable
 from typing import Any
 
-from go_explore_portfolio import Candidate, SOLVER, archive_candidates, static_candidates
+from go_explore_portfolio import (
+    FINAL_SOLUTIONS,
+    Candidate,
+    SOLVER,
+    archive_candidates,
+    canonical_level,
+    load_solved_levels,
+    static_candidates,
+)
 
 
 FEATURES_RE = re.compile(
@@ -276,6 +284,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("archives", nargs="*", type=pathlib.Path)
     parser.add_argument("--include-static", action="store_true")
     parser.add_argument("--only", action="append", default=[])
+    parser.add_argument(
+        "--solutions-file",
+        type=pathlib.Path,
+        default=FINAL_SOLUTIONS,
+        help="final_solutions.json used by --skip-solved",
+    )
+    parser.add_argument(
+        "--skip-solved",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="skip candidates whose level is already present in final_solutions.json",
+    )
     parser.add_argument("--per-level-before-diag", type=int, default=24)
     parser.add_argument("--per-level", type=int, default=8)
     parser.add_argument("--diag-timeout-sec", type=float, default=3.0)
@@ -296,6 +316,13 @@ def main() -> int:
             candidate
             for candidate in candidates
             if any(token in candidate.level or token in candidate.source for token in args.only)
+        ]
+    if args.skip_solved:
+        solved_levels = load_solved_levels(args.solutions_file)
+        candidates = [
+            candidate
+            for candidate in candidates
+            if canonical_level(candidate.level) not in solved_levels
         ]
 
     selected = select_for_diag(candidates, args.per_level_before_diag)
