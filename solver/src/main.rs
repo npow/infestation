@@ -1009,10 +1009,89 @@ fn all_action_tuples(nplayers: usize) -> Vec<Vec<Action>> {
     panic!("unsupported player count {nplayers}");
 }
 
+#[derive(Clone, Copy)]
+struct ActionStep {
+    actions: [Action; 2],
+    len: u8,
+}
+
+impl ActionStep {
+    fn empty() -> Self {
+        Self {
+            actions: [Action::Stall, Action::Stall],
+            len: 0,
+        }
+    }
+
+    fn one(action: Action) -> Self {
+        Self {
+            actions: [action, Action::Stall],
+            len: 1,
+        }
+    }
+
+    fn two(first: Action, second: Action) -> Self {
+        Self {
+            actions: [first, second],
+            len: 2,
+        }
+    }
+
+    fn as_slice(&self) -> &[Action] {
+        &self.actions[..self.len as usize]
+    }
+
+    fn to_vec(self) -> Vec<Action> {
+        self.as_slice().to_vec()
+    }
+}
+
+fn all_action_steps(nplayers: usize) -> Vec<ActionStep> {
+    let single = [
+        Action::Move(Dir4::North),
+        Action::Move(Dir4::South),
+        Action::Move(Dir4::East),
+        Action::Move(Dir4::West),
+        Action::Stall,
+    ];
+    if nplayers == 1 {
+        return single
+            .iter()
+            .map(|&action| ActionStep::one(action))
+            .collect();
+    }
+    if nplayers == 2 {
+        if std::env::var("MIRROR_2P").is_ok() {
+            return vec![
+                ActionStep::two(Action::Move(Dir4::North), Action::Move(Dir4::North)),
+                ActionStep::two(Action::Move(Dir4::South), Action::Move(Dir4::South)),
+                ActionStep::two(Action::Move(Dir4::East), Action::Move(Dir4::West)),
+                ActionStep::two(Action::Move(Dir4::West), Action::Move(Dir4::East)),
+                ActionStep::two(Action::Stall, Action::Stall),
+            ];
+        }
+        let mut out = Vec::new();
+        for first in single {
+            for second in single {
+                out.push(ActionStep::two(first, second));
+            }
+        }
+        return out;
+    }
+    panic!("unsupported player count {nplayers}");
+}
+
 struct Node {
     grid: Grid,
     parent: usize,       // usize::MAX for root
     action: Vec<Action>, // action taken from parent to reach this node
+    depth: u32,
+}
+
+struct LookupNode {
+    grid: Grid,
+    parent: usize,
+    action: ActionStep,
     depth: u32,
 }
 
@@ -1027,6 +1106,16 @@ fn reconstruct(nodes: &[Node], mut idx: usize) -> Vec<Vec<Action>> {
     let mut acts: Vec<Vec<Action>> = Vec::new();
     while nodes[idx].parent != usize::MAX {
         acts.push(nodes[idx].action.clone());
+        idx = nodes[idx].parent;
+    }
+    acts.reverse();
+    acts
+}
+
+fn reconstruct_lookup(nodes: &[LookupNode], mut idx: usize) -> Vec<Vec<Action>> {
+    let mut acts: Vec<Vec<Action>> = Vec::new();
+    while nodes[idx].parent != usize::MAX {
+        acts.push(nodes[idx].action.to_vec());
         idx = nodes[idx].parent;
     }
     acts.reverse();
@@ -4368,7 +4457,7 @@ fn solve_lookup(
 ) -> Option<(Vec<Vec<Action>>, PlayState)> {
     let nplayers = count_players(grid);
     let initial_had_rats = count_rats(grid) > 0;
-    let tuples = all_action_tuples(nplayers);
+    let tuples = all_action_steps(nplayers);
     let start = Instant::now();
     let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
     let prune_stranded = std::env::var("PRUNE_STRANDED").is_ok();
@@ -4392,10 +4481,10 @@ fn solve_lookup(
         return Some((Vec::new(), PlayState::Playing));
     }
 
-    let mut nodes = vec![Node {
+    let mut nodes = vec![LookupNode {
         grid: grid.clone(),
         parent: usize::MAX,
-        action: Vec::new(),
+        action: ActionStep::empty(),
         depth: 0,
     }];
     let mut visited: HashMap<u64, u32> = HashMap::new();
@@ -4442,7 +4531,7 @@ fn solve_lookup(
                 || nodes.len() >= max_nodes
                 || stagnated(elapsed, last_best_elapsed)
             {
-                let best_path = reconstruct(&nodes, best_idx);
+                let best_path = reconstruct_lookup(&nodes, best_idx);
                 eprintln!(
                     "  [lookup stop expansions={} queue={} nodes={} visited={} best_h={} elapsed={:.1}s reason={}]",
                     expansions,
@@ -4464,8 +4553,12 @@ fn solve_lookup(
                 continue;
             }
             for actions in &tuples {
-                let (next_grid, play_state) =
-                    step_search(&nodes[idx].grid, actions, nplayers, initial_had_rats);
+                let (next_grid, play_state) = step_search(
+                    &nodes[idx].grid,
+                    actions.as_slice(),
+                    nplayers,
+                    initial_had_rats,
+                );
                 if play_state == PlayState::GameOver {
                     continue;
                 }
@@ -4515,14 +4608,14 @@ fn solve_lookup(
                     continue;
                 }
                 let node_idx = nodes.len();
-                nodes.push(Node {
+                nodes.push(LookupNode {
                     grid: next_grid.clone(),
                     parent: idx,
-                    action: actions.clone(),
+                    action: *actions,
                     depth: cur_depth + 1,
                 });
                 if accepted_goal {
-                    return Some((reconstruct(&nodes, node_idx), play_state));
+                    return Some((reconstruct_lookup(&nodes, node_idx), play_state));
                 }
 
                 visited.insert(hash, cur_depth + 1);
@@ -4579,7 +4672,7 @@ fn solve_lookup(
             || nodes.len() >= max_nodes
             || stagnated(elapsed, last_best_elapsed)
         {
-            let best_path = reconstruct(&nodes, best_idx);
+            let best_path = reconstruct_lookup(&nodes, best_idx);
             eprintln!(
                 "  [lookup stop expansions={} open={} nodes={} visited={} best_h={} elapsed={:.1}s reason={}]",
                 expansions,
@@ -4602,8 +4695,12 @@ fn solve_lookup(
             continue;
         }
         for actions in &tuples {
-            let (next_grid, play_state) =
-                step_search(&nodes[idx].grid, actions, nplayers, initial_had_rats);
+            let (next_grid, play_state) = step_search(
+                &nodes[idx].grid,
+                actions.as_slice(),
+                nplayers,
+                initial_had_rats,
+            );
             if play_state == PlayState::GameOver {
                 continue;
             }
@@ -4645,17 +4742,17 @@ fn solve_lookup(
             }
 
             let node_idx = nodes.len();
-            nodes.push(Node {
+            nodes.push(LookupNode {
                 grid: next_grid.clone(),
                 parent: idx,
-                action: actions.clone(),
+                action: *actions,
                 depth: next_depth,
             });
             if goal_reached
                 && (play_state == PlayState::Won
                     || trap_constraints.accepts(&next_grid, play_state))
             {
-                return Some((reconstruct(&nodes, node_idx), play_state));
+                return Some((reconstruct_lookup(&nodes, node_idx), play_state));
             }
 
             visited.insert(hash, next_depth);
@@ -5385,7 +5482,7 @@ struct SearchAnalysis {
 impl SearchAnalysis {
     fn from_grid(grid: &Grid, include_trapped: bool) -> Self {
         let dist = player_dist_map(grid);
-        let rat_death_components = include_trapped.then(|| rat_death_components(grid));
+        let mut rat_death_components_cache = None;
         let mut features = Features {
             rats: 0,
             explosives: 0,
@@ -5418,9 +5515,10 @@ impl SearchAnalysis {
                                 nearest_reachable_rat
                                     .map_or(dist[y][x], |best| best.min(dist[y][x])),
                             );
-                        } else if rat_death_components
-                            .as_ref()
-                            .is_some_and(|components| !components.has_local_rat_death(grid, (x, y)))
+                        } else if include_trapped
+                            && !rat_death_components_cache
+                                .get_or_insert_with(|| rat_death_components(grid))
+                                .has_local_rat_death(grid, (x, y))
                         {
                             trapped_unreachable_rats += 1;
                         }
