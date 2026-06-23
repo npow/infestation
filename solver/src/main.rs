@@ -1098,8 +1098,8 @@ struct LookupNode {
 
 struct BranchSearchNode {
     grid: Option<Grid>,
-    parent: usize,       // usize::MAX for root
-    action: Vec<Action>, // action taken from parent to reach this node
+    parent: usize, // usize::MAX for root
+    action: ActionStep,
     depth: u32,
 }
 
@@ -1126,7 +1126,7 @@ fn reconstruct_lookup(nodes: &[LookupNode], mut idx: usize) -> Vec<Vec<Action>> 
 fn reconstruct_branch(nodes: &[BranchSearchNode], mut idx: usize) -> Vec<Vec<Action>> {
     let mut acts: Vec<Vec<Action>> = Vec::new();
     while nodes[idx].parent != usize::MAX {
-        acts.push(nodes[idx].action.clone());
+        acts.push(nodes[idx].action.to_vec());
         idx = nodes[idx].parent;
     }
     acts.reverse();
@@ -1136,7 +1136,7 @@ fn reconstruct_branch(nodes: &[BranchSearchNode], mut idx: usize) -> Vec<Vec<Act
 fn reconstruct_branch_child(
     nodes: &[BranchSearchNode],
     parent: usize,
-    action: &[Action],
+    action: ActionStep,
 ) -> Vec<Vec<Action>> {
     let mut acts = reconstruct_branch(nodes, parent);
     acts.push(action.to_vec());
@@ -5085,10 +5085,14 @@ fn solve_lookup_goal_branches(
 ) -> Vec<Branch> {
     let nplayers = count_players(grid);
     let initial_had_rats = count_rats(grid) > 0;
-    let tuples = all_action_tuples(nplayers);
+    let tuples = all_action_steps(nplayers);
     let start = Instant::now();
     let prune_dead = std::env::var("PRUNE_DEAD").is_ok();
     let prune_stranded = std::env::var("PRUNE_STRANDED").is_ok();
+    let progress_every = std::env::var("BRANCH_PROGRESS")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(0u64);
     let state_key = |state: &Grid| {
         if canonical {
             state.search_hash()
@@ -5099,7 +5103,7 @@ fn solve_lookup_goal_branches(
     let mut nodes = vec![BranchSearchNode {
         grid: Some(grid.clone()),
         parent: usize::MAX,
-        action: Vec::new(),
+        action: ActionStep::empty(),
         depth: 0,
     }];
     let mut visited = HashSet::new();
@@ -5113,9 +5117,38 @@ fn solve_lookup_goal_branches(
 
     while let Some(idx) = q.pop_front() {
         expansions += 1;
+        if progress_every > 0 && expansions % progress_every == 0 {
+            eprintln!(
+                "  [branch expansions={} depth={} queue={} nodes={} visited={} results={} elapsed={:.1}s]",
+                expansions,
+                nodes[idx].depth,
+                q.len(),
+                nodes.len(),
+                visited.len(),
+                results.len(),
+                start.elapsed().as_secs_f64()
+            );
+        }
         if expansions % 128 == 0
             && (start.elapsed().as_secs_f64() > time_limit_secs || nodes.len() >= max_nodes)
         {
+            if progress_every > 0 {
+                let reason = if nodes.len() >= max_nodes {
+                    "nodes"
+                } else {
+                    "time"
+                };
+                eprintln!(
+                    "  [branch stop expansions={} queue={} nodes={} visited={} results={} elapsed={:.1}s reason={}]",
+                    expansions,
+                    q.len(),
+                    nodes.len(),
+                    visited.len(),
+                    results.len(),
+                    start.elapsed().as_secs_f64(),
+                    reason
+                );
+            }
             break;
         }
         if results.len() >= raw_result_limit {
@@ -5133,7 +5166,7 @@ fn solve_lookup_goal_branches(
             .expect("branch search node should have grid before expansion");
         for actions in &tuples {
             let (next_grid, play_state) =
-                step_search(&cur_grid, actions, nplayers, initial_had_rats);
+                step_search(&cur_grid, actions.as_slice(), nplayers, initial_had_rats);
             if play_state == PlayState::GameOver {
                 continue;
             }
@@ -5165,7 +5198,7 @@ fn solve_lookup_goal_branches(
                     // after a short stabilization sequence.
                 } else {
                     if reached.insert(hash) {
-                        let path = reconstruct_branch_child(&nodes, idx, actions);
+                        let path = reconstruct_branch_child(&nodes, idx, *actions);
                         let score = lookup_branch_score(&next_grid, path.len());
                         results.push(Branch {
                             grid: next_grid,
@@ -5184,7 +5217,7 @@ fn solve_lookup_goal_branches(
                 nodes.push(BranchSearchNode {
                     grid: Some(next_grid),
                     parent: idx,
-                    action: actions.clone(),
+                    action: *actions,
                     depth: cur_depth + 1,
                 });
                 q.push_back(node_idx);
@@ -7417,8 +7450,10 @@ fn solve_trigger_order_lookup(
     segment_nodes: usize,
     segment_results: usize,
     beam: usize,
+    expand_branch_limit: usize,
     min_rats: Option<usize>,
     mop_secs: f64,
+    mop_branch_limit: usize,
     mop_strategy: &str,
     mop_weight: i64,
     depth: usize,
@@ -7433,8 +7468,9 @@ fn solve_trigger_order_lookup(
 
     for (order_idx, &number) in order.iter().enumerate() {
         branches.sort_by_key(|branch| branch.score);
-        if mop_secs > 0.0 {
-            for branch in branches.iter().take(beam.min(branches.len())) {
+        if order_idx > 0 && mop_secs > 0.0 && mop_branch_limit > 0 {
+            let mop_limit = mop_branch_limit.min(beam).min(branches.len());
+            for branch in branches.iter().take(mop_limit) {
                 if let Some(mop) = solve_with_context(
                     &branch.grid,
                     depth,
@@ -7451,7 +7487,8 @@ fn solve_trigger_order_lookup(
         }
 
         let mut next_branches = Vec::new();
-        for branch in branches.iter().take(beam.min(branches.len())) {
+        let expand_limit = expand_branch_limit.min(beam).min(branches.len());
+        for branch in branches.iter().take(expand_limit) {
             let before = Features::from_grid(&branch.grid);
             let goal = if strict_trigger_order {
                 LookupGoal::TriggerNumberOnly(number)
@@ -7547,7 +7584,7 @@ fn solve_trigger_order_lookup(
     }
 
     branches.sort_by_key(|branch| branch.score);
-    for branch in branches {
+    for branch in branches.into_iter().take(mop_branch_limit) {
         eprintln!(
             "  trigger lookup order done, mopping from score={}",
             branch.score
@@ -7578,8 +7615,10 @@ fn solve_any_trigger_order_lookup(
     segment_nodes: usize,
     segment_results: usize,
     beam: usize,
+    expand_branch_limit: usize,
     min_rats: Option<usize>,
     mop_secs: f64,
+    mop_branch_limit: usize,
     mop_strategy: &str,
     mop_weight: i64,
     depth: usize,
@@ -7593,8 +7632,9 @@ fn solve_any_trigger_order_lookup(
 
     for step_idx in 0..macro_steps {
         branches.sort_by_key(|branch| branch.score);
-        if mop_secs > 0.0 {
-            for branch in branches.iter().take(beam.min(branches.len())) {
+        if step_idx > 0 && mop_secs > 0.0 && mop_branch_limit > 0 {
+            let mop_limit = mop_branch_limit.min(beam).min(branches.len());
+            for branch in branches.iter().take(mop_limit) {
                 if let Some(mop) = solve_with_context(
                     &branch.grid,
                     depth,
@@ -7611,7 +7651,8 @@ fn solve_any_trigger_order_lookup(
         }
 
         let mut next_branches = Vec::new();
-        for branch in branches.iter().take(beam.min(branches.len())) {
+        let expand_limit = expand_branch_limit.min(beam).min(branches.len());
+        for branch in branches.iter().take(expand_limit) {
             let before = Features::from_grid(&branch.grid);
             let numbers = trigger_numbers(&branch.grid);
             for number in numbers {
@@ -7708,7 +7749,7 @@ fn solve_any_trigger_order_lookup(
     }
 
     branches.sort_by_key(|branch| branch.score);
-    for branch in branches {
+    for branch in branches.into_iter().take(mop_branch_limit) {
         if let Some(mop) = solve_with_context(
             &branch.grid,
             depth,
@@ -11055,7 +11096,9 @@ fn main() {
         let mut segment_nodes = 1_000_000usize;
         let mut segment_results = 32usize;
         let mut beam = 32usize;
+        let mut expand_branch_limit = 4usize;
         let mut mop_secs = 30.0;
+        let mut mop_branch_limit = 1usize;
         let mut mop_strategy = "gbfs".to_string();
         let mut mop_weight = 5i64;
         let mut depth = 400usize;
@@ -11097,8 +11140,16 @@ fn main() {
                     beam = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--expandbeam" | "--searchbeam" => {
+                    expand_branch_limit = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
                 "--mopsecs" => {
                     mop_secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--mopbeam" | "--mopbranches" => {
+                    mop_branch_limit = args[i + 1].parse().unwrap();
                     i += 2;
                 }
                 "--mopstrat" => {
@@ -11156,7 +11207,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "trigger-lookup solve: order={:?}, players={}, prefix={}, segdepth={}, segsecs={}, segnodes={}, results={}, beam={}, strict={}, trap={:?}",
+            "trigger-lookup solve: order={:?}, players={}, prefix={}, segdepth={}, segsecs={}, segnodes={}, results={}, beam={}, expandbeam={}, mopbeam={}, strict={}, trap={:?}",
             order,
             nplayers,
             prefix.len(),
@@ -11165,6 +11216,8 @@ fn main() {
             segment_nodes,
             segment_results,
             beam,
+            expand_branch_limit,
+            mop_branch_limit,
             strict_trigger_order,
             trap_constraints
         );
@@ -11177,8 +11230,10 @@ fn main() {
             segment_nodes,
             segment_results,
             beam,
+            expand_branch_limit,
             min_rats,
             mop_secs,
+            mop_branch_limit,
             &mop_strategy,
             mop_weight,
             depth,
@@ -11212,7 +11267,9 @@ fn main() {
         let mut segment_nodes = 1_000_000usize;
         let mut segment_results = 16usize;
         let mut beam = 32usize;
+        let mut expand_branch_limit = 4usize;
         let mut mop_secs = 30.0;
+        let mut mop_branch_limit = 1usize;
         let mut mop_strategy = "gbfs".to_string();
         let mut mop_weight = 5i64;
         let mut depth = 400usize;
@@ -11253,8 +11310,16 @@ fn main() {
                     beam = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--expandbeam" | "--searchbeam" => {
+                    expand_branch_limit = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
                 "--mopsecs" => {
                     mop_secs = args[i + 1].parse().unwrap();
+                    i += 2;
+                }
+                "--mopbeam" | "--mopbranches" => {
+                    mop_branch_limit = args[i + 1].parse().unwrap();
                     i += 2;
                 }
                 "--mopstrat" => {
@@ -11307,7 +11372,7 @@ fn main() {
             return;
         }
         eprintln!(
-            "trigger-any-lookup solve: players={} prefix={} steps={} segdepth={} segsecs={} segnodes={} results={} beam={} trap={:?}",
+            "trigger-any-lookup solve: players={} prefix={} steps={} segdepth={} segsecs={} segnodes={} results={} beam={} expandbeam={} mopbeam={} trap={:?}",
             nplayers,
             prefix.len(),
             steps,
@@ -11316,6 +11381,8 @@ fn main() {
             segment_nodes,
             segment_results,
             beam,
+            expand_branch_limit,
+            mop_branch_limit,
             trap_constraints
         );
         let t0 = Instant::now();
@@ -11327,8 +11394,10 @@ fn main() {
             segment_nodes,
             segment_results,
             beam,
+            expand_branch_limit,
             min_rats,
             mop_secs,
+            mop_branch_limit,
             &mop_strategy,
             mop_weight,
             depth,
