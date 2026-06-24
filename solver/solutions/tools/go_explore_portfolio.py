@@ -361,10 +361,40 @@ def unique_best(
     per_level: int,
     rank_key: str,
     dedupe_event_key: bool,
+    max_flag_penalty: int | None,
 ) -> list[Candidate]:
     by_level: dict[str, list[Candidate]] = defaultdict(list)
     for candidate in candidates:
         by_level[candidate.level].append(candidate)
+
+    def flag_penalty(candidate: Candidate) -> int:
+        """Score oracle warning flags before sparse reward metrics.
+
+        Lower remaining-rat counts are only useful when the state is still
+        structurally live. Triage already labels common dead basins, so use
+        those labels while selecting candidates instead of rediscovering the
+        same failures with full solver jobs.
+        """
+        penalty = 0
+        for flag in candidate.flags:
+            if flag.startswith("state:"):
+                penalty += 100
+            elif flag in {"no-reachable-rats", "no-remaining-mechanism"}:
+                penalty += 80
+            elif flag == "tinder-dropped-rat":
+                penalty += 60
+            elif flag.endswith("-sealed"):
+                penalty += 30
+            elif flag.endswith("-unreachable") or flag.endswith("-unreachable-rat"):
+                penalty += 20
+            elif flag.startswith("trapped:"):
+                try:
+                    penalty += 10 * int(flag.removeprefix("trapped:"))
+                except ValueError:
+                    penalty += 10
+            else:
+                penalty += 5
+        return penalty
 
     def viability_bucket(candidate: Candidate) -> int:
         """Prefer frontiers where remaining rats are still actionable.
@@ -378,6 +408,8 @@ def unique_best(
         known_reachable = candidate.reachable_rats >= 0
         known_trapped = candidate.trapped < 999
         has_rats = candidate.rats > 0 and candidate.rats < 999
+        if flag_penalty(candidate) >= 60:
+            return 5
         if known_reachable and candidate.reachable_rats > 0:
             return 0 if not (known_trapped and candidate.trapped > 0) else 1
         if not known_reachable:
@@ -393,6 +425,7 @@ def unique_best(
                 level_candidates,
                 key=lambda c: (
                     viability_bucket(c),
+                    flag_penalty(c),
                     c.score,
                     c.rats,
                     -c.reachable_rats,
@@ -405,6 +438,7 @@ def unique_best(
                 level_candidates,
                 key=lambda c: (
                     viability_bucket(c),
+                    flag_penalty(c),
                     c.rats,
                     -c.reachable_rats,
                     c.trapped,
@@ -415,6 +449,11 @@ def unique_best(
         seen: set[str] = set()
         deduped = []
         for candidate in ranked:
+            if (
+                max_flag_penalty is not None
+                and flag_penalty(candidate) > max_flag_penalty
+            ):
+                continue
             dedupe_key = candidate.prefix
             if dedupe_event_key and candidate.event_key:
                 dedupe_key = f"event:{candidate.event_key}"
@@ -422,6 +461,18 @@ def unique_best(
                 continue
             seen.add(dedupe_key)
             deduped.append(candidate)
+        if not deduped and max_flag_penalty is not None:
+            # Do not silently starve a level when all known frontiers are bad;
+            # keep the best flagged candidate so the dry-run accounting is
+            # explicit and targeted exception runs remain possible.
+            for candidate in ranked:
+                dedupe_key = candidate.prefix
+                if dedupe_event_key and candidate.event_key:
+                    dedupe_key = f"event:{candidate.event_key}"
+                if dedupe_key in seen:
+                    continue
+                deduped.append(candidate)
+                break
         selected.extend(deduped[:per_level])
     return selected
 
@@ -436,6 +487,7 @@ def jobs_for_candidate(
     candidate: Candidate,
     timeout_sec: int,
     mem_mb: int,
+    lookup_mem_mb: int | None,
     prune_dead: bool,
     prune_stranded: bool,
     progress_h: bool,
@@ -449,6 +501,7 @@ def jobs_for_candidate(
     level = candidate.level
     prefix = candidate.prefix
     base = slug(f"{pathlib.Path(level).stem}_{candidate.source}_{prefix}")
+    lookup_effective_mem_mb = lookup_mem_mb or mem_mb
     fess_args = (
         "fess",
         level,
@@ -518,7 +571,7 @@ def jobs_for_candidate(
                 str(lookup_weight),
             ),
             timeout_sec,
-            mem_mb,
+            lookup_effective_mem_mb,
             prune_dead,
             prune_stranded,
             progress_h,
@@ -651,17 +704,27 @@ def available_memory_mb() -> int | None:
 
 
 def auto_jobs(requested: int, job_count: int, mem_mb: int) -> int:
-    if requested > 0:
-        return max(1, min(requested, job_count))
+    if job_count <= 0:
+        return 0
     cpu_count = os.cpu_count() or 1
     if mem_mb <= 0:
-        return max(1, min(cpu_count, job_count))
-    mem_available = available_memory_mb()
-    if mem_available is None:
-        return max(1, min(cpu_count, job_count))
-    reserve_mb = 4096
-    memory_workers = max(1, (mem_available - reserve_mb) // mem_mb)
-    return max(1, min(cpu_count, memory_workers, job_count))
+        memory_workers = job_count
+    else:
+        mem_available = available_memory_mb()
+        if mem_available is None:
+            memory_workers = job_count
+        else:
+            reserve_mb = 4096
+            memory_workers = max(1, (mem_available - reserve_mb) // mem_mb)
+    requested_or_cpu = requested if requested > 0 else cpu_count
+    return max(1, min(requested_or_cpu, memory_workers, job_count))
+
+
+def auto_jobs_for_queue(requested: int, jobs: list[Job]) -> int:
+    if not jobs:
+        return 0
+    max_job_mem_mb = max(job.mem_mb for job in jobs)
+    return auto_jobs(requested, len(jobs), max_job_mem_mb)
 
 
 def start_job(job: Job, out_dir: pathlib.Path) -> ActiveJob:
@@ -843,6 +906,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timeout-sec", type=int, default=180)
     parser.add_argument("--mem-mb", type=int, default=1600)
     parser.add_argument(
+        "--lookup-mem-mb",
+        type=int,
+        help="memory cap for lookup_win jobs; defaults to --mem-mb",
+    )
+    parser.add_argument(
         "--lookup-depth",
         type=int,
         default=220,
@@ -886,6 +954,15 @@ def parse_args() -> argparse.Namespace:
         action=argparse.BooleanOptionalAction,
         default=True,
         help="collapse seed-file records with the same structural event key before per-level selection",
+    )
+    parser.add_argument(
+        "--max-candidate-flag-penalty",
+        type=int,
+        help=(
+            "drop candidates above this triage flag penalty before job creation; "
+            "if all candidates for a level are dropped, keep the single best "
+            "flagged candidate for visibility"
+        ),
     )
     parser.add_argument(
         "--max-jobs",
@@ -983,7 +1060,13 @@ def main() -> int:
             if not any(token in candidate.level for token in args.skip_level)
         ]
         skipped_level = before - len(candidates)
-    candidates = unique_best(candidates, args.per_level, args.rank_key, args.dedupe_event_key)
+    candidates = unique_best(
+        candidates,
+        args.per_level,
+        args.rank_key,
+        args.dedupe_event_key,
+        args.max_candidate_flag_penalty,
+    )
     jobs = []
     skipped_expensive: Counter[str] = Counter()
     for candidate in candidates:
@@ -992,6 +1075,7 @@ def main() -> int:
                 candidate,
                 args.timeout_sec,
                 args.mem_mb,
+                args.lookup_mem_mb,
                 args.prune_dead,
                 args.prune_stranded,
                 args.progress_h,
@@ -1025,8 +1109,9 @@ def main() -> int:
     out_dir = args.out_dir or RUN_ROOT / f"{timestamp}_go_explore"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    workers = auto_jobs(args.jobs, len(jobs), args.mem_mb)
+    workers = auto_jobs_for_queue(args.jobs, jobs)
     cpu_count = os.cpu_count() or 1
+    job_mem_values = sorted({job.mem_mb for job in jobs})
     print(
         f"raw_candidates={raw_candidate_count} selected_candidates={len(candidates)} "
         f"skipped_solved={skipped_solved} skipped_level={skipped_level} "
@@ -1034,8 +1119,10 @@ def main() -> int:
         f"queued_jobs={len(jobs)} concurrency={workers} requested_concurrency={args.jobs} "
         f"cpu_count={cpu_count} max_queued_jobs={args.max_jobs} "
         f"dedupe_event_key={args.dedupe_event_key} "
+        f"max_candidate_flag_penalty={args.max_candidate_flag_penalty} "
         f"expensive_filter={args.expensive_filter} "
         f"lookup_stagnation_secs={args.lookup_stagnation_secs} "
+        f"job_mem_mb={job_mem_values} "
         f"mem_available_mb={available_memory_mb()} logs={out_dir}",
         flush=True,
     )
