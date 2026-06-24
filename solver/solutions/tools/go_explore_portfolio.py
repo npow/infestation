@@ -64,6 +64,7 @@ class Job:
     args: tuple[str, ...]
     timeout_sec: int
     mem_mb: int
+    cpu_slots: int
     prune_dead: bool
     prune_stranded: bool
     progress_h: bool
@@ -545,6 +546,7 @@ def jobs_for_candidate(
             ),
             timeout_sec,
             mem_mb,
+            1,
             prune_dead,
             prune_stranded,
             progress_h,
@@ -572,6 +574,7 @@ def jobs_for_candidate(
             ),
             timeout_sec,
             lookup_effective_mem_mb,
+            1,
             prune_dead,
             prune_stranded,
             progress_h,
@@ -582,6 +585,7 @@ def jobs_for_candidate(
             fess_args,
             timeout_sec,
             mem_mb,
+            max(1, fess_jobs),
             prune_dead,
             prune_stranded,
             progress_h,
@@ -613,6 +617,7 @@ def jobs_for_candidate(
             ),
             timeout_sec,
             mem_mb,
+            1,
             prune_dead,
             prune_stranded,
             progress_h,
@@ -714,28 +719,23 @@ def available_memory_mb() -> int | None:
     return None
 
 
-def auto_jobs(requested: int, job_count: int, mem_mb: int) -> int:
+def auto_jobs(requested: int, job_count: int) -> int:
     if job_count <= 0:
         return 0
     cpu_count = os.cpu_count() or 1
-    if mem_mb <= 0:
-        memory_workers = job_count
-    else:
-        mem_available = available_memory_mb()
-        if mem_available is None:
-            memory_workers = job_count
-        else:
-            reserve_mb = 4096
-            memory_workers = max(1, (mem_available - reserve_mb) // mem_mb)
     requested_or_cpu = requested if requested > 0 else cpu_count
-    return max(1, min(requested_or_cpu, memory_workers, job_count))
+    return max(1, min(requested_or_cpu, job_count))
 
 
 def auto_jobs_for_queue(requested: int, jobs: list[Job]) -> int:
-    if not jobs:
-        return 0
-    max_job_mem_mb = max(job.mem_mb for job in jobs)
-    return auto_jobs(requested, len(jobs), max_job_mem_mb)
+    return auto_jobs(requested, len(jobs))
+
+
+def memory_budget_mb(reserve_mb: int) -> int | None:
+    mem_available = available_memory_mb()
+    if mem_available is None:
+        return None
+    return max(1, mem_available - reserve_mb)
 
 
 def start_job(job: Job, out_dir: pathlib.Path) -> ActiveJob:
@@ -763,7 +763,10 @@ def start_job(job: Job, out_dir: pathlib.Path) -> ActiveJob:
         log.write("# env PROGRESS_H=1\n")
     if job.smart_h:
         log.write("# env SMART_H=1\n")
-    log.write(f"# mem_mb={job.mem_mb} timeout_sec={job.timeout_sec}\n")
+    log.write(
+        f"# mem_mb={job.mem_mb} cpu_slots={job.cpu_slots} "
+        f"timeout_sec={job.timeout_sec}\n"
+    )
     log.flush()
     process = subprocess.Popen(
         command,
@@ -818,16 +821,50 @@ def stop_job(active: ActiveJob, reason: str) -> int:
 def run_jobs(
     jobs: list[Job],
     out_dir: pathlib.Path,
-    concurrency: int,
+    max_processes: int,
+    cpu_slots: int,
+    mem_budget_mb: int | None,
     stop_on_solved: bool,
 ) -> bool:
     pending = deque(jobs)
     active: list[ActiveJob] = []
     found_solution = False
 
+    def used_cpu_slots() -> int:
+        return sum(active_job.job.cpu_slots for active_job in active)
+
+    def used_mem_mb() -> int:
+        return sum(active_job.job.mem_mb for active_job in active)
+
+    def launchable_index() -> int | None:
+        if len(active) >= max_processes or used_cpu_slots() >= cpu_slots:
+            return None
+        active_cpu = used_cpu_slots()
+        active_mem = used_mem_mb()
+        for index, job in enumerate(pending):
+            if active_cpu + job.cpu_slots > cpu_slots:
+                continue
+            if mem_budget_mb is not None and active_mem + job.mem_mb > mem_budget_mb:
+                continue
+            return index
+        # Preserve the old "always make forward progress" behavior when the
+        # host budget snapshot is lower than a single job's cap.
+        if not active and pending:
+            return 0
+        return None
+
+    def pop_launchable(index: int) -> Job:
+        pending.rotate(-index)
+        job = pending.popleft()
+        pending.rotate(index)
+        return job
+
     def launch_ready() -> None:
-        while pending and len(active) < concurrency and not (stop_on_solved and found_solution):
-            job = pending.popleft()
+        while pending and not (stop_on_solved and found_solution):
+            index = launchable_index()
+            if index is None:
+                break
+            job = pop_launchable(index)
             active.append(start_job(job, out_dir))
 
     launch_ready()
@@ -899,7 +936,25 @@ def parse_args() -> argparse.Namespace:
         "--jobs",
         type=int,
         default=0,
-        help="maximum concurrent jobs; 0 chooses a CPU/memory-aware default",
+        help="maximum concurrent solver processes; 0 uses CPU count",
+    )
+    parser.add_argument(
+        "--cpu-slots",
+        type=int,
+        default=0,
+        help=(
+            "maximum active CPU slots; 0 uses CPU count. FESS consumes "
+            "--fess-jobs slots; other modes consume one"
+        ),
+    )
+    parser.add_argument(
+        "--mem-reserve-mb",
+        type=int,
+        default=4096,
+        help=(
+            "leave this much MemAvailable unused when scheduling mixed "
+            "memory-cap jobs"
+        ),
     )
     parser.add_argument(
         "--static",
@@ -1121,21 +1176,26 @@ def main() -> int:
     out_dir = args.out_dir or RUN_ROOT / f"{timestamp}_go_explore"
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    workers = auto_jobs_for_queue(args.jobs, jobs)
     cpu_count = os.cpu_count() or 1
+    workers = auto_jobs_for_queue(args.jobs, jobs)
+    cpu_slot_budget = args.cpu_slots if args.cpu_slots > 0 else cpu_count
+    mem_budget = memory_budget_mb(args.mem_reserve_mb)
     job_mem_values = sorted({job.mem_mb for job in jobs})
+    job_cpu_values = sorted({job.cpu_slots for job in jobs})
     print(
         f"raw_candidates={raw_candidate_count} selected_candidates={len(candidates)} "
         f"skipped_solved={skipped_solved} skipped_level={skipped_level} "
         f"skipped_expensive_jobs={sum(skipped_expensive.values())} "
-        f"queued_jobs={len(jobs)} concurrency={workers} requested_concurrency={args.jobs} "
-        f"cpu_count={cpu_count} max_queued_jobs={args.max_jobs} "
+        f"queued_jobs={len(jobs)} max_processes={workers} requested_processes={args.jobs} "
+        f"cpu_count={cpu_count} cpu_slots={cpu_slot_budget} requested_cpu_slots={args.cpu_slots} "
+        f"max_queued_jobs={args.max_jobs} "
         f"dedupe_event_key={args.dedupe_event_key} "
         f"max_candidate_flag_penalty={args.max_candidate_flag_penalty} "
         f"expensive_filter={args.expensive_filter} "
         f"lookup_stagnation_secs={args.lookup_stagnation_secs} "
-        f"job_mem_mb={job_mem_values} "
-        f"mem_available_mb={available_memory_mb()} logs={out_dir}",
+        f"job_mem_mb={job_mem_values} job_cpu_slots={job_cpu_values} "
+        f"mem_available_mb={available_memory_mb()} mem_budget_mb={mem_budget} "
+        f"mem_reserve_mb={args.mem_reserve_mb} logs={out_dir}",
         flush=True,
     )
     if skipped_expensive:
@@ -1163,7 +1223,14 @@ def main() -> int:
             print("$", shlex.join([str(SOLVER), *job.args]))
         return 0
 
-    found_solution = run_jobs(jobs, out_dir, workers, args.stop_on_solved)
+    found_solution = run_jobs(
+        jobs,
+        out_dir,
+        workers,
+        cpu_slot_budget,
+        mem_budget,
+        args.stop_on_solved,
+    )
     if not found_solution:
         print("no solved job in this go-explore portfolio")
     return 0

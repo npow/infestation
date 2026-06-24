@@ -24,6 +24,10 @@ paths; check before reusing those.
   It also interleaves levels, enables `PRUNE_DEAD=1` and `PRUNE_STRANDED=1` by
   default, and stops remaining queued/running probes after a solution marker unless
   `--no-stop-on-solved` is passed.
+  Mixed queues are scheduled against active memory and CPU-slot budgets:
+  `--jobs` caps solver processes, `--cpu-slots` caps active CPU slots, and
+  `--mem-reserve-mb` controls the host memory reserve. FESS consumes
+  `--fess-jobs` CPU slots; other solver modes consume one.
   Use `--max-jobs` to run short, inspectable waves instead of the whole archive
   queue. Seed-file records with the same structural `event.key` are deduped by
   default before per-level selection; use `--no-dedupe-event-key` to compare
