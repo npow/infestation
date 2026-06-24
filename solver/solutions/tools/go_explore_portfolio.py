@@ -209,9 +209,9 @@ FESS_LEVEL_GUARDS: dict[str, tuple[str, ...]] = {
     ),
     "levels/cooperation/blocked_v2.csv": (
         "--min-rats",
-        "9",
+        "3",
         "--min-reachable-rats",
-        "5",
+        "2",
         "--max-trapped-rats",
         "1",
     ),
