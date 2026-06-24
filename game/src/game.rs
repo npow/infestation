@@ -176,6 +176,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 *grid.at_mut(pos) = cell;
             }
         }
+        self.modified_cell_bits = [0; 16];
 
         let grid = self.grid.borrow_mut();
         for moving in &self.moving {
