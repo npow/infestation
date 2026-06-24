@@ -148,6 +148,17 @@ upstream movement and rat logic. The active rat-bearing hard set is now:
   `(17,4)` opened also returned no branch. Future AI work needs a different
   pre-row-5 actor/topology change, not right-pocket wall repair from these
   prefixes.
+- `tinderrectangle`: P75/P39 one-step-live-win (`winready`) probes are negative,
+  and P75's apparent `>>` all-clear is a suicide detonation. The top-corner
+  ignition diagnostic is only useful before the right-pocket commitment: P75 has
+  too few live player states to reach row-3 staging. From P57, preserving all 16
+  rats overconstrains left row-3 movement; allowing one lower-rat loss reaches
+  `<<<^<<^>>>>^>>v>v<v>>v^>^^>>v>.vvvv<<>^^^^^<<vvv<<^^^<<<<<<v^<<<`
+  with the player at `(1,3)` and 15 top-row rats, but bounded live searches from
+  that state find no `winready`, no live `ratsatmost:1`, and no live
+  `explosivesatmost:0`. Its immediate `<` clears all rats/explosives but kills
+  the player, so this is a suicide edge-detonation basin unless a rat can
+  trigger the edge chain remotely before the player enters the blast.
 
 ### Newly solved - 2026-06-14
 
