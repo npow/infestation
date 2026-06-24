@@ -159,6 +159,29 @@ upstream movement and rat logic. The active rat-bearing hard set is now:
   `explosivesatmost:0`. Its immediate `<` clears all rats/explosives but kills
   the player, so this is a suicide edge-detonation basin unless a rat can
   trigger the edge chain remotely before the player enters the blast.
+- Search follow-up after `90230f1`: no new verified wins. The bounded predicate
+  wave at `/tmp/infestation-runs/codex_predicate_fast_20260624T121802Z` ran
+  66 blocker jobs with 8 processes / 4 internal branch workers each. It found
+  only three non-solving hits: Chase can break plank `(12,15)` from the initial
+  board via `^>>>^^>^^>>>>>v>>v^^^vvvv`; the old P109 Chase family also has
+  `(12,15)` opened but leaves the `(11,17)` rat sealed; and the AI P236
+  two-enemy basin has a one-step local `ratgone:18,4` hit that still does not
+  clean up. Directed A* and relaxed predicate rechecks did not find any Release,
+  Reload, Blocked, AI, or Tinder blocker mutations.
+- `chase`: the early plank-12 branch is a real new diagnostic but not a solve.
+  From `^>>>^^>^^>>>>>v>>v^^^vvvv`, deeper checks in
+  `/tmp/infestation-runs/chase_plank12_deep_20260624T1230Z` found no branch for
+  breaking `(11,15)`, merging the `(11,17)` rat component, removing `(11,17)`,
+  or reducing to three rats while `(12,15)` is open. The scratch-prefix
+  Go-Explore run at `/tmp/infestation-runs/chase_scratch_go_20260624T1250Z`
+  also found no solution from the five `tmp_chase_seeds_more.jsonl` prefixes.
+  Future Chase work should look for an earlier helper-rat separation before the
+  25-turn plank-12 contact, not continue the P109 or scratch cleanup families.
+- Relaxing preservation assumptions did not open the current blockers:
+  `/tmp/infestation-runs/relaxed_blocker_recheck_20260624T1245Z` reran the key
+  Chase, Blocked, Release, Reload, AI, and Tinder predicates without
+  `--min-rats`; all 14 returned no branch. The failures are not simply caused by
+  over-tight rat preservation guards.
 
 ### Newly solved - 2026-06-14
 
