@@ -5459,16 +5459,18 @@ fn solve_lookup_goal_branches_parallel(
         return select_diverse_branches(results, max_results);
     }
 
+    let active_jobs = jobs.min(seeds.len());
+    let per_seed_max_nodes = max_nodes.div_ceil(seeds.len()).max(1);
     eprintln!(
         "  [branch parallel split_depth={} seeds={} jobs={} per_seed_depth={} per_seed_maxnodes={}]",
         split_depth,
         seeds.len(),
-        jobs.min(seeds.len()),
+        active_jobs,
         max_depth.saturating_sub(split_depth),
-        max_nodes
+        per_seed_max_nodes
     );
 
-    let chunk_size = seeds.len().div_ceil(jobs.min(seeds.len()));
+    let chunk_size = seeds.len().div_ceil(active_jobs);
     let mut worker_results: Vec<Branch> = std::thread::scope(|scope| {
         let mut handles = Vec::new();
         for chunk in seeds.chunks(chunk_size) {
@@ -5487,7 +5489,7 @@ fn solve_lookup_goal_branches_parallel(
                         grid,
                         max_depth.saturating_sub(seed.depth),
                         remaining_secs,
-                        max_nodes,
+                        per_seed_max_nodes,
                         goal,
                         max_results,
                         min_rats,
