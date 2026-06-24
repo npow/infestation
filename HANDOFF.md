@@ -1,7 +1,7 @@
 # Infestation solving campaign — HANDOFF
 
 Resume doc for continuing the effort on another machine. **Goal: solve the
-remaining CSV levels.** 38 verified solutions are recorded in
+remaining CSV levels.** 41 verified solutions are recorded in
 `solver/solutions/final_solutions.json`.
 
 ---
@@ -72,13 +72,15 @@ so every result is exactly what the shipped game does. Binary: `target/release/s
 
 ## 3. Status
 
-### Solved - 38 saved solutions (all oracle-verified `result=Won`)
+### Solved - 41 saved solutions (all oracle-verified `result=Won`)
 Move strings: **`solver/solutions/SOLUTIONS.md`** (machine-readable: `final_solutions.json`).
 Browser auto-player: `solver/solutions/autoplay.js`. New puzzles: `levels/claude/`.
 
 Older notes in this file mention `chase`, `world`, and `order_of_operations`
-as active work, but those are now in `final_solutions.json` and verify against
-the current oracle. `levels/claude/gauntlet.csv` has zero rats; direct
+as active work. `world` and `order_of_operations` are now in
+`final_solutions.json` and verify against the current oracle. `chase` was
+removed from the verified set after the upstream fix that banned the
+unintended route, and remains open. `levels/claude/gauntlet.csv` has zero rats; direct
 `solver verify` remains `Playing` because hub/portal completion is app
 `LevelStack` state, not a rat win. The portal-stack route is now recorded in
 `solver/solutions/gauntlet_route.json` and verified by
@@ -86,24 +88,40 @@ the current oracle. `levels/claude/gauntlet.csv` has zero rats; direct
 
 ### UNSOLVED - primary hard set
 
-As of the 2026-06-15 portal-stack pass, `chase.csv`, `world.csv`, the Claude
-child levels, the `claude/gauntlet.csv` portal hub, `old_levels/overstep.csv`,
-and `cooperation/tug_of_war.csv` are solved / route-verified and still verify.
-The active rat-bearing hard set is:
-`tinderrectangle.csv`, `release.csv`, `reload_v3.csv`,
-`cyborg_rats/ai_takeover.csv`, `cooperation/handoff.csv`,
-`cooperation/blocked_v2.csv`, and `old_levels/on_the_clock.csv`.
+As of the 2026-06-24 upstream recheck, `cooperation/handoff.csv`,
+`cyborg_rats/unguided.csv`, `old_levels/on_the_clock.csv`, and
+`tinderbox.csv` still verify against `upstream/master` while preserving
+upstream movement and rat logic. The active rat-bearing hard set is now:
+`chase.csv`, `cooperation/blocked_v2.csv`,
+`cyborg_rats/ai_takeover.csv`, `release.csv`, `reload_v3.csv`, and
+`tinderrectangle.csv`.
 
 | # | Level | Players | Name-hint / trick | Best lead / recommended attack |
 |---|---|---|---|---|
-| 1 | `tinderrectangle` | 1 | pure ignition geometry | `ignitions` says a top-pack rat at `(0,0)` or `(16,0)` can detonate the rectangle and win. Directly cutting the left web from `(1,3)`/`(2,3)` kills the player. Treat this as a lure/facing puzzle: shape a top rat into the explosive corner, then make the one safe nudge. |
-| 2 | `release` | 1 | release the caged rats, then mop | Strong human prefix: `v<vv^^>>v` consumes trigger 3 then 4, drops rats from 24 to 23, explosives from 35 to 5, webs from 47 to 27, and makes 21 rats reachable. Follow-up trigger 5 is reachable with suffix `v<>>>^`; next work is choosing between trigger 2 and 6, then mop-up. |
-| 3 | `reload_v3` | 1 | fire/reload cycles; triggers 1-7 | Work bottom trigger row as reload stations, not as a global search. Likely order starts around trigger 1, then 2/3/4/5/6/7 as each detonation opens the next chamber. Use `triglookup` with explicit orders and inspect each irreversible change. |
-| 4 | `cyborg_rats/ai_takeover` | 1 | `release` skeleton plus cyborgs/triggers 7-8 | Solve `release` first, then transfer the trigger skeleton. Extra triggers 7/8 and cyborg Dijkstra behavior are probably the intended differences. |
-| 5 | `cooperation/handoff` | 2 | baton pass | Small enough to hand-reason. P1 cannot simply reach trigger 1 first. P1 can reach trigger 2 first, but then trigger 1 is no longer useful/reachable; likely P1 opens the handoff and P2 finishes on the remote side. |
-| 6 | `cooperation/blocked_v2` | 2 | one player blocked | Keep the previous warning: one rat may be permanently unreachable behind effectively indestructible structure. Before spending human-solving time, prove or disprove winnability with targeted reachability/exhaustive checks. |
-| 7 | `old_levels/on_the_clock` | 1 | clocked trigger/resource order | P19 setup `>>>^^>>>vvv><vvvvvv` keeps 8 rats, 3 explosives, and 13 triggers. Avoid the P24 sibling unless a branch proves bottom-cage access improves; it spends too much mechanism too early. |
+| 1 | `chase` | 1 | repaired after invalid route ban | The previous route no longer works on latest upstream and is not in `final_solutions.json`. Latest bounded search still ends with a sealed/unreachable fourth rat; future work needs a nonlocal opener before old-route cleanup. |
+| 2 | `cooperation/blocked_v2` | 2 | one player blocked | Latest clean frontiers still end with `blocked-unreachable-rat`. Test simultaneous two-player body-block/position predicates before trigger exhaustion, not more direct trigger-2/3 repairs. |
+| 3 | `cyborg_rats/ai_takeover` | 1 | release-like skeleton plus cyborgs/triggers 7-8 | Clean FESS frontiers reach 19/20 enemies with no trapped flags. Next probes should target the right-side topology around `(18,4)/(18,5)` or pre-trigger-7/8 bypasses before the known corridor collapse. |
+| 4 | `release` | 1 | release the caged rats, then mop | Standard trigger-3/4 opener and trigger-5/6 variants repeatedly seal the right rat / trigger-2 access. Back up before the standard opener and change the lower-left/right-pocket actor geometry. |
+| 5 | `reload_v3` | 1 | fire/reload cycles; triggers 1-7 | Bottom/station and strict-trigger descendants still leave two rats trapped with the top-left/bottom-left blockers sealed. Avoid direct trigger-order deepening unless a new pre-trigger topology changes those blockers. |
+| 6 | `tinderrectangle` | 1 | pure ignition geometry | P57/P59/P60 baffle states are clean and keep all 16 rats reachable, but have not produced rectangle separation or ignition. Use all-source ignition diagnostics and earlier baffle variants, not more P106 rectsep repair. |
 | - | `claude/gauntlet` | 1 | portal hub | Route-verified separately: hub moves `^^`, `<<`, `vvvv`, `>>>>`, `^^^^` visit all five child portals, and each child solution passes `solver verify`. |
+
+### Search checkpoint - 2026-06-24
+
+- Branch `claude/new-puzzles` is pushed through `494be6f Fix blocked_v2 frontier guards`;
+  `e3bb618 Add handoff solution` is in history.
+- `python3 solver/solutions/tools/verify.py` reports `41 WON, 0 FAILED`.
+- Against `upstream/master` at `0a8219c Fix unintended solution to handoff`,
+  copied solver/test API checks verified `unguided`, `handoff`,
+  `on_the_clock`, and `tinderbox`. The old `chase` seed fails there and is
+  intentionally not recorded as a solution.
+- The stale slowdown was not hardware capacity: old work had only 2-3
+  single-core `dropchain` jobs active. Those were killed, and new waves use
+  bounded 24-process portfolios with per-child memory caps.
+- Two no-solution waves are archived at
+  `/tmp/infestation-runs/archive_open6_parallel.jsonl` and
+  `/tmp/infestation-runs/archive_go_event_open6_20260624T115006Z.jsonl`;
+  seed summaries are in the matching `seeds_*.jsonl` files.
 
 ### Newly solved - 2026-06-14
 
@@ -10263,7 +10281,7 @@ solver/                             Rust oracle crate
   src/main.rs                         all modes: solve / verify / trace / wp
   Cargo.toml
 solver/solutions/
-  SOLUTIONS.md                       35 verified original solutions + 5 Claude puzzles
+  SOLUTIONS.md                       human-readable verified solution inventory
   final_solutions.json               machine-readable verified set
   autoplay.js                        browser console auto-player (1p + 2p)
   results/                           raw search outputs (results*.json, autoplay_data.json)
@@ -10276,9 +10294,9 @@ solver/solutions/
 
 ## 6. Session context
 - A session Stop-hook with goal **"solve all the puzzles"** may be active in
-  some environments. The current missing inventory is 7 rat-bearing hard
-  levels: `chase`, `blocked_v2`, `handoff`, `ai_takeover`, `release`,
-  `reload_v3`, and `tinderrectangle`. `claude/gauntlet.csv` is zero-rat and
+  some environments. The current missing inventory is 6 rat-bearing hard
+  levels: `chase`, `blocked_v2`, `ai_takeover`, `release`, `reload_v3`, and
+  `tinderrectangle`. `claude/gauntlet.csv` is zero-rat and
   portal-route verified separately. Resume by working §4.
 - Fork created with `gh repo fork`; push with `gh auth setup-git --hostname github.com` then
   `git push fork claude/new-puzzles`. No PR was opened to upstream (`davidspies/infestation`).

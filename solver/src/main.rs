@@ -376,7 +376,7 @@ fn is_mutation_floor(token: &str) -> bool {
     matches!(token, "." | "w")
 }
 
-fn print_ignition_geometries(grid: &Grid, limit: usize) {
+fn print_ignition_geometries(grid: &Grid, limit: usize, include_all_sources: bool) {
     let base_features = Features::from_grid(grid);
     let base_tokens = csv_tokens(grid);
     let rats = positions_for_any(grid, &[CellKind::Rat, CellKind::CyborgRat]);
@@ -387,7 +387,7 @@ fn print_ignition_geometries(grid: &Grid, limit: usize) {
     let mut seen = HashSet::new();
 
     for &(source_rat_x, source_rat_y) in &rats {
-        if source_rat_y < 3 {
+        if !include_all_sources && source_rat_y < 3 {
             continue;
         }
         for rat_y in 0..grid.height() {
@@ -1293,6 +1293,7 @@ enum LookupGoal {
     RatsAtMostWithCellNot(usize, i32, i32, CellKind),
     RatsAtMostWithRatInRect(usize, i32, i32, i32, i32),
     RatsAtMostWithRatInRectAndPlayerInRect(usize, i32, i32, i32, i32, i32, i32, i32, i32),
+    RatsAtMostWithPlayersInRects(usize, i32, i32, i32, i32, i32, i32, i32, i32),
     RatsAtMostWithPlayerAt(usize, i32, i32),
     RatsAtMostWithPlayerFacing(usize, i32, i32, Dir4),
     TriggerNumberOnlyWithCellIs(u8, i32, i32, CellKind),
@@ -1986,6 +1987,28 @@ impl LookupGoal {
                     values[8],
                 )
             }
+            "ratsleplayersrects" | "ratsatmostplayersrects" => {
+                let values: Vec<i32> = arg
+                    .split(',')
+                    .map(|part| part.trim().parse().expect("coordinate"))
+                    .collect();
+                assert_eq!(
+                    values.len(),
+                    9,
+                    "expected count,ax1,ay1,ax2,ay2,bx1,by1,bx2,by2"
+                );
+                Self::RatsAtMostWithPlayersInRects(
+                    values[0] as usize,
+                    values[1],
+                    values[2],
+                    values[3],
+                    values[4],
+                    values[5],
+                    values[6],
+                    values[7],
+                    values[8],
+                )
+            }
             "ratsleplayer" | "ratsatmostplayer" | "ratsleplayerat" => {
                 let (count, (x, y)) = parse_count_and_point(arg);
                 Self::RatsAtMostWithPlayerAt(count, x, y)
@@ -2616,6 +2639,20 @@ fn lookup_goal_reached(
                     .into_iter()
                     .any(|point| point_in_rect(point, px1, py1, px2, py2))
         }
+        LookupGoal::RatsAtMostWithPlayersInRects(count, ax1, ay1, ax2, ay2, bx1, by1, bx2, by2) => {
+            count_rats(current) <= count
+                && players_in_two_rects(
+                    &positions_matching(current, |cell| cell == CellKind::Player),
+                    ax1,
+                    ay1,
+                    ax2,
+                    ay2,
+                    bx1,
+                    by1,
+                    bx2,
+                    by2,
+                )
+        }
         LookupGoal::RatsAtMostWithPlayerAt(count, x, y) => {
             count_rats(current) <= count
                 && positions_matching(current, |cell| cell == CellKind::Player).contains(&(x, y))
@@ -3116,6 +3153,13 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
             };
             rats_penalty + rat_rect_penalty + player_rect_penalty + heuristic(current) / 1_000
         }
+        LookupGoal::RatsAtMostWithPlayersInRects(count, ax1, ay1, ax2, ay2, bx1, by1, bx2, by2) => {
+            let rats_penalty = count_rats(current).saturating_sub(count) as i64 * 1_000_000;
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            rats_penalty
+                + two_player_rect_distance(&players, ax1, ay1, ax2, ay2, bx1, by1, bx2, by2)
+                + heuristic(current) / 1_000
+        }
         LookupGoal::RatsAtMostWithPlayerAt(count, x, y) => {
             let rats_penalty = count_rats(current).saturating_sub(count) as i64 * 1_000_000;
             let players = positions_matching(current, |cell| cell == CellKind::Player);
@@ -3554,6 +3598,11 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
             count_rats(current).saturating_sub(count) as i64
                 + rat_rect_penalty
                 + player_rect_penalty
+        }
+        LookupGoal::RatsAtMostWithPlayersInRects(count, ax1, ay1, ax2, ay2, bx1, by1, bx2, by2) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            count_rats(current).saturating_sub(count) as i64
+                + two_player_rect_distance(&players, ax1, ay1, ax2, ay2, bx1, by1, bx2, by2)
         }
         LookupGoal::RatsAtMostWithPlayerAt(count, x, y) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
@@ -6971,6 +7020,27 @@ fn point_in_rect(point: (i32, i32), x1: i32, y1: i32, x2: i32, y2: i32) -> bool 
     point.0 >= min_x && point.0 <= max_x && point.1 >= min_y && point.1 <= max_y
 }
 
+fn players_in_two_rects(
+    players: &[(i32, i32)],
+    ax1: i32,
+    ay1: i32,
+    ax2: i32,
+    ay2: i32,
+    bx1: i32,
+    by1: i32,
+    bx2: i32,
+    by2: i32,
+) -> bool {
+    players.iter().enumerate().any(|(i, &a)| {
+        players.iter().enumerate().any(|(j, &b)| {
+            i != j
+                && ((point_in_rect(a, ax1, ay1, ax2, ay2) && point_in_rect(b, bx1, by1, bx2, by2))
+                    || (point_in_rect(a, bx1, by1, bx2, by2)
+                        && point_in_rect(b, ax1, ay1, ax2, ay2)))
+        })
+    })
+}
+
 fn nearest_rect_distance(points: &[(i32, i32)], x1: i32, y1: i32, x2: i32, y2: i32) -> i64 {
     let min_x = x1.min(x2);
     let max_x = x1.max(x2);
@@ -6997,6 +7067,37 @@ fn nearest_rect_distance(points: &[(i32, i32)], x1: i32, y1: i32, x2: i32, y2: i
         })
         .min()
         .unwrap_or(1_000)
+}
+
+fn two_player_rect_distance(
+    players: &[(i32, i32)],
+    ax1: i32,
+    ay1: i32,
+    ax2: i32,
+    ay2: i32,
+    bx1: i32,
+    by1: i32,
+    bx2: i32,
+    by2: i32,
+) -> i64 {
+    if players.len() < 2 {
+        return nearest_rect_distance(players, ax1, ay1, ax2, ay2)
+            + nearest_rect_distance(players, bx1, by1, bx2, by2)
+            + 1_000;
+    }
+
+    let mut best = i64::MAX;
+    for (i, &a) in players.iter().enumerate() {
+        for (j, &b) in players.iter().enumerate() {
+            if i == j {
+                continue;
+            }
+            let cost = nearest_rect_distance(&[a], ax1, ay1, ax2, ay2)
+                + nearest_rect_distance(&[b], bx1, by1, bx2, by2);
+            best = best.min(cost);
+        }
+    }
+    best
 }
 
 fn nearest_target_distance(points: &[(i32, i32)], targets: &[(i32, i32)]) -> i64 {
@@ -10500,6 +10601,7 @@ fn main() {
         // solver ignitions <csv> [prefix] [--limit N] — list one-step detonation geometries.
         let mut prefix_str = String::new();
         let mut limit = 80usize;
+        let mut include_all_sources = false;
         let mut i = 3;
         if i < args.len() && !args[i].starts_with("--") {
             prefix_str = args[i].clone();
@@ -10511,6 +10613,10 @@ fn main() {
                     limit = args[i + 1].parse().unwrap();
                     i += 2;
                 }
+                "--all-sources" | "--all-rats" => {
+                    include_all_sources = true;
+                    i += 1;
+                }
                 _ => i += 1,
             }
         }
@@ -10519,7 +10625,7 @@ fn main() {
         let (state, play_state, applied) = replay_path(&grid, &path);
         println!("state={play_state:?} turns_applied={applied}");
         if play_state == PlayState::Playing {
-            print_ignition_geometries(&state, limit);
+            print_ignition_geometries(&state, limit, include_all_sources);
         }
         return;
     }
