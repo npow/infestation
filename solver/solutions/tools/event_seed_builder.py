@@ -276,7 +276,7 @@ def load_candidates(args: argparse.Namespace) -> list[Candidate]:
             for candidate in candidates
             if any(token in canonical_level(candidate.level) or token in candidate.source for token in args.only)
         ]
-    return unique_best(candidates, args.per_level, args.rank_key, False)
+    return unique_best(candidates, args.per_level, args.rank_key, False, None)
 
 
 def seed_record(

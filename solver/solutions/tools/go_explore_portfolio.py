@@ -162,6 +162,61 @@ STATIC_SEEDS: dict[str, list[tuple[str, str]]] = {
     ],
 }
 
+FESS_LEVEL_GUARDS: dict[str, tuple[str, ...]] = {
+    "levels/tinderrectangle.csv": (
+        "--min-rats",
+        "16",
+        "--max-trapped-rats",
+        "0",
+    ),
+    "levels/release.csv": (
+        "--min-rats",
+        "20",
+        "--min-reachable-rats",
+        "18",
+        "--max-trapped-rats",
+        "3",
+        "--min-explosives",
+        "4",
+    ),
+    "levels/cyborg_rats/ai_takeover.csv": (
+        "--min-rats",
+        "20",
+        "--min-reachable-rats",
+        "10",
+        "--max-trapped-rats",
+        "4",
+        "--min-explosives",
+        "4",
+    ),
+    "levels/reload_v3.csv": (
+        "--min-rats",
+        "3",
+        "--min-reachable-rats",
+        "1",
+        "--max-trapped-rats",
+        "2",
+        "--min-triggers",
+        "14",
+    ),
+    "levels/cooperation/handoff.csv": (
+        "--min-rats",
+        "5",
+        "--min-explosives",
+        "6",
+        "--max-trapped-rats",
+        "3",
+    ),
+    "levels/cooperation/blocked_v2.csv": (
+        "--min-rats",
+        "9",
+        "--min-reachable-rats",
+        "5",
+        "--max-trapped-rats",
+        "1",
+    ),
+}
+
 
 def read_source_meta(source: str) -> SourceMeta | None:
     try:
@@ -503,6 +558,7 @@ def jobs_for_candidate(
     prefix = candidate.prefix
     base = slug(f"{pathlib.Path(level).stem}_{candidate.source}_{prefix}")
     lookup_effective_mem_mb = lookup_mem_mb or mem_mb
+    fess_level_guards = FESS_LEVEL_GUARDS.get(level, ())
     fess_args = (
         "fess",
         level,
@@ -526,6 +582,7 @@ def jobs_for_candidate(
         "420",
         "--mopsecs",
         "2.0",
+        *fess_level_guards,
     )
     if fess_jobs > 1:
         fess_args = (*fess_args, "--jobs", str(fess_jobs))
