@@ -182,6 +182,46 @@ upstream movement and rat logic. The active rat-bearing hard set is now:
   Chase, Blocked, Release, Reload, AI, and Tinder predicates without
   `--min-rats`; all 14 returned no branch. The failures are not simply caused by
   over-tight rat preservation guards.
+- Status checkpoint - 2026-06-24T14:53Z: remotes were fetched and
+  `upstream/master` is still `0a8219c Fix unintended solution to handoff`.
+  Branch `claude/new-puzzles` is even with `fork/claude/new-puzzles` at
+  `a3e703e Avoid reseeding closed obligation families`. Verification on the
+  current checkout reports `41 WON, 0 FAILED`; `cooperation/handoff.csv`,
+  `cyborg_rats/unguided.csv`, `old_levels/on_the_clock.csv`, and
+  `tinderbox.csv` still verify. `chase.csv` is not in
+  `final_solutions.json` because the old route is invalid on latest upstream.
+  The open rat-bearing set remains exactly six: `chase.csv`,
+  `cooperation/blocked_v2.csv`, `cyborg_rats/ai_takeover.csv`, `release.csv`,
+  `reload_v3.csv`, and `tinderrectangle.csv`.
+- Overrun batch checkpoint: logs under
+  `/tmp/infestation-runs/diverse_open6_20260624T1448Z` produced no verified
+  wins. Completed `NO_SOLUTION` logs: `ai_fess_early.log`,
+  `ai_trigany.log`, `chase_fess_after_plank_relaxed.log`,
+  `chase_lookup_after_plank.log`, `release_fess_early.log`,
+  `release_trigany.log`, `reload_remote_t5_reframe.log`, and
+  `reload_trigany_all3.log`. `chase_open_11_16_relaxed.log` and
+  `tinder_trap_s9_corner.log` ended with no branch records after their split
+  headers. `blocked_fess_live_cut.log` and `reload_fess_initial.log` were
+  stopped after overrunning their intended window and should be treated only as
+  partial frontier noise, not evidence. Do not restart this broad batch; the
+  next pass should use short exact probes from named frontiers and record the
+  necessary condition before launch.
+- Focused exact-probe batch
+  `/tmp/infestation-runs/focused_exact_20260624T1455Z` also found no branches
+  and no wins. This was a bounded 10-job run with external `timeout 75s` guards
+  and up to 8 concurrent jobs / 4 branch workers each. Closed checks:
+  Chase helper timing could not break `(11,15)` while a rat/player were in the
+  useful rectangles, nor open `(11,16)` while the `(11,17)` rat remained live;
+  Blocked could not combine the preserved interior rat with upper-trigger-3
+  opening `(6,10)`, nor fire strict trigger 3 from the spaced 8-rat staging;
+  Release could not clear `(1,16)` with the left actor still staged, nor use
+  the row-17 actor to break `(16,17)`; Reload could not remove `(2,21)` while
+  the sealed `(0,21)` rat remained live, nor open `(10,5)` with the remote-T5
+  top-cage actor/player geometry; AI could not fire strict trigger 7 while
+  keeping `(16,8)` as web; Tinder could not drop a rat to `(13,8)` with the
+  player in the safe right-side rectangle from the 135-turn staging. Treat all
+  ten as closed for these prefixes/guards; a future probe must change the
+  prefix, the necessary condition, or the resource assumptions.
 
 ### Newly solved - 2026-06-14
 
