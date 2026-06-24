@@ -1252,7 +1252,9 @@ enum LookupGoal {
     PlayerAt(i32, i32),
     PlayerFacing(i32, i32, Dir4),
     RatStepReady(i32, i32),
+    RatStepReadyWithRowCountAndPlayerInRect(i32, i32, i32, usize, i32, i32, i32, i32),
     RatAt(i32, i32),
+    RatAtWithRowCountAndPlayerInRect(i32, i32, i32, usize, i32, i32, i32, i32),
     RatComponentAtLeast(i32, i32, usize),
     RatRectComponentAtLeast(i32, i32, i32, i32, usize),
     RatAtFarFromPlayer(i32, i32, i64),
@@ -1661,9 +1663,53 @@ impl LookupGoal {
                 let (x, y) = parse_required_point(arg);
                 Self::RatStepReady(x, y)
             }
+            "ratstepreadyrowplayerrect" | "rat-step-ready-row-player-rect" => {
+                let values: Vec<i32> = arg
+                    .split(',')
+                    .map(|part| part.trim().parse().expect("coordinate or count"))
+                    .collect();
+                assert_eq!(
+                    values.len(),
+                    8,
+                    "expected targetx,targety,row,min_row_count,playerx1,playery1,playerx2,playery2"
+                );
+                assert!(values[3] >= 0, "row count must be non-negative");
+                Self::RatStepReadyWithRowCountAndPlayerInRect(
+                    values[0],
+                    values[1],
+                    values[2],
+                    values[3] as usize,
+                    values[4],
+                    values[5],
+                    values[6],
+                    values[7],
+                )
+            }
             "ratat" => {
                 let (x, y) = parse_required_point(arg);
                 Self::RatAt(x, y)
+            }
+            "ratrowplayerrect" | "ratatrowplayerrect" | "rat-at-row-player-rect" => {
+                let values: Vec<i32> = arg
+                    .split(',')
+                    .map(|part| part.trim().parse().expect("coordinate or count"))
+                    .collect();
+                assert_eq!(
+                    values.len(),
+                    8,
+                    "expected ratx,raty,row,min_row_count,playerx1,playery1,playerx2,playery2"
+                );
+                assert!(values[3] >= 0, "row count must be non-negative");
+                Self::RatAtWithRowCountAndPlayerInRect(
+                    values[0],
+                    values[1],
+                    values[2],
+                    values[3] as usize,
+                    values[4],
+                    values[5],
+                    values[6],
+                    values[7],
+                )
             }
             "ratcomponentge" | "ratcompge" | "ratcomponentatleast" => {
                 let values: Vec<i32> = arg
@@ -2471,7 +2517,39 @@ fn lookup_goal_reached(
         }
         LookupGoal::PlayerFacing(x, y, dir) => player_facing(current, (x, y), dir),
         LookupGoal::RatStepReady(x, y) => rat_step_ready(current, (x, y)),
+        LookupGoal::RatStepReadyWithRowCountAndPlayerInRect(
+            x,
+            y,
+            row,
+            min_row_count,
+            px1,
+            py1,
+            px2,
+            py2,
+        ) => {
+            rat_step_ready(current, (x, y))
+                && rat_count_in_row(current, row) >= min_row_count
+                && positions_matching(current, |cell| cell == CellKind::Player)
+                    .iter()
+                    .any(|&point| point_in_rect(point, px1, py1, px2, py2))
+        }
         LookupGoal::RatAt(x, y) => rat_at(current, (x, y)),
+        LookupGoal::RatAtWithRowCountAndPlayerInRect(
+            x,
+            y,
+            row,
+            min_row_count,
+            px1,
+            py1,
+            px2,
+            py2,
+        ) => {
+            rat_at(current, (x, y))
+                && rat_count_in_row(current, row) >= min_row_count
+                && positions_matching(current, |cell| cell == CellKind::Player)
+                    .iter()
+                    .any(|&point| point_in_rect(point, px1, py1, px2, py2))
+        }
         LookupGoal::RatComponentAtLeast(x, y, minimum) => {
             rat_component_size_at(current, (x, y)).is_some_and(|size| size >= minimum)
         }
@@ -2870,9 +2948,44 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         LookupGoal::RatStepReady(x, y) => {
             rat_step_ready_heuristic(current, (x, y)) + heuristic(current) / 1_000
         }
+        LookupGoal::RatStepReadyWithRowCountAndPlayerInRect(
+            x,
+            y,
+            row,
+            min_row_count,
+            px1,
+            py1,
+            px2,
+            py2,
+        ) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let row_deficit = min_row_count.saturating_sub(rat_count_in_row(current, row)) as i64;
+            rat_step_ready_heuristic(current, (x, y))
+                + row_deficit * 500_000
+                + nearest_rect_distance(&players, px1, py1, px2, py2) * 2_000
+                + heuristic(current) / 1_000
+        }
         LookupGoal::RatAt(x, y) => {
             let rats = rat_positions(current);
             nearest_target_distance(&rats, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::RatAtWithRowCountAndPlayerInRect(
+            x,
+            y,
+            row,
+            min_row_count,
+            px1,
+            py1,
+            px2,
+            py2,
+        ) => {
+            let rats = rat_positions(current);
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let row_deficit = min_row_count.saturating_sub(rat_count_in_row(current, row)) as i64;
+            nearest_target_distance(&rats, &[(x, y)]) * 1_000
+                + row_deficit * 500_000
+                + nearest_rect_distance(&players, px1, py1, px2, py2) * 2_000
+                + heuristic(current) / 1_000
         }
         LookupGoal::RatComponentAtLeast(x, y, minimum) => {
             let rats = rat_positions(current);
@@ -3366,7 +3479,43 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
                 + (!player_facing(current, (x, y), dir) as i64)
         }
         LookupGoal::RatStepReady(x, y) => rat_step_ready_heuristic(current, (x, y)) / 1_000,
+        LookupGoal::RatStepReadyWithRowCountAndPlayerInRect(
+            x,
+            y,
+            row,
+            min_row_count,
+            px1,
+            py1,
+            px2,
+            py2,
+        ) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let row_deficit = min_row_count.saturating_sub(rat_count_in_row(current, row)) as i64;
+            rat_step_ready_heuristic(current, (x, y)) / 1_000
+                + row_deficit * 1_000
+                + nearest_rect_distance(&players, px1, py1, px2, py2)
+        }
         LookupGoal::RatAt(x, y) => !rat_at(current, (x, y)) as i64,
+        LookupGoal::RatAtWithRowCountAndPlayerInRect(
+            x,
+            y,
+            row,
+            min_row_count,
+            px1,
+            py1,
+            px2,
+            py2,
+        ) => {
+            let rats = rat_positions(current);
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let row_deficit = min_row_count.saturating_sub(rat_count_in_row(current, row)) as i64;
+            let rat_distance = if rat_at(current, (x, y)) {
+                0
+            } else {
+                nearest_target_distance(&rats, &[(x, y)])
+            };
+            rat_distance + row_deficit * 1_000 + nearest_rect_distance(&players, px1, py1, px2, py2)
+        }
         LookupGoal::RatComponentAtLeast(x, y, minimum) => {
             minimum.saturating_sub(rat_component_size_at(current, (x, y)).unwrap_or(0)) as i64
         }
@@ -6988,6 +7137,20 @@ fn rat_at(grid: &Grid, target: (i32, i32)) -> bool {
             grid.cell_kind_at(target.0 as usize, target.1 as usize),
             CellKind::Rat | CellKind::CyborgRat
         )
+}
+
+fn rat_count_in_row(grid: &Grid, row: i32) -> usize {
+    if row < 0 || row as usize >= grid.height() {
+        return 0;
+    }
+    (0..grid.width())
+        .filter(|&x| {
+            matches!(
+                grid.cell_kind_at(x, row as usize),
+                CellKind::Rat | CellKind::CyborgRat
+            )
+        })
+        .count()
 }
 
 fn nearest_player_distance_from(grid: &Grid, target: (i32, i32)) -> Option<i64> {

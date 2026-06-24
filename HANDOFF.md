@@ -108,7 +108,8 @@ upstream movement and rat logic. The active rat-bearing hard set is now:
 
 ### Search checkpoint - 2026-06-24
 
-- Branch `claude/new-puzzles` is pushed through `494be6f Fix blocked_v2 frontier guards`;
+- Branch `claude/new-puzzles` is pushed through
+  `6505dc4 Record focused open-puzzle checkpoint`;
   `e3bb618 Add handoff solution` is in history.
 - `python3 solver/solutions/tools/verify.py` reports `41 WON, 0 FAILED`.
 - Against `upstream/master` at `0a8219c Fix unintended solution to handoff`,
@@ -222,6 +223,60 @@ upstream movement and rat logic. The active rat-bearing hard set is now:
   player in the safe right-side rectangle from the 135-turn staging. Treat all
   ten as closed for these prefixes/guards; a future probe must change the
   prefix, the necessary condition, or the resource assumptions.
+- Rethink checkpoint after `6505dc4`: branch `claude/new-puzzles` is even with
+  `fork/claude/new-puzzles`; only untracked scratch files are
+  `solver/solutions/tmp_chase_seeds*.jsonl`. `python3
+  solver/solutions/tools/verify.py` still reports `41 WON, 0 FAILED`.
+  `handoff`, `unguided`, `on_the_clock`, and `tinderbox` remain verified
+  against the current checkout. The open rat-bearing set is still exactly six:
+  `chase.csv`, `cooperation/blocked_v2.csv`,
+  `cyborg_rats/ai_takeover.csv`, `release.csv`, `reload_v3.csv`, and
+  `tinderrectangle.csv`.
+- The bounded parallel rethink wave at
+  `/tmp/infestation-runs/codex_parallel_rethink_20260624T172133` ran 26 jobs
+  with 24-way external concurrency and found no verified solution. Its archive,
+  triage, and seed files are
+  `/tmp/infestation-runs/archive_codex_parallel_rethink_20260624T172133.jsonl`,
+  `/tmp/infestation-runs/triage_codex_parallel_rethink_20260624T172133.jsonl`,
+  and `/tmp/infestation-runs/seeds_codex_parallel_rethink_20260624T172133.jsonl`.
+  Do not repeat this broad queue unchanged.
+- Current useful negatives from that wave: old `blocked_v2` and `chase` routes
+  fail on the current checkout; `blocked_v2` routebeam found only 14-turn
+  partials with one reachable rat and trapped lower/outer rats, and strict
+  trigger-1/3 plus lower-left web repair from the best partial are closed;
+  `ai_takeover` still collapses to a two-enemy near miss with the `(18,4)`
+  right-topology blocker; `release` and `reload_v3` still fall into sealed
+  right/top-left survivor families; `tinderrectangle` has synthetic winning
+  ignition geometries, but exact corner-ready predicates from the initial board
+  and old lower-rectangle frontiers did not produce a live route.
+- Targeted wave checkpoint:
+  `/tmp/infestation-runs/codex_targeted_wave_20260624T173111Z` ran 27 bounded
+  jobs with roughly 30 CPU slots and found no `SOLVED`, `GOAL`, or `BRANCH`
+  hit. Archive, triage, and seeds are
+  `/tmp/infestation-runs/archive_codex_targeted_wave_20260624T173111Z.jsonl`,
+  `/tmp/infestation-runs/triage_codex_targeted_wave_20260624T173111Z.jsonl`,
+  and `/tmp/infestation-runs/seeds_codex_targeted_wave_20260624T173111Z.jsonl`.
+  The triage selected 18 seeds, but they are repeats of known warning families,
+  not new live handles.
+- New Tinder-specific lookup predicates were added for lower-rat identity:
+  `ratstepreadyrowplayerrect:targetx,targety,row,min_row_count,px1,py1,px2,py2`
+  and `ratrowplayerrect:ratx,raty,row,min_row_count,px1,py1,px2,py2`. They
+  disambiguate lower-rat candidates from top-row false positives by requiring a
+  minimum rat count in a row plus a player-safe rectangle.
+- Do not repeat the targeted wave unchanged. Closed checks include Tinder lower
+  step-ready targets `(0,0)`, `(16,0)`, and `(13,8)` from the initial board and
+  from prefix `<^<<<<^>^>v`; the P83 lower-rat followups; Reload direct
+  strict-trigger-3 and remote-trigger-5 followups; Chase plank-12 cleanup;
+  Blocked initial/pre-trigger-5 FESS; Release post-trigger-2 cleanup; and AI
+  P38 cleanup around the persistent `(18,4)` blocker.
+- Tinder correction run
+  `/tmp/infestation-runs/codex_tinder_noprune_20260624T174133Z` showed the
+  instant inner-prefix lookup exits are not a `PRUNE_DEAD` issue. With the
+  strict all-rat/no-loss guards, the exact lower-rat lookup exhausts a tiny
+  state space immediately; branchdump explored much larger spaces because it
+  does not apply `--min-rats` as an expansion guard. Future Tinder probes
+  should change the earlier baffle/identity premise, not rerun those inner
+  lower-rat exact goals.
 
 ### Newly solved - 2026-06-14
 
