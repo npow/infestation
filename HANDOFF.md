@@ -303,6 +303,35 @@ upstream movement and rat logic. The active rat-bearing hard set is now:
   but frontier confirms it is a cul-de-sac: the only mechanism-preserving move
   is one more east push to `(9,3)`, after which all 16-rat continuations die or
   stall. Do not rerun this row-3 push family unchanged.
+- Source-aware ignition correction - 2026-06-24: `solver ignitions
+  --all-sources` now includes the source rat in its duplicate key and prints
+  `source=(x,y)`, so all-source output no longer hides later source choices.
+  Corrected enumeration for `tinderrectangle.csv` shows the strongest synthetic
+  one-step win targets are `(13,8)`, `(16,0)`, and `(0,0)`, not only the visible
+  right-corner line. Exact initial-board probes under all-rat/all-reachable
+  guards found no branch for source-specific `(16,0)` ready states
+  (`/tmp/infestation-runs/tinder_source_toprow_codex_20260624T183148Z`), no
+  decomposed `ratat:16,0` or row-3 staged target
+  (`/tmp/infestation-runs/tinder_ratat16_decompose_codex_20260624T183322Z`),
+  no strict `(13,8)` / `(0,0)` target or staged target
+  (`/tmp/infestation-runs/tinder_corrected_targets_codex_20260624T183428Z`),
+  and no relaxed 15-rat variants for `(13,8)` / `(0,0)`
+  (`/tmp/infestation-runs/tinder_relaxed_targets_codex_20260624T183532Z`).
+  New lookup goal `ratgone-ratat-playerrect:gonex,goney,ratx,raty,px1,py1,px2,py2`
+  supports exact checks for "source rat absent, target rat present, player
+  staged". Future Tinder work should change the earlier baffle/topology, not
+  rerun these corrected final-geometry predicates unchanged.
+- Reload local audit - 2026-06-24: the strict trigger-3 positive handle still
+  has no next handle under focused local checks. From
+  `^>>>>>>>^^^vvvvvvv<<<<<^^<<<<<<^^^^<<<<<<^<`, frontier shows the direct
+  trigger-3 move `^` traps all 3 rats; side plank breaks `>` and `<` are the
+  only non-bad local mechanism moves. Events from the right break return
+  `NO_EVENTS`; exact branchdumps from both side-break children found no
+  `triggeronly:3` continuation preserving at least one reachable rat. The
+  remote-trigger-5 actor prefix
+  `vvv<<<<<<vvv><^^^^^^^^^^^^^<^^^^^^^` still has only the known drift and
+  trigger-7 event families. Do not deepen those local Reload children without a
+  different pre-trigger invariant.
 
 ### Newly solved - 2026-06-14
 

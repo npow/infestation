@@ -431,6 +431,8 @@ fn print_ignition_geometries(grid: &Grid, limit: usize, include_all_sources: boo
                                         || next_features.explosives < base_features.explosives)
                                 {
                                     let key = (
+                                        source_rat_x,
+                                        source_rat_y,
                                         rat_x,
                                         rat_y,
                                         player_x,
@@ -442,7 +444,7 @@ fn print_ignition_geometries(grid: &Grid, limit: usize, include_all_sources: boo
                                         continue;
                                     }
                                     println!(
-                                        "rat=({rat_x},{rat_y}) player=({player_x},{player_y},{player_symbol}) action={} result={play_state:?} next_rats={} next_explosives={} next_webs={}",
+                                        "source=({source_rat_x},{source_rat_y}) rat=({rat_x},{rat_y}) player=({player_x},{player_y},{player_symbol}) action={} result={play_state:?} next_rats={} next_explosives={} next_webs={}",
                                         action_to_ch(actions[0]),
                                         next_features.rats,
                                         next_features.explosives,
@@ -1281,6 +1283,7 @@ enum LookupGoal {
     RatAtWithPlayerFacing(i32, i32, i32, i32, Dir4),
     RatAtWithCell(i32, i32, i32, i32, CellKind),
     RatGone(i32, i32),
+    RatGoneAndRatAtWithPlayerInRect(i32, i32, i32, i32, i32, i32, i32, i32),
     NoRatsAt2(i32, i32, i32, i32),
     NoRatsInRect(i32, i32, i32, i32),
     RatsAtMost(usize),
@@ -1937,6 +1940,23 @@ impl LookupGoal {
             "ratgone" => {
                 let (x, y) = parse_required_point(arg);
                 Self::RatGone(x, y)
+            }
+            "ratgoneratatplayerrect"
+            | "ratgone-ratat-playerrect"
+            | "ratgone-ratat-player-in-rect" => {
+                let values: Vec<i32> = arg
+                    .split(',')
+                    .map(|part| part.trim().parse().expect("coordinate"))
+                    .collect();
+                assert_eq!(
+                    values.len(),
+                    8,
+                    "expected gonex,goney,ratx,raty,playerx1,playery1,playerx2,playery2"
+                );
+                Self::RatGoneAndRatAtWithPlayerInRect(
+                    values[0], values[1], values[2], values[3], values[4], values[5], values[6],
+                    values[7],
+                )
             }
             "norats2" | "noratsat2" => {
                 let mut parts = arg.split(',');
@@ -2672,6 +2692,22 @@ fn lookup_goal_reached(
                 && current.cell_kind_at(cell_x as usize, cell_y as usize) == kind
         }
         LookupGoal::RatGone(x, y) => !rat_at(current, (x, y)),
+        LookupGoal::RatGoneAndRatAtWithPlayerInRect(
+            gone_x,
+            gone_y,
+            rat_x,
+            rat_y,
+            px1,
+            py1,
+            px2,
+            py2,
+        ) => {
+            !rat_at(current, (gone_x, gone_y))
+                && rat_at(current, (rat_x, rat_y))
+                && positions_matching(current, |cell| cell == CellKind::Player)
+                    .iter()
+                    .any(|&point| point_in_rect(point, px1, py1, px2, py2))
+        }
         LookupGoal::NoRatsAt2(x1, y1, x2, y2) => {
             !rat_at(current, (x1, y1)) && !rat_at(current, (x2, y2))
         }
@@ -3147,6 +3183,31 @@ fn lookup_goal_heuristic(goal: LookupGoal, initial: &Grid, current: &Grid) -> i6
         LookupGoal::RatGone(x, y) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
             nearest_target_distance(&players, &[(x, y)]) + heuristic(current) / 1_000
+        }
+        LookupGoal::RatGoneAndRatAtWithPlayerInRect(
+            gone_x,
+            gone_y,
+            rat_x,
+            rat_y,
+            px1,
+            py1,
+            px2,
+            py2,
+        ) => {
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let rats = rat_positions(current);
+            let gone_penalty = if rat_at(current, (gone_x, gone_y)) {
+                100_000 + nearest_target_distance(&players, &[(gone_x, gone_y)]) * 1_000
+            } else {
+                0
+            };
+            let rat_penalty = if rat_at(current, (rat_x, rat_y)) {
+                0
+            } else {
+                nearest_target_distance(&rats, &[(rat_x, rat_y)]) * 10_000
+            };
+            let player_penalty = nearest_rect_distance(&players, px1, py1, px2, py2) * 2_000;
+            gone_penalty + rat_penalty + player_penalty + heuristic(current) / 1_000
         }
         LookupGoal::NoRatsAt2(x1, y1, x2, y2) => {
             let players = positions_matching(current, |cell| cell == CellKind::Player);
@@ -3670,6 +3731,27 @@ fn lookup_bfs_progress_score(goal: LookupGoal, initial: &Grid, current: &Grid) -
             (!rat_at(current, (rat_x, rat_y)) as i64) + cell_missing
         }
         LookupGoal::RatGone(x, y) => rat_at(current, (x, y)) as i64,
+        LookupGoal::RatGoneAndRatAtWithPlayerInRect(
+            gone_x,
+            gone_y,
+            rat_x,
+            rat_y,
+            px1,
+            py1,
+            px2,
+            py2,
+        ) => {
+            let rats = rat_positions(current);
+            let players = positions_matching(current, |cell| cell == CellKind::Player);
+            let gone_penalty = rat_at(current, (gone_x, gone_y)) as i64 * 1_000;
+            let rat_penalty = if rat_at(current, (rat_x, rat_y)) {
+                0
+            } else {
+                nearest_target_distance(&rats, &[(rat_x, rat_y)])
+            };
+            let player_penalty = nearest_rect_distance(&players, px1, py1, px2, py2);
+            gone_penalty + rat_penalty + player_penalty
+        }
         LookupGoal::NoRatsAt2(x1, y1, x2, y2) => {
             rat_at(current, (x1, y1)) as i64 + rat_at(current, (x2, y2)) as i64
         }
