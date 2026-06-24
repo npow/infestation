@@ -658,6 +658,17 @@ def expensive_filter_reason(candidate: Candidate, policy: str) -> str | None:
     if hard_flags:
         return "hard_flags:" + ",".join(sorted(hard_flags))
 
+    if policy == "no-flags":
+        if candidate.flags:
+            return "flags:" + ",".join(sorted(candidate.flags))
+        if candidate.rats <= 0:
+            return "no_rats"
+        if candidate.reachable_rats <= 0:
+            return "no_reachable_rats"
+        if candidate.trapped > 0:
+            return "trapped_rats"
+        return None
+
     if policy == "known-clean":
         if candidate.rats <= 0:
             return "no_rats"
@@ -942,11 +953,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--expensive-filter",
-        choices=["known-clean", "all"],
+        choices=["known-clean", "no-flags", "all"],
         default="known-clean",
         help=(
-            "gate expensive fess/dropchain probes; known-clean only runs them "
-            "when seed diagnostics show all rats reachable and none trapped"
+            "gate expensive fess/dropchain probes; no-flags allows structurally "
+            "clean frontier states, known-clean additionally requires all rats "
+            "reachable and none trapped"
         ),
     )
     parser.add_argument(
