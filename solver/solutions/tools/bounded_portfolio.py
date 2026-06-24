@@ -50,6 +50,43 @@ class ActiveJob:
 BEST_H_RE = re.compile(r"\bbest_h=(-?\d+)\b")
 
 
+def arg_value(args: tuple[str, ...], flag: str) -> int | None:
+    try:
+        idx = args.index(flag)
+    except ValueError:
+        return None
+    if idx + 1 >= len(args):
+        return None
+    try:
+        return int(args[idx + 1])
+    except ValueError:
+        return None
+
+
+def replace_arg_value(args: tuple[str, ...], flag: str, value: int) -> tuple[str, ...]:
+    updated = list(args)
+    try:
+        idx = updated.index(flag)
+    except ValueError:
+        updated.extend((flag, str(value)))
+    else:
+        if idx + 1 >= len(updated):
+            updated.append(str(value))
+        else:
+            updated[idx + 1] = str(value)
+    return tuple(updated)
+
+
+def branchdump_parallel_args(args: tuple[str, ...], branch_jobs: int) -> tuple[str, ...]:
+    if branch_jobs <= 1 or not args or args[0] != "branchdump" or "--jobs" in args:
+        return args
+    max_nodes = arg_value(args, "--maxnodes")
+    updated = (*args, "--jobs", str(branch_jobs))
+    if max_nodes is not None:
+        updated = replace_arg_value(updated, "--maxnodes", max_nodes * branch_jobs)
+    return updated
+
+
 TINDER_T106 = (
     "<<>^v<<>>^<v<<>>>^^vv<<^v>>^^<vv<<<>>>>^^^>>v>vv>>^^^>>vvv"
     "^^^><<<vvv<<^^^<<<<<v<v<>^>^>>>>>vvv>>^^^>>><vvv"
@@ -890,10 +927,17 @@ def start_job(
     progress_h: bool,
     smart_h: bool,
     mem_mb: int | None,
+    branch_jobs: int,
 ) -> ActiveJob:
     log_path = out_dir / f"{job.name}.log"
-    command = [str(SOLVER), *job.args]
-    effective_mem_mb = mem_mb or job.mem_mb
+    effective_args = branchdump_parallel_args(job.args, branch_jobs)
+    command = [str(SOLVER), *effective_args]
+    effective_branch_jobs = arg_value(effective_args, "--jobs") if effective_args else None
+    effective_mem_mb = mem_mb or (
+        job.mem_mb * effective_branch_jobs
+        if job.args and job.args[0] == "branchdump" and effective_branch_jobs is not None
+        else job.mem_mb
+    )
     env = None
     if prune_dead or prune_stranded or progress_h or smart_h:
         env = dict(os.environ)
@@ -916,6 +960,11 @@ def start_job(
         log.write("# env PROGRESS_H=1\n")
     if smart_h:
         log.write("# env SMART_H=1\n")
+    if effective_args != job.args:
+        log.write(
+            f"# branchdump_jobs={effective_branch_jobs} "
+            "# scaled --maxnodes for internal parallelism\n"
+        )
     log.write(f"# mem_mb={effective_mem_mb} timeout_sec={job.timeout_sec}\n")
     log.flush()
     process = subprocess.Popen(
@@ -973,6 +1022,7 @@ def run_jobs(
     smart_h: bool,
     mem_mb: int | None,
     workers: int,
+    branch_jobs: int,
 ) -> bool:
     pending = deque(jobs)
     active: list[ActiveJob] = []
@@ -989,6 +1039,7 @@ def run_jobs(
                 progress_h,
                 smart_h,
                 mem_mb,
+                branch_jobs,
             )
             active.append(active_job)
             print(
@@ -1087,6 +1138,15 @@ def parse_args() -> argparse.Namespace:
         type=int,
         help="override per-child virtual-memory cap",
     )
+    parser.add_argument(
+        "--branch-jobs",
+        type=int,
+        default=0,
+        help=(
+            "internal --jobs for branchdump children; 0 fills idle cores based on "
+            "portfolio concurrency, 1 disables nested branchdump parallelism"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -1107,10 +1167,17 @@ def main() -> int:
         raise SystemExit("no jobs selected")
     jobs = interleave_by_level(jobs)
     workers = auto_jobs(args.jobs, jobs, args.mem_mb)
+    cpu_count = os.cpu_count() or 1
+    branch_jobs = (
+        max(1, cpu_count // workers)
+        if args.branch_jobs == 0
+        else max(1, args.branch_jobs)
+    )
     mem_available = available_memory_mb()
     print(
         f"running {len(jobs)} jobs with concurrency={workers} "
-        f"requested_jobs={args.jobs} mem_available_mb={mem_available} logs={out_dir}"
+        f"requested_jobs={args.jobs} branch_jobs={branch_jobs} "
+        f"mem_available_mb={mem_available} logs={out_dir}"
     )
     found_solution = run_jobs(
         jobs,
@@ -1121,6 +1188,7 @@ def main() -> int:
         args.smart_h,
         args.mem_mb,
         workers,
+        branch_jobs,
     )
     if not found_solution:
         print("no solved job in this bounded portfolio")

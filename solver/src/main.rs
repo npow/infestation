@@ -5410,8 +5410,11 @@ fn branch_split_depth(nplayers: usize, jobs: usize, max_depth: usize) -> usize {
     let branch_factor = all_action_steps(nplayers).len().max(1);
     let mut split_depth = 1usize;
     let mut frontier_capacity = branch_factor;
-    let max_split_depth = max_depth.min(3);
-    while frontier_capacity < jobs.saturating_mul(2) && split_depth < max_split_depth {
+    let max_split_depth = max_depth.min(4);
+    // Pruning can leave the real frontier much smaller than the theoretical
+    // action product, so aim well above the worker count before splitting stops.
+    let target_frontier = jobs.saturating_mul(1024);
+    while frontier_capacity < target_frontier && split_depth < max_split_depth {
         split_depth += 1;
         frontier_capacity = frontier_capacity.saturating_mul(branch_factor);
     }
@@ -5447,6 +5450,7 @@ fn solve_lookup_goal_branches_parallel(
         );
     }
 
+    let split_started = Instant::now();
     let (mut results, seeds) = branch_seed_frontier(
         grid,
         split_depth,
@@ -5459,26 +5463,30 @@ fn solve_lookup_goal_branches_parallel(
         return select_diverse_branches(results, max_results);
     }
 
-    let active_jobs = jobs.min(seeds.len());
-    let per_seed_max_nodes = max_nodes.div_ceil(seeds.len()).max(1);
+    let seed_count = seeds.len();
+    let active_jobs = jobs.min(seed_count);
+    let per_seed_max_nodes = max_nodes.div_ceil(active_jobs).max(1);
     eprintln!(
-        "  [branch parallel split_depth={} seeds={} jobs={} per_seed_depth={} per_seed_maxnodes={}]",
+        "  [branch parallel split_depth={} seeds={} jobs={} per_seed_depth={} per_seed_maxnodes={} split_elapsed={:.2}s]",
         split_depth,
-        seeds.len(),
+        seed_count,
         active_jobs,
         max_depth.saturating_sub(split_depth),
-        per_seed_max_nodes
+        per_seed_max_nodes,
+        split_started.elapsed().as_secs_f64()
     );
 
-    let chunk_size = seeds.len().div_ceil(active_jobs);
+    let mut buckets: Vec<Vec<BranchSeed>> = (0..active_jobs).map(|_| Vec::new()).collect();
+    for (idx, seed) in seeds.into_iter().enumerate() {
+        buckets[idx % active_jobs].push(seed);
+    }
     let mut worker_results: Vec<Branch> = std::thread::scope(|scope| {
         let mut handles = Vec::new();
-        for chunk in seeds.chunks(chunk_size) {
-            let chunk = chunk.to_vec();
+        for bucket in buckets {
             handles.push(scope.spawn(move || {
                 let mut local = Vec::new();
                 let worker_started = Instant::now();
-                for seed in chunk {
+                for seed in bucket {
                     let remaining_secs =
                         (time_limit_secs - worker_started.elapsed().as_secs_f64()).max(0.0);
                     if remaining_secs <= 0.0 {
