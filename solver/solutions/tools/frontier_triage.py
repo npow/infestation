@@ -227,6 +227,7 @@ def oracle_score(candidate: Candidate, diag: Diag, flags: tuple[str, ...]) -> tu
         "release-trigger2-unreachable": 3,
         "reload-trigger2-unreachable": 3,
         "tug-low-reachability": 3,
+        "tinder-dropped-rat": 8,
     }
     hard_flag_penalty = sum(flag_weights.get(flag, 0) for flag in flags)
     hard_flag_penalty += sum(2 for flag in flags if flag.endswith("-sealed"))
