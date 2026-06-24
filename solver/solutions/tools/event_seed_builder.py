@@ -27,12 +27,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from go_explore_portfolio import (
+    DEFAULT_OBLIGATION_LABELS,
     Candidate,
     SOLVER,
+    apply_negative_obligation_policy,
     archive_candidates,
     seed_file_candidates,
     static_candidates,
     unique_best,
+    load_negative_obligations,
 )
 
 
@@ -276,6 +279,18 @@ def load_candidates(args: argparse.Namespace) -> list[Candidate]:
             for candidate in candidates
             if any(token in canonical_level(candidate.level) or token in candidate.source for token in args.only)
         ]
+    negative_obligations = load_negative_obligations(args.obligation_labels)
+    candidates, matches = apply_negative_obligation_policy(
+        candidates,
+        negative_obligations,
+        args.obligation_policy,
+    )
+    if matches:
+        print(
+            f"negative_obligation_matches={matches} obligation_policy={args.obligation_policy}",
+            file=sys.stderr,
+            flush=True,
+        )
     return unique_best(candidates, args.per_level, args.rank_key, False, None)
 
 
@@ -504,7 +519,18 @@ def parse_args() -> argparse.Namespace:
         help="train the frozen-prior transfer head and score event successors before writing seeds",
     )
     parser.add_argument("--triage", action="append", type=pathlib.Path, default=[])
-    parser.add_argument("--obligation-labels", action="append", type=pathlib.Path, default=[])
+    parser.add_argument(
+        "--obligation-labels",
+        action="append",
+        type=pathlib.Path,
+        default=[DEFAULT_OBLIGATION_LABELS],
+    )
+    parser.add_argument(
+        "--obligation-policy",
+        choices=["score", "drop", "ignore"],
+        default="score",
+        help="how to handle parents that extend negative obligation labels",
+    )
     parser.add_argument("--samples-per-solution", type=int, default=10)
     parser.add_argument("--epochs", type=int, default=80)
     parser.add_argument("--seed", type=int, default=11)

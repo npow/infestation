@@ -22,12 +22,15 @@ from collections.abc import Iterable
 from typing import Any
 
 from go_explore_portfolio import (
+    DEFAULT_OBLIGATION_LABELS,
     FINAL_SOLUTIONS,
     Candidate,
     SOLVER,
     archive_candidates,
     canonical_level,
+    load_negative_obligations,
     load_solved_levels,
+    negative_obligation_id,
     static_candidates,
 )
 
@@ -148,8 +151,12 @@ def unique_by_prefix(candidates: Iterable[Candidate]) -> list[Candidate]:
     return list(by_level_prefix.values())
 
 
-def coarse_rank(candidate: Candidate) -> tuple[int, int, int, int, int]:
+def coarse_rank(
+    candidate: Candidate,
+    negative_obligations: dict[str, list[tuple[str, str]]],
+) -> tuple[int, int, int, int, int, int]:
     return (
+        1 if negative_obligation_id(candidate.level, candidate.prefix, negative_obligations) else 0,
         candidate.rats,
         -candidate.reachable_rats,
         candidate.trapped,
@@ -231,6 +238,7 @@ def oracle_score(candidate: Candidate, diag: Diag, flags: tuple[str, ...]) -> tu
     }
     hard_flag_penalty = sum(flag_weights.get(flag, 0) for flag in flags)
     hard_flag_penalty += sum(2 for flag in flags if flag.endswith("-sealed"))
+    hard_flag_penalty += sum(40 for flag in flags if flag.startswith("negative-obligation:"))
     return (
         hard_flag_penalty,
         diag.total_rats,
@@ -247,6 +255,7 @@ def oracle_score(candidate: Candidate, diag: Diag, flags: tuple[str, ...]) -> tu
 def select_for_diag(
     candidates: Iterable[Candidate],
     per_level_before_diag: int,
+    negative_obligations: dict[str, list[tuple[str, str]]],
 ) -> list[Candidate]:
     by_level: dict[str, list[Candidate]] = defaultdict(list)
     for candidate in unique_by_prefix(candidates):
@@ -254,7 +263,10 @@ def select_for_diag(
 
     selected = []
     for level, level_candidates in sorted(by_level.items()):
-        ranked = sorted(level_candidates, key=coarse_rank)
+        ranked = sorted(
+            level_candidates,
+            key=lambda candidate: coarse_rank(candidate, negative_obligations),
+        )
         selected.extend(ranked[:per_level_before_diag])
     return selected
 
@@ -346,6 +358,19 @@ def parse_args() -> argparse.Namespace:
         default=7,
         help="drop records whose weighted hard-flag penalty is above this value when lower-penalty records exist; negative disables the filter",
     )
+    parser.add_argument(
+        "--obligation-labels",
+        action="append",
+        type=pathlib.Path,
+        default=[DEFAULT_OBLIGATION_LABELS],
+        help="JSONL labels used to demote/drop already-closed negative prefix families",
+    )
+    parser.add_argument(
+        "--obligation-policy",
+        choices=["score", "drop", "ignore"],
+        default="score",
+        help="how to handle prefixes that extend negative obligation labels",
+    )
     parser.add_argument("--diag-timeout-sec", type=float, default=3.0)
     parser.add_argument("--jsonl-out", type=pathlib.Path)
     parser.add_argument("--seeds-out", type=pathlib.Path)
@@ -372,20 +397,39 @@ def main() -> int:
             for candidate in candidates
             if canonical_level(candidate.level) not in solved_levels
         ]
+    negative_obligations = (
+        load_negative_obligations(args.obligation_labels)
+        if args.obligation_policy != "ignore"
+        else {}
+    )
+    if args.obligation_policy == "drop":
+        candidates = [
+            candidate
+            for candidate in candidates
+            if negative_obligation_id(candidate.level, candidate.prefix, negative_obligations)
+            is None
+        ]
 
-    selected = select_for_diag(candidates, args.per_level_before_diag)
+    selected = select_for_diag(candidates, args.per_level_before_diag, negative_obligations)
     records: list[TriageRecord] = []
     for candidate in selected:
         diag = run_diag(candidate, args.diag_timeout_sec)
         if diag is None:
             continue
-        flags = warning_flags(candidate.level, diag)
+        flags = list(warning_flags(candidate.level, diag))
+        obligation_id = negative_obligation_id(
+            candidate.level,
+            candidate.prefix,
+            negative_obligations,
+        )
+        if args.obligation_policy == "score" and obligation_id is not None:
+            flags.append(f"negative-obligation:{obligation_id}")
         records.append(
             TriageRecord(
                 candidate=candidate,
                 diag=diag,
-                flags=flags,
-                score=oracle_score(candidate, diag, flags),
+                flags=tuple(flags),
+                score=oracle_score(candidate, diag, tuple(flags)),
             )
         )
 

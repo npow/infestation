@@ -33,6 +33,7 @@ SOLVER = ROOT / "target" / "release" / "solver"
 RUN_ROOT = pathlib.Path("/tmp/infestation-runs")
 DEFAULT_ARCHIVE = RUN_ROOT / "archive_20260614_full.jsonl"
 FINAL_SOLUTIONS = ROOT / "solver" / "solutions" / "final_solutions.json"
+DEFAULT_OBLIGATION_LABELS = ROOT / "solver" / "solutions" / "tools" / "obligation_labels.jsonl"
 
 LEVEL_RE = re.compile(r"\blevels/[^\s'\"]+?\.csv\b")
 
@@ -402,6 +403,83 @@ def canonical_level(level: str) -> str:
     return level
 
 
+def compact_moves(prefix: str) -> str:
+    return "".join(prefix.split())
+
+
+def load_negative_obligations(paths: Iterable[pathlib.Path]) -> dict[str, list[tuple[str, str]]]:
+    obligations: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for path in paths:
+        if not path.exists():
+            continue
+        for line_number, line in enumerate(
+            path.read_text(encoding="utf-8", errors="replace").splitlines(),
+            start=1,
+        ):
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as error:
+                raise SystemExit(f"{path}:{line_number}: invalid json: {error}") from error
+            label = str(record.get("label", "")).lower()
+            if label not in {"negative", "violates", "violated", "dead", "bad"}:
+                continue
+            level = record.get("level")
+            prefix = record.get("prefix")
+            if not isinstance(level, str) or not isinstance(prefix, str):
+                continue
+            compact = compact_moves(prefix)
+            if not compact:
+                continue
+            obligation_id = str(record.get("obligation_id", "negative"))
+            obligations[canonical_level(level)].append((compact, obligation_id))
+    for level in obligations:
+        obligations[level].sort(key=lambda item: len(item[0]), reverse=True)
+    return obligations
+
+
+def negative_obligation_id(
+    level: str,
+    prefix: str,
+    obligations: dict[str, list[tuple[str, str]]],
+) -> str | None:
+    compact = compact_moves(prefix)
+    if not compact:
+        return None
+    for negative_prefix, obligation_id in obligations.get(canonical_level(level), []):
+        if compact.startswith(negative_prefix):
+            return obligation_id
+    return None
+
+
+def apply_negative_obligation_policy(
+    candidates: Iterable[Candidate],
+    obligations: dict[str, list[tuple[str, str]]],
+    policy: str,
+) -> tuple[list[Candidate], int]:
+    if policy == "ignore" or not obligations:
+        return list(candidates), 0
+    result: list[Candidate] = []
+    matched = 0
+    for candidate in candidates:
+        obligation_id = negative_obligation_id(candidate.level, candidate.prefix, obligations)
+        if obligation_id is None:
+            result.append(candidate)
+            continue
+        matched += 1
+        if policy == "drop":
+            continue
+        if policy != "score":
+            raise ValueError(f"unknown obligation policy: {policy}")
+        flag = f"negative-obligation:{obligation_id}"
+        if flag in candidate.flags:
+            result.append(candidate)
+        else:
+            result.append(dataclasses.replace(candidate, flags=(*candidate.flags, flag)))
+    return result, matched
+
+
 def load_solved_levels(solutions_file: pathlib.Path) -> set[str]:
     try:
         data = json.loads(solutions_file.read_text(encoding="utf-8"))
@@ -437,6 +515,8 @@ def unique_best(
                 penalty += 100
             elif flag in {"no-reachable-rats", "no-remaining-mechanism"}:
                 penalty += 80
+            elif flag.startswith("negative-obligation:"):
+                penalty += 70
             elif flag == "tinder-dropped-rat":
                 penalty += 60
             elif flag.endswith("-sealed"):
@@ -1089,6 +1169,19 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--obligation-labels",
+        action="append",
+        type=pathlib.Path,
+        default=[DEFAULT_OBLIGATION_LABELS],
+        help="JSONL labels used to demote/drop already-closed negative prefix families",
+    )
+    parser.add_argument(
+        "--obligation-policy",
+        choices=["score", "drop", "ignore"],
+        default="score",
+        help="how to handle prefixes that extend negative obligation labels",
+    )
+    parser.add_argument(
         "--max-jobs",
         type=int,
         help="after interleaving, queue at most this many jobs; use --jobs for concurrency",
@@ -1184,6 +1277,12 @@ def main() -> int:
             if not any(token in candidate.level for token in args.skip_level)
         ]
         skipped_level = before - len(candidates)
+    negative_obligations = load_negative_obligations(args.obligation_labels)
+    candidates, negative_obligation_matches = apply_negative_obligation_policy(
+        candidates,
+        negative_obligations,
+        args.obligation_policy,
+    )
     candidates = unique_best(
         candidates,
         args.per_level,
@@ -1242,6 +1341,8 @@ def main() -> int:
     print(
         f"raw_candidates={raw_candidate_count} selected_candidates={len(candidates)} "
         f"skipped_solved={skipped_solved} skipped_level={skipped_level} "
+        f"negative_obligation_matches={negative_obligation_matches} "
+        f"obligation_policy={args.obligation_policy} "
         f"skipped_expensive_jobs={sum(skipped_expensive.values())} "
         f"queued_jobs={len(jobs)} max_processes={workers} requested_processes={args.jobs} "
         f"cpu_count={cpu_count} cpu_slots={cpu_slot_budget} requested_cpu_slots={args.cpu_slots} "
