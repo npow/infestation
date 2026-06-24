@@ -5083,6 +5083,32 @@ fn solve_lookup_goal_branches(
     trap_constraints: TrapConstraints,
     canonical: bool,
 ) -> Vec<Branch> {
+    solve_lookup_goal_branches_with_initial(
+        grid,
+        grid,
+        max_depth,
+        time_limit_secs,
+        max_nodes,
+        goal,
+        max_results,
+        min_rats,
+        trap_constraints,
+        canonical,
+    )
+}
+
+fn solve_lookup_goal_branches_with_initial(
+    grid: &Grid,
+    goal_initial: &Grid,
+    max_depth: usize,
+    time_limit_secs: f64,
+    max_nodes: usize,
+    goal: LookupGoal,
+    max_results: usize,
+    min_rats: Option<usize>,
+    trap_constraints: TrapConstraints,
+    canonical: bool,
+) -> Vec<Branch> {
     let nplayers = count_players(grid);
     let initial_had_rats = count_rats(grid) > 0;
     let tuples = all_action_steps(nplayers);
@@ -5171,7 +5197,7 @@ fn solve_lookup_goal_branches(
                 continue;
             }
             let goal_reached = play_state == PlayState::Won
-                || lookup_goal_reached(goal, grid, &next_grid, play_state);
+                || lookup_goal_reached(goal, goal_initial, &next_grid, play_state);
             let hash = state_key(&next_grid);
             if !goal_reached && visited.contains(&hash) {
                 continue;
@@ -5456,8 +5482,9 @@ fn solve_lookup_goal_branches_parallel(
                     if remaining_secs <= 0.0 {
                         break;
                     }
-                    let branches = solve_lookup_goal_branches(
+                    let branches = solve_lookup_goal_branches_with_initial(
                         &seed.grid,
+                        grid,
                         max_depth.saturating_sub(seed.depth),
                         remaining_secs,
                         max_nodes,
