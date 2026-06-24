@@ -112,10 +112,6 @@ pub(crate) struct MoveHandler<G = Grid> {
     pub(crate) exploding: Vec<Exploding>,
     /// Explosions queued for the next wave.
     pub(crate) pending_explosions: Vec<Position>,
-    /// Original cells overwritten while building a movement phase.
-    pub(crate) modified_cells: Vec<(Position, Cell)>,
-    /// Tracks modified cells without linearly scanning modified_cells.
-    modified_cell_bits: [u64; 16],
 }
 
 impl<G: BorrowMut<Grid>> MoveHandler<G> {
@@ -128,8 +124,6 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             triggered_numbers: Vec::new(),
             exploding: Vec::new(),
             pending_explosions: Vec::new(),
-            modified_cells: Vec::new(),
-            modified_cell_bits: [0; 16],
         }
     }
 
@@ -142,55 +136,15 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
             && self.pending_explosions.is_empty()
     }
 
-    pub(crate) fn set_cell_for_movement(&mut self, pos: Position, cell: Cell) {
-        let bit_index = {
-            let grid = self.grid.borrow();
-            let bounds = grid.bounds();
-            pos.in_bounds(bounds)
-                .then_some(pos.y as usize * bounds.0 + pos.x as usize)
-                .filter(|index| *index < self.modified_cell_bits.len() * u64::BITS as usize)
-        };
-        let already_modified = if let Some(index) = bit_index {
-            let word = index / u64::BITS as usize;
-            let mask = 1u64 << (index % u64::BITS as usize);
-            let already_modified = self.modified_cell_bits[word] & mask != 0;
-            self.modified_cell_bits[word] |= mask;
-            already_modified
-        } else {
-            self.modified_cells
-                .iter()
-                .any(|&(modified_pos, _)| modified_pos == pos)
-        };
-
-        if !already_modified {
-            let original = self.grid.borrow().at(pos);
-            self.modified_cells.push((pos, original));
-        }
-        *self.grid.borrow_mut().at_mut(pos) = cell;
-    }
-
-    pub(crate) fn restore_movement_grid(&mut self) {
-        {
-            let grid = self.grid.borrow_mut();
-            for (pos, cell) in self.modified_cells.drain(..) {
-                *grid.at_mut(pos) = cell;
-            }
-        }
-        self.modified_cell_bits = [0; 16];
-
-        let grid = self.grid.borrow_mut();
-        for moving in &self.moving {
-            *grid.at_mut(moving.from) = Cell::Empty;
-        }
-    }
-
     fn begin_move(&mut self, moving: Moving) {
-        self.set_cell_for_movement(moving.from, Cell::Empty);
+        let grid = self.grid.borrow_mut();
+        *grid.at_mut(moving.from) = Cell::Empty;
         self.moving.push(moving);
-        if !matches!(self.grid.borrow().at(moving.to), Cell::BlackHole) {
+        let dest_entity = grid.at_mut(moving.to);
+        if !matches!(*dest_entity, Cell::BlackHole) {
             // The grid changes will get overwritten when we replace the grid with the previous one.
             // This is just for sequential blocking checks.
-            self.set_cell_for_movement(moving.to, moving.cell);
+            *dest_entity = moving.cell;
         }
     }
 }

@@ -64,27 +64,28 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 .map(|p| rat_pos.dist_sq(p.pos))
                 .min()
                 .unwrap();
-            let mut best = RatMoveKey {
+            let mut candidates = vec![RatMoveKey {
                 score,
                 move_d2: 0,
                 player_still: true,
                 player: Player::Player1,
                 dir: None,
-            };
+            }];
 
             // Generate move options for each player
             for player_info in players {
                 let face_dir = Dir8::from_delta(player_info.pos - rat_pos).unwrap();
-                let mut dirs = [face_dir; 3];
-                let dir_count = if face_dir.is_diagonal() {
-                    dirs[1] = face_dir.x_only().unwrap();
-                    dirs[2] = face_dir.y_only().unwrap();
-                    3
+                let dirs: Vec<Dir8> = if face_dir.is_diagonal() {
+                    vec![
+                        face_dir,
+                        face_dir.x_only().unwrap(),
+                        face_dir.y_only().unwrap(),
+                    ]
                 } else {
-                    1
+                    vec![face_dir]
                 };
 
-                for dir in dirs.into_iter().take(dir_count) {
+                for dir in dirs {
                     let new_pos = rat_pos + dir.delta();
 
                     if self.grid.borrow().at(new_pos).blocks_rat() {
@@ -99,18 +100,17 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                         continue;
                     }
 
-                    let candidate = RatMoveKey {
+                    candidates.push(RatMoveKey {
                         score: new_pos.dist_sq(player_info.pos),
                         move_d2: dir.dist_sq(),
                         player_still: !player_info.moved,
                         player: player_info.player,
                         dir: Some(dir),
-                    };
-                    if candidate < best {
-                        best = candidate;
-                    }
+                    });
                 }
             }
+
+            let best = candidates.into_iter().min().unwrap();
 
             if let Some(dir) = best.dir {
                 self.begin_move(Moving {

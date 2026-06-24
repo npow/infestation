@@ -85,9 +85,6 @@ pub fn step_grid(grid: &Grid, actions: &[Action]) -> (Grid, PlayState) {
 }
 
 /// Apply actions to a state the caller already knows is Playing.
-///
-/// Search callers expand only live frontier states and already know the level's
-/// player count, so this avoids two full-grid scans before every candidate move.
 #[must_use]
 pub fn step_grid_assume_playing(
     grid: &Grid,

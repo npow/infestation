@@ -16,10 +16,13 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         let players = self.find_players();
         assert!(!players.is_empty());
 
+        let grid = self.grid.borrow();
+        let prev_grid = grid.clone();
+
         // Phase 1: Determine each player's intended destination (wall/plank blocks only)
-        let mut dests = [Position { x: 0, y: 0 }; 2];
-        let mut move_dirs = [None; 2];
-        let mut facing_dirs = [Dir4::North; 2];
+        let mut dests: Vec<Position> = Vec::new();
+        let mut move_dirs: Vec<Option<Dir4>> = Vec::new();
+        let mut facing_dirs: Vec<Dir4> = Vec::new();
 
         for (i, player) in players.iter().enumerate() {
             let (player_pos, current_dir) = (player.pos, player.dir);
@@ -28,14 +31,14 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 Action::Move(dir) => {
                     let candidate = player_pos + dir.delta();
                     let wall_blocked = self.grid.borrow().at(candidate).blocks_player();
-                    dests[i] = if wall_blocked { player_pos } else { candidate };
-                    move_dirs[i] = Some(dir);
-                    facing_dirs[i] = dir;
+                    dests.push(if wall_blocked { player_pos } else { candidate });
+                    move_dirs.push(Some(dir));
+                    facing_dirs.push(dir);
                 }
                 Action::Stall => {
-                    dests[i] = player_pos;
-                    move_dirs[i] = None;
-                    facing_dirs[i] = current_dir;
+                    dests.push(player_pos);
+                    move_dirs.push(None);
+                    facing_dirs.push(current_dir);
                 }
             }
         }
@@ -46,7 +49,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
 
             if moving[0] && moving[1] && dests[0] == dests[1] {
                 self.contested_cell = Some(dests[0]);
-                self.set_cell_for_movement(dests[0], Cell::Empty);
+                *self.grid.borrow_mut().at_mut(dests[0]) = Cell::Empty;
                 // Both target same cell → both blocked
                 dests[0] = players[0].pos;
                 dests[1] = players[1].pos;
@@ -74,12 +77,7 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
         }
 
         // Phase 3: Create Moving entities and build PlayerInfos
-        let mut player_infos = [PlayerInfo {
-            pos: Position { x: 0, y: 0 },
-            dir: Dir4::North,
-            moved: false,
-            player: Player::Player1,
-        }; 2];
+        let mut player_infos: Vec<PlayerInfo> = Vec::new();
         for (i, found) in players.iter().enumerate() {
             let dest = dests[i];
             let blocked = dest == found.pos;
@@ -94,23 +92,27 @@ impl<G: BorrowMut<Grid>> MoveHandler<G> {
                 });
             }
 
-            player_infos[i] = PlayerInfo {
+            player_infos.push(PlayerInfo {
                 pos: dest,
                 dir: facing_dirs[i],
                 moved: move_dirs[i].is_some(),
                 player: found.player,
-            };
+            });
         }
 
-        let player_infos = &player_infos[..players.len()];
-        self.move_cyborg_rats(player_infos);
-        self.move_rats(player_infos);
+        self.move_cyborg_rats(&player_infos);
+        self.move_rats(&player_infos);
 
         // Don't actually perform the move yet.
         // The grid is useful for tracking what is blocked so that rat movement is resolved
         // sequentially. But we should wait for animations to complete before placing things at
         // their final positions.
-        self.restore_movement_grid();
+        let curr_grid = self.grid.borrow_mut();
+        *curr_grid = prev_grid;
+        // Remove entities from their old positions now that they're tracked as moving entities.
+        for m in &self.moving {
+            *curr_grid.at_mut(m.from) = Cell::Empty;
+        }
     }
 }
 
