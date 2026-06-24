@@ -633,12 +633,13 @@ def jobs_for_candidate(
     lookup_weight: int,
     lookup_stagnation_secs: float,
     fess_jobs: int,
+    fess_level_guards_enabled: bool,
 ) -> list[Job]:
     level = candidate.level
     prefix = candidate.prefix
     base = slug(f"{pathlib.Path(level).stem}_{candidate.source}_{prefix}")
     lookup_effective_mem_mb = lookup_mem_mb or mem_mb
-    fess_level_guards = FESS_LEVEL_GUARDS.get(level, ())
+    fess_level_guards = FESS_LEVEL_GUARDS.get(level, ()) if fess_level_guards_enabled else ()
     fess_args = (
         "fess",
         level,
@@ -1144,6 +1145,12 @@ def parse_args() -> argparse.Namespace:
         help="threads per fess solver process; keep at 1 when running many fess processes concurrently",
     )
     parser.add_argument(
+        "--fess-level-guards",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="apply level-specific FESS guard predicates before frontier expansion",
+    )
+    parser.add_argument(
         "--expensive-filter",
         choices=["known-clean", "no-flags", "all"],
         default="known-clean",
@@ -1308,6 +1315,7 @@ def main() -> int:
                 args.lookup_weight,
                 args.lookup_stagnation_secs,
                 args.fess_jobs,
+                args.fess_level_guards,
             ),
             candidate,
             args.expensive_filter,
@@ -1350,6 +1358,7 @@ def main() -> int:
         f"dedupe_event_key={args.dedupe_event_key} "
         f"max_candidate_flag_penalty={args.max_candidate_flag_penalty} "
         f"expensive_filter={args.expensive_filter} "
+        f"fess_level_guards={args.fess_level_guards} "
         f"lookup_stagnation_secs={args.lookup_stagnation_secs} "
         f"job_mem_mb={job_mem_values} job_cpu_slots={job_cpu_values} "
         f"mem_available_mb={available_memory_mb()} mem_budget_mb={mem_budget} "

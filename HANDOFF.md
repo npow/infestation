@@ -277,6 +277,32 @@ upstream movement and rat logic. The active rat-bearing hard set is now:
   does not apply `--min-rats` as an expansion guard. Future Tinder probes
   should change the earlier baffle/identity premise, not rerun those inner
   lower-rat exact goals.
+- Codex no-guard FESS recheck added `go_explore_portfolio.py
+  --no-fess-level-guards` and archived the representative run at
+  `/tmp/infestation-runs/go_fess_no_guards_representatives_codex_20260624T_now`.
+  It found no solves. The important negatives: AI's two-enemy frontier has no
+  live event continuation and immediately collapses to zero reachable rats;
+  Tinder's 15-rat dropped-lower basin has no event candidates; Release still
+  seals `(18,4)` behind `(18,5)`; Reload timeouts still preserve the same
+  top-left sealed-rat family. Relaxing FESS guards alone is not the missing
+  assumption.
+- Exact predicate batch
+  `/tmp/infestation-runs/exact_predicates_codex_rethink_20260624T_now` found no
+  branches for: Blocked making all 3 rats reachable or opening `(1,15)` from
+  b20; AI opening `(17,4)` or staging a left normal rat with the right cyborg
+  from `v<vv^^^`; Release opening `(18,5)` with the right rat live from
+  `v<vv^^>>vv>`; Reload opening `(1,21)` from the bottom-station prefix; and
+  Tinder `rectignite` from the untouched all-16 board.
+- Tinder geometry batch
+  `/tmp/infestation-runs/tinder_geometry_codex_20260624T_now` tested the
+  one-step winning ignition geometry from `ignitions`: rat at `(16,0)` plus
+  player staged on left row 3. Direct all-16 and allow-one-loss exact searches
+  found no branch. A live all-16 heuristic lead reaches lower rat `(8,3)` /
+  player `(9,3)` via
+  `<^^<<<^vv<v>>^>v<<<<>^>^^>>v<<v<<>>^>>>^>>v>vv>>^^^>>vvvvv<>>^^<^^^<<vvv<<^^<^<<v<<<^<>>>>>>`,
+  but frontier confirms it is a cul-de-sac: the only mechanism-preserving move
+  is one more east push to `(9,3)`, after which all 16-rat continuations die or
+  stall. Do not rerun this row-3 push family unchanged.
 
 ### Newly solved - 2026-06-14
 
