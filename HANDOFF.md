@@ -122,6 +122,32 @@ upstream movement and rat logic. The active rat-bearing hard set is now:
   `/tmp/infestation-runs/archive_open6_parallel.jsonl` and
   `/tmp/infestation-runs/archive_go_event_open6_20260624T115006Z.jsonl`;
   seed summaries are in the matching `seeds_*.jsonl` files.
+- Follow-up after committing `97d8e70 Add two-player rectangle lookup tooling`:
+  a seed-only wave from
+  `/tmp/infestation-runs/seeds_go_event_open6_20260624T115006Z.jsonl`
+  ran 60 bounded jobs with 24 processes / 30 CPU slots and found no solution.
+  Logs are in `/tmp/infestation-runs/go_seedonly_20260624T115614Z`;
+  archive/triage/seeds are
+  `/tmp/infestation-runs/archive_go_seedonly_20260624T115614Z.jsonl`,
+  `/tmp/infestation-runs/triage_go_seedonly_20260624T115614Z.jsonl`, and
+  `/tmp/infestation-runs/seeds_go_seedonly_20260624T115614Z.jsonl`.
+- The seed-only wave did not improve the open inventory. Its useful negative
+  was operational: using the full prior archive reselected long
+  unknown-diagnostic no-solution lookup prefixes, so the next broad run should
+  prefer triaged seed files or exact predicates, not the full archive.
+- `cooperation/blocked_v2`: exact `ratsleplayersrects` probes from the b20
+  prefix failed for lower-left + mid, lower-left + top-right, and lower-left +
+  trigger-corridor two-player staging while preserving 3 rats, 2 reachable
+  rats, at most 1 trapped rat, and at least 4 triggers. The standard
+  body-block staging hypothesis is now closed for those regions.
+- `cyborg_rats/ai_takeover`: the new 236-turn two-enemy frontier is a near miss
+  but not live enough to solve directly. The remaining blocker is still the
+  unreachable cyborg at `(18,4)`. From both the p236 frontier and the early
+  `v<vv^^^` row-5 opener, exact probes for opening `(17,4)` or `(17,5)` while
+  preserving the `(18,4)` cyborg returned no branch; triggering 7 with
+  `(17,4)` opened also returned no branch. Future AI work needs a different
+  pre-row-5 actor/topology change, not right-pocket wall repair from these
+  prefixes.
 
 ### Newly solved - 2026-06-14
 
